@@ -1,10 +1,15 @@
 <script>
     import Nav from '$lib/components/Nav.svelte';
+    const links = [
+        { path: '/', title: 'Home'},
+        { path: '/login', title: 'Login' },
+        { path: '/signup', title: 'Signup' },
+    ];
 </script>
 
 <footer>
     <h1>Messenger Footer</h1>
-    <Nav />
+    <Nav {links}/>
 </footer>
 
 <style lang="scss">

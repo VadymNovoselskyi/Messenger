@@ -1,0 +1,17 @@
+body {
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+}
+
+header {
+    grid-row: 1;
+}
+
+main {
+    grid-row: 2;
+    padding: 3rem 4rem;
+}
+
+footer {
+    grid-row: 3;
+}

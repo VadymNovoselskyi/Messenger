@@ -1,12 +1,18 @@
 <script>
-    import { page } from '$app/stores'
+    import { page } from '$app/stores';
+
+    export let links = [
+        { path: 'Default path 1', title: 'Default title 1' },
+        { path: 'Default path 2', title: 'Default title 2' }
+    ];
+    export let id = 'nav';
 </script>
 
 <nav>
-    <ul>
-        <li><a href="/" class:current={$page.url.pathname === '/'}>Home</a></li>
-        <li><a href="/login" class:current={$page.url.pathname === '/login'} >Login</a></li>
-        <li><a href="/signup" class:current={$page.url.pathname === '/signup'} >Signup</a></li>
+    <ul id={id}>
+        {#each links as { path, title }}
+            <li><a href={path} class:current={$page.url.pathname === path}>{title}</a></li>
+        {/each}
     </ul>
 </nav>
 

@@ -1,10 +1,15 @@
 <script>
     import Nav from "$lib/components/Nav.svelte";
+    const links = [
+        { path: '/', title: 'Home'},
+        { path: '/login', title: 'Login' },
+        { path: '/signup', title: 'Signup' },
+    ];
 </script>
 
 <header>
     <h1>Messenger Header</h1>
-    <Nav />
+    <Nav {links}/>
 </header>
 
 <style lang="scss">
