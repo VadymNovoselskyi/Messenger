@@ -1,15 +1,24 @@
+:root {
+    --main-padding: 1rem
+}
+
+body {
+    display: grid;
+    grid-template-rows: 94vh 6vh;
+    height: 100vh;
+    overflow: hidden;
+}
+
 main {
-    padding: 1rem;
+    grid-row: 1;
+    padding: var(--main-padding);
+    max-height: 94vh;
 }
 
 #toolbar {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    padding: 1rem;  
+    grid-row: 2;
+    height: 6vh;
     background-color: var(--secondary-bg-color);
     color: var(--secondary-text-color); 
-    text-align: center;
-    z-index: 1000;
+    align-content: center;
 }
