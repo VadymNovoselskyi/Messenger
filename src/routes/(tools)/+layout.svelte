@@ -1,7 +1,7 @@
 <script>
     import Nav from '$lib/components/Nav.svelte';
     import '$lib/style.scss';
-    import './app-style.scss';
+    import './tools-style.scss';
 
     const links = [
         { path: '/user', title: 'Chats' },
@@ -12,14 +12,10 @@
     const id = 'toolbar';
 </script>
 
-<div id="app">
+<div id="tools">
     <main>
         <slot />
     </main>
     
     <Nav {links} {id}/>
 </div>
-
-<style lang="scss">
-    
-</style>

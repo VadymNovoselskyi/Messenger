@@ -15,17 +15,10 @@
     padding: 0;
 }
 
-body {
-    min-height: 100vh;
-}
 
 main {
     background-color: var(--primaty-bg-color);
     color: var(--primary-text-color);
-
-    #title {
-        border-bottom: 2px solid var(--secondary-bg-color);
-    }
 }
 
 a {     

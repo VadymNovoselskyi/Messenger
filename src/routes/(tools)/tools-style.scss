@@ -1,4 +1,8 @@
-#app {
+:root {
+    --main-padding: 2rem
+}
+
+#tools {
     display: grid;
     grid-template-rows: 94vh 6vh;
     height: 100vh;
@@ -6,9 +10,10 @@
 
     main {
         grid-row: 1;
+        padding: var(--main-padding);
         max-height: 94vh;
     }
-
+    
     #toolbar {
         grid-row: 2;
         height: 6vh;
@@ -17,3 +22,4 @@
         align-content: center;
     }
 }
+
