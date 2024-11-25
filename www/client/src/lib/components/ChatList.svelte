@@ -3,17 +3,17 @@
         { imgSrc: '', title: 'Name1', message: 'lorem bla bla' },
         { imgSrc: '', title: 'Name2', message: 'lorem bla bla bla bla bla bla bla' }
     ]
-</script>
+</script> 
 
-{#each chats as { imgSrc, title, message }}
+{#each chats as { imgSrc, title, message }} 
     <section class="chat">
-        <img src={imgSrc} alt={title} class="profile-picture">
+        <img src={imgSrc} alt={title} class="profile-picture"> 
         <h3 class="chat-name">{title}</h3>
         <p class="chat-message">{message}</p>
     </section>  
 {/each}
 
-<style lang="scss">
+<style lang="scss"> 
 .chat {
     display: grid;
     grid-template-columns: auto 1fr;
@@ -26,6 +26,8 @@
     .profile-picture {
         grid-column: 1;
         grid-row: span 2;
+        width: 64px;
+        height: 64px;
     }
 
     .chat-name {

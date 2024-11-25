@@ -30,7 +30,6 @@
 
 <svelte:head>
     <title>Chats</title>
-    <script src="https://kit.fontawesome.com/00ab35ae35.js" crossorigin="anonymous"></script>
 </svelte:head>
 
 <div id="wrapper">

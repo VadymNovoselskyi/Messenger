@@ -1,4 +1,8 @@
-<form action="#">
+<svelte:head>
+    <script src="https://kit.fontawesome.com/00ab35ae35.js" crossorigin="anonymous"></script>
+</svelte:head>
+
+<form action="">
     <input id="message-input" type="text" name="message" placeholder="Type your text here">
     <button id="send-icon">
         <i class="fa-solid fa-paper-plane"></i>
