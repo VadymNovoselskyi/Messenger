@@ -1,9 +1,10 @@
-<script>
+<script lang="ts">
     import ChatList from '$lib/components/ChatList.svelte';
     import MessageList from '$lib/components/MessageList.svelte';
     import MessageField from '$lib/components/MessageField.svelte';
+    import type { Chat, Message } from '$lib/types';
 
-    let chats = [
+    let chats: Chat[] = [
         { imgSrc: '', title: 'Name1', message: 'lorem bla bla' },
         { imgSrc: '', title: 'Name2', message: 'Lorem, ipsum dolor sit amet consectetur adipisicing elit. Inventore, fugiat. Inventore veritatis doloremque voluptate iure nesciunt assumenda qui alias temporibus beatae dolores dolore aspernatur laudantium, cupiditate sint, unde esse earum.' },
         { imgSrc: '', title: 'Name3', message: 'Lorem, ipsum dolor sit amet consectetur adipisicing elit. Inventore, fugiat. Inventore veritatis doloremque voluptate iure nesciunt assumenda qui alias temporibus beatae dolores dolore aspernatur laudantium, cupiditate sint, unde esse earum.' },
@@ -12,7 +13,7 @@
         { imgSrc: '', title: 'Name6', message: 'Lorem, ipsum dolor sit amet consectetur adipisicing elit. Inventore, fugiat. Inventore veritatis doloremque voluptate iure nesciunt assumenda qui alias temporibus beatae dolores dolore aspernatur laudantium, cupiditate sint, unde esse earum.' }
     ];
 
-    let messages = [
+    let messages: Message[] = [
         { message: 'Lorem ipsum dolor sit amet consectetur adipisicing elit. Voluptates dicta praesentium harum earum maxime amet vel sed aliquid enim optio dolore pariatur reiciendis, commodi dolores autem est laborum saepe ipsum.', isSent: true},
         { message: 'Repudiandae consequuntur rerum ratione minus sapiente iure, laudantium molestias autem ex eos dolorum totam a! Aspernatur, maiores sint tempora at praesentium eos quidem quaerat odit dolores fugit, veritatis, nisi voluptas.', isSent: false },
         { message: 'Necessitatibus accusamus soluta, repudiandae id ratione error hic ducimus magni molestias iure praesentium eum sapiente, blanditiis quos voluptas cupiditate nemo eaque, repellat porro laborum? Suscipit iure a dolor eos officia?', isSent: true},

@@ -1,9 +1,10 @@
-<script>
+<script lang="ts">
+    import type { Link } from '$lib/types';
     import Nav from '$lib/components/Nav.svelte';
     import '$lib/style.scss';
-    import './tools-style.scss';
+    import './app-style.scss';
 
-    const links = [
+    const links: Link[] = [
         { path: '/user', title: 'Chats' },
         { path: '/user/search', title: 'Search' },
         { path: '/user/profile', title: 'Profile' },

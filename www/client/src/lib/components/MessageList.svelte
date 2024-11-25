@@ -1,5 +1,7 @@
-<script>
-    export let messages = [
+<script lang="ts">
+    import type { Message } from '$lib/types';
+
+    export let messages: Message[] = [
         { message: 'lorem bla bla', isSent: true},
         { message: 'lorem bla bla bla bla bla bla bla', isSent: false }
     ]

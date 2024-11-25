@@ -7,11 +7,19 @@ services:
     ports:
       - 80:80
     volumes:
-      - ./www/html:/var/www/html
       - ./config/nginx/nginx.conf:/etc/nginx/nginx.conf
-      - ./config/ssl:/etc/ssl
+  
 
-  server:
+  client:
+    image: node:latest
+    container_name: client
+    working_dir: /www/client
+    command: "npm run dev -- --host 0.0.0.0"
+    volumes:
+      - ./www/client:/www/client
+
+
+server:
     image: node:latest
     container_name: server
     working_dir: /usr/src/server
@@ -19,14 +27,6 @@ services:
       - ./www/server:/usr/src/server
       - ./www/server/node_modules:/usr/src/server/node_modules
     command: npm run dev
-  
-  client:
-    image: node:latest
-    container_name: client
-    working_dir: /www/
-    command: "npm run dev -- --host 0.0.0.0"
-    volumes:
-      - ./www/client:/client
 
 
   mongodb:

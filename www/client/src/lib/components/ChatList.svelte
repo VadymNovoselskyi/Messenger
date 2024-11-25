@@ -1,5 +1,7 @@
-<script>
-    export let chats = [
+<script lang="ts">
+    import type { Chat } from '$lib/types';
+
+    export let chats: Chat[] = [
         { imgSrc: '', title: 'Name1', message: 'lorem bla bla' },
         { imgSrc: '', title: 'Name2', message: 'lorem bla bla bla bla bla bla bla' }
     ]

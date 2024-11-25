@@ -1,6 +1,8 @@
-<script>
+<script lang="ts">
     import Nav from '$lib/components/Nav.svelte';
-    const links = [
+    import type { Link } from '$lib/types';
+
+    const links: Link[] = [
         { path: '/', title: 'Home'},
         { path: '/login', title: 'Login' },
         { path: '/signup', title: 'Signup' },
