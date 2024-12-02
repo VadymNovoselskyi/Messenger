@@ -2,7 +2,7 @@
     import type { Link } from '$lib/types';
     import Nav from '$lib/components/Nav.svelte';
     import '$lib/style.scss';
-    import './app-style.scss';
+    import './tools-style.scss';
 
     const links: Link[] = [
         { path: '/user', title: 'Chats' },

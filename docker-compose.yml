@@ -14,12 +14,12 @@ services:
     image: node:latest
     container_name: client
     working_dir: /www/client
-    command: "npm run dev -- --host 0.0.0.0"
     volumes:
       - ./www/client:/www/client
+    command: "npm run dev -- --host 0.0.0.0"
 
 
-server:
+  server:
     image: node:latest
     container_name: server
     working_dir: /usr/src/server
