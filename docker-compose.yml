@@ -7,7 +7,7 @@ services:
     ports:
       - 80:80
     volumes:
-      - ./config/nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./config/nginx.conf:/etc/nginx/nginx.conf
   
 
   client:

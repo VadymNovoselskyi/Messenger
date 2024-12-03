@@ -3,7 +3,7 @@ import users from '../data.mjs'
 
 const router = express.Router();
 
-router.post('/users', async function(req, res){
+router.post('/users', async (req, res) => {
     let user = {};
     user.uid = users.length + 1
     user.name = req.body.namn

@@ -3,7 +3,7 @@ import users from '../data.mjs'
 
 const router = express.Router();
 
-router.delete('/api/users', async function(req, res){
+router.delete('/api/users', async (req, res) => {
     users.splice(req.body.uid-1,1)
  
  

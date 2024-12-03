@@ -3,7 +3,7 @@ import users from '../data.mjs'
 
 const router = express.Router();
 
-router.patch('/api/users', async function(req, res){
+router.patch('/api/users', async (req, res) => {
     let user = users[req.body.uid-1];
  
     if(req.body.name.trim())
