@@ -27,11 +27,43 @@
         { message: 'Obcaecati sed praesentium adipisci harum, dolore minus magnam rerum commodi voluptatibus velit optio ea non nobis voluptatum, a eos delectus voluptas quo debitis autem in eligendi voluptates cum. Nostrum, facilis!', isSent: true},
         { message: 'Tempora, vitae animi amet itaque asperiores soluta, perspiciatis enim recusandae reprehenderit sit eos distinctio optio neque inventore a quae, iste dicta quos eaque quo laboriosam suscipit doloribus nesciunt. Facilis, beatae.', isSent: false }
     ]
+
+    const ws = new WebSocket("ws://localhost/api/");
+
+    function sendForm(event: SubmitEvent) {
+        event.preventDefault();
+        const message = (event.target as HTMLFormElement)!.message.value;
+        const receiver = 'contact1';
+
+        ws.send(JSON.stringify({
+            api: 'send_message',
+            uid: 'me',
+            cid: '1',
+            message
+        }));
+    }
+
+    ws.addEventListener('open', () => {
+        console.log('Connected to the server')
+
+        ws.send(JSON.stringify({
+            api: 'get_chats',
+            uid: 'me'
+        }));
+    });
+
+    ws.addEventListener('message', event => {
+        const { data } = event;
+        const chats = JSON.parse(data);
+        chats.forEach((dataBit: any) => console.log(dataBit));
+        console.log(chats)
+    });
 </script>
 
 <svelte:head>
     <title>Chats</title>
 </svelte:head>
+
 
 <div id="wrapper">
     <section id="chats-list">
@@ -44,7 +76,9 @@
     </section>
 
     <section id="message-field">
-        <MessageField />
+        <MessageField 
+            submitFn={sendForm}
+        />
     </section>
 </div>
 

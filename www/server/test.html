@@ -4,14 +4,40 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Document</title>
-
-    <script type="module">
-        import { io } from "https://cdn.socket.io/4.8.1/socket.io.esm.min.js";
-        console.log(io);
-    </script>
 </head>
 <body>
+    <form action="" id="testForm">
+        <label>Message to the server</label>
+        <input type="text" name="text">
+        <input type="submit">
+    </form>
+
     <script>
+        const ws = new WebSocket("ws://localhost:5000");
+        const form = document.querySelector('#testForm');
+        const me = 'me';
+    
+        form.addEventListener('submit', event => {
+            event.preventDefault();
+            const message = event.target.text.value;
+            const receiver = 'contact1';
+    
+            ws.send(JSON.stringify({
+                from: me,
+                receiver,
+                message
+            }));
+        })
+    
+        ws.addEventListener('open', () => {
+            console.log('Connected to the server')
+    
+            ws.send('Hey, server!');
+        });
+    
+        ws.addEventListener('message', ({ data }) => {
+            console.log(`Message from server: ${data}`);
+        });
     </script>
 </body>
 </html>

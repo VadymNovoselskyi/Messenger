@@ -1,43 +1,30 @@
-// import express from "express"
-// import cors from "cors"
+import WebSocket, { WebSocketServer } from 'ws';
+import { getChats } from './mongodb/api.mjs';
 
-// import createRouter from "./router/createRouter.mjs";
-// import readRouter from './router/readRouter.mjs';
-// import updateRouter from "./router/updateRouter.mjs";
-// import deleteRouter from "./router/deleteRouter.mjs";
+const wss = new WebSocketServer({ port:5000 });
 
-// const app = express();
+wss.on('connection', ws => {
+  console.log('Client connected');
 
+  ws.on('message', data => {
+    console.log(`The message is: ${data}`);
+    data = JSON.parse(data);
 
-// // ---- Middleware ----
-// app.use(cors()); // Tillåter anrop från annan domän
-// app.use(express.urlencoded({extended: true})); // body urlencoded
-// app.use(express.json()); // body i json-formatet
+    switch(data.api) {
+      case "get_chats":
+        getChats(data.uid).then(chats => {
+          console.log(chats);
+          ws.send(JSON.stringify(chats));
+        }); 
+        break;
 
+      default:
+        console.error(`Unknown api call: ${data.api}`);
+    }
+  });
 
-// app.use(createRouter);
-// app.use(readRouter);
-// app.use(updateRouter);
-// app.use(deleteRouter);
-// // -- End Middleware --
+  ws.on('close', () => {
+    console.log('Client disconnected'); 
+  });
 
-
-// /** Startar servern och lyssnar på port 5000 */
-// app.listen(5000);
-
-import express from "express"
-import cors from "cors"
-import router from "./mongodb/router.mjs"
-
-
-const app = express()
-
-
-// ---- Middleware ----
-app.use(cors()) // Tillåter anrop från annan domän
-app.use(router)
-// -- End Middleware --
-
-
-/** Startar servern och lyssnar på port 5000 */
-app.listen(5000)
+});
