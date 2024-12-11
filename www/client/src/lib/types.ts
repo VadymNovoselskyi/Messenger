@@ -12,4 +12,5 @@ export interface Chat {
     imgSrc: string;
     title: string;
     message: string;
+    lastUpdate: string;
 }

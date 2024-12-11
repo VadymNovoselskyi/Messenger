@@ -11,10 +11,12 @@ wss.on('connection', ws => {
     data = JSON.parse(data);
 
     switch(data.api) {
+
       case "get_chats":
         getChats(data.uid).then(chats => {
-          console.log(chats);
-          ws.send(JSON.stringify(chats));
+          ws.send(JSON.stringify({
+            api: 'get_chats',
+            chats}));
         }); 
         break;
 

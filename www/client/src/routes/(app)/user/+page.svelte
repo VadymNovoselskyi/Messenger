@@ -1,16 +1,43 @@
 <script lang="ts">
+    import { page } from '$app/stores';
     import ChatList from '$lib/components/ChatList.svelte';
     import MessageList from '$lib/components/MessageList.svelte';
     import MessageField from '$lib/components/MessageField.svelte';
     import type { Chat, Message } from '$lib/types';
 
+    const wsConnectionPromise: Promise<WebSocket> = new Promise((resolve, reject) => {
+        resolve(new WebSocket(`${$page.url.origin}/api/`));
+    });
+
+    wsConnectionPromise.then((ws: WebSocket) => {
+        ws.addEventListener('open', () => {
+            console.log("Connected to the ws");
+
+            ws.send(JSON.stringify({
+                api: 'get_chats',
+                uid: 'me'
+            }));
+        });
+
+        ws.addEventListener('message', event => { 
+            const { data } = event;
+            const response = JSON.parse(data);
+            console.log(response);
+
+            switch(response.api) {
+                case 'get_chats':
+                    const { chats } = response;
+                    chats.forEach((dataBit: any) => console.log(dataBit));
+                    break;
+                
+                default:
+                    console.error('Uknown api call');
+            }
+        });
+    });
+
     let chats: Chat[] = [
-        { imgSrc: '', title: 'Name1', message: 'lorem bla bla' },
-        { imgSrc: '', title: 'Name2', message: 'Lorem, ipsum dolor sit amet consectetur adipisicing elit. Inventore, fugiat. Inventore veritatis doloremque voluptate iure nesciunt assumenda qui alias temporibus beatae dolores dolore aspernatur laudantium, cupiditate sint, unde esse earum.' },
-        { imgSrc: '', title: 'Name3', message: 'Lorem, ipsum dolor sit amet consectetur adipisicing elit. Inventore, fugiat. Inventore veritatis doloremque voluptate iure nesciunt assumenda qui alias temporibus beatae dolores dolore aspernatur laudantium, cupiditate sint, unde esse earum.' },
-        { imgSrc: '', title: 'Name4', message: 'Lorem, ipsum dolor sit amet consectetur adipisicing elit. Inventore, fugiat. Inventore veritatis doloremque voluptate iure nesciunt assumenda qui alias temporibus beatae dolores dolore aspernatur laudantium, cupiditate sint, unde esse earum.' },
-        { imgSrc: '', title: 'Name5', message: 'Lorem, ipsum dolor sit amet consectetur adipisicing elit. Inventore, fugiat. Inventore veritatis doloremque voluptate iure nesciunt assumenda qui alias temporibus beatae dolores dolore aspernatur laudantium, cupiditate sint, unde esse earum.' },
-        { imgSrc: '', title: 'Name6', message: 'Lorem, ipsum dolor sit amet consectetur adipisicing elit. Inventore, fugiat. Inventore veritatis doloremque voluptate iure nesciunt assumenda qui alias temporibus beatae dolores dolore aspernatur laudantium, cupiditate sint, unde esse earum.' }
+        { imgSrc: '', title: 'Name1', message: 'lorem bla bla', lastUpdate: '12:14' }
     ];
 
     let messages: Message[] = [
@@ -28,42 +55,22 @@
         { message: 'Tempora, vitae animi amet itaque asperiores soluta, perspiciatis enim recusandae reprehenderit sit eos distinctio optio neque inventore a quae, iste dicta quos eaque quo laboriosam suscipit doloribus nesciunt. Facilis, beatae.', isSent: false }
     ]
 
-    const ws = new WebSocket("ws://localhost/api/");
-
     function sendForm(event: SubmitEvent) {
         event.preventDefault();
         const message = (event.target as HTMLFormElement)!.message.value;
         const receiver = 'contact1';
 
-        ws.send(JSON.stringify({
-            api: 'send_message',
-            uid: 'me',
-            cid: '1',
-            message
-        }));
+        // ws.send(JSON.stringify({
+        //     api: 'send_message',
+        //     uid: 'me',
+        //     message
+        // }));
     }
-
-    ws.addEventListener('open', () => {
-        console.log('Connected to the server')
-
-        ws.send(JSON.stringify({
-            api: 'get_chats',
-            uid: 'me'
-        }));
-    });
-
-    ws.addEventListener('message', event => {
-        const { data } = event;
-        const chats = JSON.parse(data);
-        chats.forEach((dataBit: any) => console.log(dataBit));
-        console.log(chats)
-    });
 </script>
 
 <svelte:head>
     <title>Chats</title>
 </svelte:head>
-
 
 <div id="wrapper">
     <section id="chats-list">
