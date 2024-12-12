@@ -1,19 +1,14 @@
 <script lang="ts">
     import type { Chat } from '$lib/types';
 
-    export let chats: Chat[] = [
-        { imgSrc: '', title: 'Name1', message: 'lorem bla bla' },
-        { imgSrc: '', title: 'Name2', message: 'lorem bla bla bla bla bla bla bla' }
-    ]
+    let { chat }: { chat: Chat } = $props();
 </script> 
 
-{#each chats as { imgSrc, title, message }} 
-    <section class="chat">
-        <img src={imgSrc} alt={title} class="profile-picture"> 
-        <h3 class="chat-name">{title}</h3>
-        <p class="chat-message">{message}</p>
-    </section>  
-{/each}
+<section class="chat">
+    <img src={''} alt='Some alt' class="profile-picture"> 
+    <h3 class="chat-name">Some name</h3>
+    <p class="chat-message">Last message</p>
+</section>  
 
 <style lang="scss"> 
 .chat {

@@ -1,15 +1,10 @@
 <script lang="ts">
     import type { Message } from '$lib/types';
 
-    export let messages: Message[] = [
-        { message: 'lorem bla bla', isSent: true},
-        { message: 'lorem bla bla bla bla bla bla bla', isSent: false }
-    ]
+    const { message }: { message: Message} = $props();
 </script>
 
-{#each messages as { message, isSent }}
-    <h3 class="message" class:sent={isSent} class:received={!isSent}>{message}</h3>
-{/each}
+<h3 class="message" class:sent={message.isSent} class:received={!message.isSent}>{message.text}</h3>
 
 <style lang="scss">
     .message {

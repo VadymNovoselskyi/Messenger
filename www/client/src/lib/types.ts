@@ -4,13 +4,13 @@ export interface Link {
 }
 
 export interface Message {
-    message: string;
+    text: string;
     isSent: boolean;
 }
 
 export interface Chat {
-    imgSrc: string;
-    title: string;
-    message: string;
-    lastUpdate: string;
+    _id: string; //ID type?
+    users: string[]; //User[]
+    messages: Message[];
+    lastUpdate: string; //ISO-Date
 }
