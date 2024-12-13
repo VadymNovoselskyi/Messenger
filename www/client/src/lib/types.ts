@@ -4,8 +4,11 @@ export interface Link {
 }
 
 export interface Message {
+    mid: number;
+    from: string; //User
     text: string;
-    isSent: boolean;
+    sendTime: string; //ISO-date
+    
 }
 
 export interface Chat {

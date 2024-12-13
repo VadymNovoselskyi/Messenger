@@ -1,40 +1,23 @@
-<script lang="ts">
+<script lang="ts">	
     import { page } from '$app/stores';
-    import { ws } from '$lib/stores/socket.svelte';
-    import { chats } from '$lib/stores/chats.svelte';
+    
     import ChatList from '$lib/components/ChatList.svelte';
+    import MessageList from '$lib/components/MessageList.svelte';
     import MessageField from '$lib/components/MessageField.svelte';
-    import type { Chat } from '$lib/types';
+    import type { Chat, Message } from '$lib/types';
 
-    const chatsPromise: Promise<Chat[]> = new Promise((resolve, reject) => {
-        ws.socket = new WebSocket(`${$page.url.origin}/api/`)
-        
-        ws.socket.addEventListener('open', () => {
-            console.log("Connected to the ws");
 
-            ws.socket.send(JSON.stringify({
-                api: 'get_chats',
-                uid: 'me'
-            }));
-        });
+    function sendForm(event: SubmitEvent) {
+        event.preventDefault();
+        const message = (event.target as HTMLFormElement)!.message.value;
+        const receiver = 'contact1';
 
-        ws.socket.addEventListener('message', event => { 
-            const { data } = event;
-            const response = JSON.parse(data);
-            console.log(response);
-
-            switch(response.api) {
-                case 'get_chats':
-                    // chats = response.chats;
-                    resolve(response.chats);
-                    break;
-                
-                default:
-                    console.error(`Uknown api call: '${response.api}'`);
-                    reject(response);
-            }
-        });
-    });
+        // ws.send(JSON.stringify({
+        //     api: 'send_message',
+        //     uid: 'me',
+        //     message
+        // }));
+    }
 </script>
 
 <svelte:head>
@@ -45,21 +28,24 @@
 <div id="wrapper">
     <section id="chats-list">
         <h1 id="chats-list-title">Chats</h1>
-
-        {#await chatsPromise}
-            <p>Waiting...</p>
-        {:then chats}
             {#each chats as chat} 
                 <ChatList {chat} />
             {/each}
-        {/await}
+            
+            <section id="chat-display">
+                {#each getChatsResponse.chats as { messages }}
+                    <MessageList {messages} />
+                {/each}
+            </section>
 
     </section>
 
     <section id="chat-display"></section>
 
     <section id="message-field">
-        <MessageField />
+        <MessageField 
+            submitFn={sendForm}
+        />
     </section>
 </div>
 
@@ -112,3 +98,5 @@
     }
 }
 </style>
+
+<h1>{$page.params.cid}</h1>

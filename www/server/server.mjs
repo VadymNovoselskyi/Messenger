@@ -16,7 +16,8 @@ wss.on('connection', ws => {
         getChats(data.uid).then(chats => {
           ws.send(JSON.stringify({
             api: 'get_chats',
-            chats}));
+            chats
+          }));
         }); 
         break;
 

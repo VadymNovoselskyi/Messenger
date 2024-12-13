@@ -1,5 +1,7 @@
-<script>
-    let { submitFn } = $props();
+<script lang="ts">
+    const defaultFN = (event: Event) => event.preventDefault;
+
+    let { submitFn = defaultFN } = $props();
 </script>
 
 <svelte:head>
