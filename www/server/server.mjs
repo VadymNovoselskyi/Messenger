@@ -1,5 +1,5 @@
 import WebSocket, { WebSocketServer } from 'ws';
-import { getChats } from './mongodb/api.mjs';
+import { getChats, sendMessage } from './mongodb/api.mjs';
 
 const wss = new WebSocketServer({ port:5000 });
 
@@ -19,6 +19,10 @@ wss.on('connection', ws => {
             chats
           }));
         }); 
+        break;
+
+      case "send_message":
+        sendMessage(data.uid, data.cid, data.message)
         break;
 
       default:

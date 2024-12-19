@@ -2,12 +2,8 @@
     import { page } from '$app/stores';
     import type { Link } from '$lib/types';
 
-    export let links: Link[] = [
-        { path: 'Default path 1', title: 'Default title 1' },
-        { path: 'Default path 2', title: 'Default title 2' }
-    ];
+    let { links, id }: { links: Link[], id: string} = $props();
 
-    export let id: string = 'nav';
 </script>
 
 

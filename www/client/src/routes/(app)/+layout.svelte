@@ -5,10 +5,10 @@
     import './app-style.scss';
 
     const links: Link[] = [
-        { path: '/user', title: 'Chats' },
-        { path: '/user/search', title: 'Search' },
-        { path: '/user/profile', title: 'Profile' },
-        { path: '/user/settings', title: 'Settings' }
+        { path: '/', title: 'Chats' },
+        { path: '/search', title: 'Search' },
+        { path: '/profile', title: 'Profile' },
+        { path: '/settings', title: 'Settings' }
     ];
     const id = 'toolbar';
 </script>

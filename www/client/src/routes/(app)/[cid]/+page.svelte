@@ -1,40 +1,20 @@
 <script lang="ts">
     import { page } from '$app/stores';
-    import { ws } from '$lib/stores/socket.svelte';
-    import { chats } from '$lib/stores/chats.svelte';
+    import { memory } from '$lib/stores/memory.svelte';
+    import { getWS, sendMessage } from '$lib/api';
+
     import ChatList from '$lib/components/ChatList.svelte';
+    import MessageList from '$lib/components/MessageList.svelte';
     import MessageField from '$lib/components/MessageField.svelte';
-    import type { Chat } from '$lib/types';
 
-    const chatsPromise: Promise<Chat[]> = new Promise((resolve, reject) => {
-        ws.socket = new WebSocket(`${$page.url.origin}/api/`)
-        
-        ws.socket.addEventListener('open', () => {
-            console.log("Connected to the ws");
+    const ws = getWS();
 
-            ws.socket.send(JSON.stringify({
-                api: 'get_chats',
-                uid: 'me'
-            }));
-        });
-
-        ws.socket.addEventListener('message', event => { 
-            const { data } = event;
-            const response = JSON.parse(data);
-            console.log(response);
-
-            switch(response.api) {
-                case 'get_chats':
-                    // chats = response.chats;
-                    resolve(response.chats);
-                    break;
-                
-                default:
-                    console.error(`Uknown api call: '${response.api}'`);
-                    reject(response);
-            }
-        });
+    ws.addEventListener('open', () => {
+        console.log("Connected to the ws");
     });
+
+    let cid = $derived($page.params.cid);
+    let { messages } = $derived(memory.chats.find(chat => chat._id === cid))!;
 </script>
 
 <svelte:head>
@@ -45,21 +25,15 @@
 <div id="wrapper">
     <section id="chats-list">
         <h1 id="chats-list-title">Chats</h1>
-
-        {#await chatsPromise}
-            <p>Waiting...</p>
-        {:then chats}
-            {#each chats as chat} 
-                <ChatList {chat} />
-            {/each}
-        {/await}
-
+        <ChatList bind:chats={memory.chats} />
     </section>
 
-    <section id="chat-display"></section>
+    <section id="chat-display">
+        <MessageList {messages} />
+    </section>
 
     <section id="message-field">
-        <MessageField />
+        <MessageField submitFn={sendMessage} />
     </section>
 </div>
 
@@ -94,6 +68,7 @@
         
         display: grid;
         grid-template-columns: repeat(10, 1fr);
+        grid-auto-rows: max-content;
         
         background-color: #3a506b;
         max-height: 94vh;

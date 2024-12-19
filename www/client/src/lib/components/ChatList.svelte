@@ -2,34 +2,20 @@
 <!-- Remove hardcoded 'me' to actual users name (stores???) -->
 <script lang="ts">
     import { page } from '$app/stores';
+    import { formatISODate } from '$lib/utils';
     import type { Chat } from '$lib/types';
 
-    let { chat }: { chat: Chat } = $props();
-
-    const contact = chat.users.find((name: string) => name !== 'me');
-    const lastMessage = chat.messages[chat.messages.length - 1].text;
-
-    function formatDate(isoDate: string): string {
-        const date = new Date(isoDate);
-        const now = new Date();
-        
-        const isSameYear = date.getFullYear() === now.getFullYear();
-        if(!isSameYear) return `${date.getHours()}:${date.getMinutes()}, ${date.getDate()}-${date.getMonth()}-${date.getFullYear()}`;
-        
-        const isSameDay = date.getDate() === now.getDate();
-        const isSameMonth = date.getMonth() === now.getMonth();
-        if(!isSameDay || !isSameMonth) return `${date.getHours()}:${date.getMinutes()}, ${date.getDate()}-${date.getMonth()}`;
-
-        return `${date.getHours()}:${date.getMinutes()}`;
-    }
+    let { chats = $bindable() }: { chats: Chat[] } = $props();
 </script> 
 
-<a href='{$page.url.pathname}/{chat._id}' class="chat">
-    <img src={''} alt='{contact}' class="profile-picture"> 
-    <h3 class="chat-name">{contact}</h3>
-    <p class="chat-message">{lastMessage}</p>
-    <p class="send-date">{formatDate(chat.lastUpdate)}</p>
-</a>
+{#each chats as chat} 
+    <a href='{$page.url.origin}/{chat._id}' class="chat">
+        <img src={''} alt='{chat.users.find((name: string) => name !== 'me')}' class="profile-picture"> 
+        <h3 class="chat-name">{chat.users.find((name: string) => name !== 'me')}</h3>
+        <p class="chat-message">{chat.messages[chat.messages.length - 1].text}</p>
+        <p class="send-date">{formatISODate(chat.lastModified)}</p>
+    </a>
+{/each}
 
 <style lang="scss"> 
 .chat {

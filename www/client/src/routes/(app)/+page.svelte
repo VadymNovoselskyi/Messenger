@@ -1,23 +1,16 @@
-<script lang="ts">	
-    import { page } from '$app/stores';
-    
+<script lang="ts">
+    import { memory } from '$lib/stores/memory.svelte';
     import ChatList from '$lib/components/ChatList.svelte';
-    import MessageList from '$lib/components/MessageList.svelte';
     import MessageField from '$lib/components/MessageField.svelte';
-    import type { Chat, Message } from '$lib/types';
 
+    import { getWS, requestChats } from '$lib/api'
 
-    function sendForm(event: SubmitEvent) {
-        event.preventDefault();
-        const message = (event.target as HTMLFormElement)!.message.value;
-        const receiver = 'contact1';
-
-        // ws.send(JSON.stringify({
-        //     api: 'send_message',
-        //     uid: 'me',
-        //     message
-        // }));
-    }
+    const ws = getWS();
+    
+    ws.addEventListener('open', () => {
+        console.log("Connected to the ws");
+        requestChats();
+    });
 </script>
 
 <svelte:head>
@@ -28,24 +21,13 @@
 <div id="wrapper">
     <section id="chats-list">
         <h1 id="chats-list-title">Chats</h1>
-            {#each chats as chat} 
-                <ChatList {chat} />
-            {/each}
-            
-            <section id="chat-display">
-                {#each getChatsResponse.chats as { messages }}
-                    <MessageList {messages} />
-                {/each}
-            </section>
-
+        <ChatList bind:chats={memory.chats} />
     </section>
 
     <section id="chat-display"></section>
 
     <section id="message-field">
-        <MessageField 
-            submitFn={sendForm}
-        />
+        <MessageField />
     </section>
 </div>
 
@@ -76,15 +58,7 @@
     #chat-display {
         grid-column: 2;
         grid-row: 1;
-        padding: 0 1rem;
-        
-        display: grid;
-        grid-template-columns: repeat(10, 1fr);
-        
         background-color: #3a506b;
-        max-height: 94vh;
-        overflow-y: auto;
-        scrollbar-width: thin;
     }
 
     #message-field {
@@ -98,5 +72,3 @@
     }
 }
 </style>
-
-<h1>{$page.params.cid}</h1>

@@ -1,5 +1,7 @@
 <script lang="ts">
-    const defaultFN = (event: Event) => event.preventDefault;
+    function defaultFN(event: Event) {
+        event.preventDefault;
+    }
 
     let { submitFn = defaultFN } = $props();
 </script>
