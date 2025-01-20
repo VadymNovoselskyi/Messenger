@@ -1,5 +1,6 @@
 import { get } from 'svelte/store';
 import { page } from '$app/stores';
+import { goto } from '$app/navigation';
 import { memory } from '$lib/stores/memory.svelte';
 import { setCookie, getCookie } from '$lib/utils';
 
@@ -24,9 +25,8 @@ export async function requestChats(): Promise<void> {
     const ws = await getWS();
     ws.send(JSON.stringify({
         api: 'get_chats',
-        payload: {
-            uid: 'me'
-        }
+        token: getCookie("token"),
+        payload: {}
     }));
 }
 
@@ -41,8 +41,8 @@ export async function sendMessage(event: Event): Promise<void> {
     const cid = get(page).params.cid;
     ws.send(JSON.stringify({
         api: 'send_message',
+        token: getCookie("token"),
         payload: {
-            uid: 'me',
             cid,
             message
         }
@@ -50,7 +50,7 @@ export async function sendMessage(event: Event): Promise<void> {
 
     const chat = memory.chats.find(chat => chat._id === cid)!;
     chat.messages = [...chat.messages, {
-        from: 'me',
+        from: memory.uid,
         text: message,
         sendTime: new Date().toISOString()
     }];
@@ -96,23 +96,24 @@ export function handleServerMessage(event: MessageEvent): void {
     const response = event.data;
     const data = JSON.parse(response);
     console.log(data);
+    if(data.payload.status === 'error') {
+        alert(data.payload.message);
+        return;
+    }
 
     switch(data.api) {
         case 'get_chats':
-            memory.chats = data.chats;
+            memory.chats = data.payload.chats;
             break;
         
         case 'login':
         case 'signup':
-            if(data.payload.status === 'error') {
-                alert(data.payload.message);
-            }
-
-            else {memory.uid = data.payload.uid}
+            memory.uid = data.payload.uid
             console.log(data.api)
 
             setCookie("token", data.payload.token, 28);
             console.log(getCookie("token"));
+            goto('/');
             break;
         
         default:

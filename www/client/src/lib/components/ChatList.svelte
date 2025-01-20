@@ -1,17 +1,17 @@
-<!-- ToDo -->
-<!-- Remove hardcoded 'me' to actual users name (stores???) -->
 <script lang="ts">
     import { page } from '$app/stores';
+    import { memory } from '$lib/stores/memory.svelte'
     import { formatISODate } from '$lib/utils';
     import type { Chat } from '$lib/types';
+    
 
     let { chats }: { chats: Chat[] } = $props();
 </script> 
 
 {#each chats as chat} 
     <a href='{$page.url.origin}/{chat._id}' class="chat">
-        <img src={''} alt='{chat.users.find((name: string) => name !== 'me')}' class="profile-picture"> 
-        <h3 class="chat-name">{chat.users.find((name: string) => name !== 'me')}</h3>
+        <img src={''} alt='{chat.users.find((name: string) => name !== memory.uid)}' class="profile-picture"> 
+        <h3 class="chat-name">{chat.users.find((name: string) => name !== memory.uid)}</h3>
         <p class="chat-message">{chat.messages[chat.messages.length - 1].text}</p>
         <p class="send-date">{formatISODate(chat.lastModified)}</p>
     </a>

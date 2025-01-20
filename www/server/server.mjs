@@ -6,7 +6,6 @@ import { getChats, sendMessage, findUser, createUser } from './mongodb/api.mjs';
 const generateToken = (uid) => {
   return jwt.sign({ uid }, secretKey, { expiresIn: '7d' });
 };
-const users = {};
 const secretKey = 'y8q6GA@0md8ySuNk';
 
 const wss = new WebSocketServer({ port: 5000 });
@@ -45,6 +44,7 @@ wss.on('connection', ws => {
           }
         }));
         ws.isAuthenticated = true;
+        ws.uid = uid;
       }
 
       else if (api === 'login') {
@@ -56,7 +56,7 @@ wss.on('connection', ws => {
             api,
             payload: {
               status: 'error',
-              message: 'User not found' 
+              message: 'User not found'
             }
           }));
         }
@@ -67,7 +67,7 @@ wss.on('connection', ws => {
             api,
             payload: {
               status: 'error',
-              message: 'Invalid password' 
+              message: 'Invalid password'
             }
           }));
         }
@@ -81,23 +81,21 @@ wss.on('connection', ws => {
             token
           }
         }));
-        ws.isAuthenticated
+        ws.isAuthenticated;
+        ws.uid = user._id;
       }
-      else if (api === 'auth') {
-        const { token } = payload;
+      else if (!ws.isAuthenticated) {
+        const { token } = JSON.parse(message);
 
         try {
           const decoded = jwt.verify(token, secretKey);
           const uid = decoded.uid;
-          ws.send(JSON.stringify({
-            api,
-            payload: {
-              status: 'success',
-              uid,
-              token
-            }
-          }));
+          ws.isAuthenticated = true;
+          ws.uid = uid;
+
+          await handleAuthenticatedCall(api, payload, uid);
         } catch (err) {
+          console.log(err)
           ws.send(JSON.stringify({
             api,
             payload: {
@@ -106,12 +104,43 @@ wss.on('connection', ws => {
             }
           }));
         }
-        ws.isAuthenticated = true;
-      }
-      else if (ws.isAuthenticated) {
-        ws.send(JSON.stringify({ type: 'message', message: 'You are authenticated!' }));
       }
       else {
+        console.log(uid)
+        await handleAuthenticatedCall(api, payload, uid);
+      }
+    }
+    catch (err) {
+      console.log(err);
+      ws.send(JSON.stringify({
+        api,
+        payload: {
+          status: 'error',
+          message: 'Invalid api call'
+        }
+      }));
+    }
+  });
+
+  async function handleAuthenticatedCall(api, payload, uid) {
+    switch (api) {
+      case "get_chats":
+        const chats = await getChats(uid);
+        ws.send(JSON.stringify({
+          api: 'get_chats',
+          payload: {
+            status: 'success',
+            chats
+          }
+        }));
+        break;
+
+      case "send_message":
+        sendMessage(uid, payload.cid, payload.message);
+        break;
+
+      default:
+        console.error(`Unknown api call: ${api}`);
         ws.send(JSON.stringify({
           api,
           payload: {
@@ -119,53 +148,8 @@ wss.on('connection', ws => {
             message: 'Invalid api call'
           }
         }));
-      }
     }
-    catch (err) {
-      console.log(err);
-      ws.send(JSON.stringify({ type: 'error', message: 'Invalid message format' }));
-    }
-  });
-
-
-  // ws.on('message', message => {
-  //   console.log(`The message is: ${message}`);
-  //   const { api } = JSON.parse(message);
-
-  //   switch (api) {
-
-  //     case "get_chats":
-  //       getChats(message.uid).then(chats => {
-  //         ws.send(JSON.stringify({
-  //           api: 'get_chats',
-  //           chats
-  //         }));
-  //       });
-  //       break;
-
-  //     case "send_message":
-  //       sendMessage(message.uid, message.cid, message.message)
-  //       break;
-
-  //     case "login":
-  //       auth();
-  //       break;
-
-  //     case "signup":
-  //       const id = createUser(message.username, message.password);
-  //       const payload = { id, username };
-  //       const token = jwt.sign(payload, secretKey, { expiresIn: '28d' });
-  //       ws.send(JSON.stringify({
-  //         api: "signup",
-  //         type: 'auth-t  oken',
-  //         token 
-  //       }));
-  //       break;
-
-  //     default:
-  //       console.error(`Unknown api call: ${api}`);
-  //   }
-  // });
+  }
 
   ws.on('close', () => {
     console.log('Client disconnected');
