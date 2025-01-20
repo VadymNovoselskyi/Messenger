@@ -1,0 +1,19 @@
+#app {
+    display: grid;
+    grid-template-rows: 94vh 6vh;
+    height: 100vh;
+    overflow: hidden;
+
+    main {
+        grid-row: 1;
+        max-height: 94vh;
+    }
+
+    #toolbar {
+        grid-row: 2;
+        height: 6vh;
+        background-color: var(--secondary-bg-color);
+        color: var(--secondary-text-color); 
+        align-content: center;
+    }
+}

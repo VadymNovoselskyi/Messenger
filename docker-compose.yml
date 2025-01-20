@@ -1,0 +1,43 @@
+services:
+
+  web:
+    image: nginx:latest
+    container_name: nginx
+    restart: always
+    ports:
+      - 80:80
+    volumes:
+      - ./config/nginx.conf:/etc/nginx/nginx.conf
+  
+
+  client:
+    image: node:latest
+    container_name: client
+    working_dir: /www/client
+    volumes:
+      - ./www/client:/www/client
+    command: "npm run dev -- --host 0.0.0.0"
+
+
+  server:
+    image: node:latest
+    container_name: server
+    working_dir: /usr/src/server
+    volumes:
+      - ./www/server:/usr/src/server
+      - ./www/server/node_modules:/usr/src/server/node_modules
+    command: npm run dev
+
+
+  mongodb:
+    image: mongo:latest
+    container_name: mongodb
+    restart: always
+    volumes:
+      - ./mongodb:/data/db
+    ports:
+      - 27017:27017
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: 12345
+

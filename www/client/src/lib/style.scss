@@ -1,0 +1,28 @@
+:root {
+    --primary-bg-color: #f8f4ec;
+    --primary-text-color: #222222;
+    --primary-hover-bg-color: #dedede; /* Warm gray */
+    --primary-hover-text-color: #000000; /* Deep black */
+                    
+
+    --secondary-bg-color: #333333;
+    --secondary-text-color: #fffaef;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+
+main {
+    background-color: var(--primary-bg-color);
+    color: var(--primary-text-color);
+}
+
+a {     
+    &, &:visited, &:active {
+        color: inherit;
+    }
+}
