@@ -81,10 +81,14 @@ wss.on('connection', ws => {
             token
           }
         }));
-        ws.isAuthenticated;
-        ws.uid = user._id;
+        ws.isAuthenticated = true;
+        ws.uid = user._id.toString();
       }
-      else if (!ws.isAuthenticated) {
+      else if (ws.isAuthenticated) {
+        console.log(ws.uid)
+        await handleAuthenticatedCall(api, payload, ws.uid);
+      }
+      else {
         const { token } = JSON.parse(message);
 
         try {
@@ -105,15 +109,10 @@ wss.on('connection', ws => {
           }));
         }
       }
-      else {
-        console.log(uid)
-        await handleAuthenticatedCall(api, payload, uid);
-      }
     }
     catch (err) {
       console.log(err);
       ws.send(JSON.stringify({
-        api,
         payload: {
           status: 'error',
           message: 'Invalid api call'

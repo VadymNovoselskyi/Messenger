@@ -1,14 +1,22 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
+	import { tick } from 'svelte';
 	import { page } from '$app/stores';
 	import { memory } from '$lib/stores/memory.svelte';
 	import { requestChats, sendMessage } from '$lib/api.svelte';
 	import type { Chat, Message } from '$lib/types';
 
-	import { tick } from 'svelte';
 
 	import ChatList from '$lib/components/ChatList.svelte';
 	import MessageList from '$lib/components/MessageList.svelte';
 	import MessageField from '$lib/components/MessageField.svelte';
+
+	import { goto } from '$app/navigation';
+    import { getCookie } from '$lib/utils';
+
+    onMount(() => {
+        if (!getCookie("uid") || !getCookie("token")) {goto("/login")}
+    });
 
 	let chatDisplay: HTMLElement;
 		
@@ -70,6 +78,7 @@
 		overflow: hidden;
 
 		#chats-list {
+			position: relative;
 			grid-column: 1;
 			grid-row: span 2;
 			padding: 2rem 0.4rem;

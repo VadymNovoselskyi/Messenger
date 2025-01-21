@@ -1,9 +1,16 @@
 <script lang="ts">
+    import { onMount } from 'svelte';
     import { memory } from '$lib/stores/memory.svelte';
+    import { goto } from '$app/navigation';
     import ChatList from '$lib/components/ChatList.svelte';
     import MessageField from '$lib/components/MessageField.svelte';
 
     import { requestChats } from '$lib/api.svelte'
+    import { getCookie } from '$lib/utils';
+
+    onMount(() => {
+        if (!getCookie("uid") || !getCookie("token")) {goto("/login")}
+    });
 </script>
 
 <svelte:head>
@@ -42,6 +49,7 @@
     overflow: hidden;
     
     #chats-list {
+        position: relative;
         grid-column: 1;   
         grid-row: span 2;     
         padding: 2rem 0.4rem;

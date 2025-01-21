@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { formatISODate } from '$lib/utils';
+    import { formatISODate, getCookie } from '$lib/utils';
     import type { Message } from '$lib/types';
 	import { memory } from '$lib/stores/memory.svelte';
 
@@ -8,7 +8,7 @@
 
 {#if messages} 
     {#each messages as message}
-        <div class="message" class:sent={message.from === memory.uid} class:received={message.from !== memory.uid}>
+        <div class="message" class:sent={message.from === getCookie("uid")} class:received={message.from !== getCookie("uid")}>
             <h3 class="text">{message.text}</h3>
             <p class="sendTime">{formatISODate(message.sendTime)}</p>
         </div>

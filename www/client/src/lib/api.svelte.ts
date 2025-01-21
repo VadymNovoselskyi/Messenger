@@ -50,11 +50,12 @@ export async function sendMessage(event: Event): Promise<void> {
 
     const chat = memory.chats.find(chat => chat._id === cid)!;
     chat.messages = [...chat.messages, {
-        from: memory.uid,
+        from: getCookie("uid") ?? '',
         text: message,
         sendTime: new Date().toISOString()
     }];
 }
+
 
 export async function login(event: SubmitEvent) {
     const { usernameLogin, passwordLogin } = event.currentTarget as HTMLFormElement;
@@ -108,9 +109,9 @@ export function handleServerMessage(event: MessageEvent): void {
         
         case 'login':
         case 'signup':
-            memory.uid = data.payload.uid
             console.log(data.api)
-
+            
+            setCookie("uid", data.payload.uid, 28);
             setCookie("token", data.payload.token, 28);
             console.log(getCookie("token"));
             goto('/');

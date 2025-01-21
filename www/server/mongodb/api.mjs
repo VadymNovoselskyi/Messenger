@@ -3,7 +3,7 @@ import { chats, users } from './connect.mjs';
 import bcrypt from 'bcrypt';
 
 export async function getChats(uid) {
-   const userChats = await chats.find({ users: uid });
+   const userChats = await chats.find({ "users.uid": uid });
    return userChats.toArray();
 }
 
@@ -23,7 +23,7 @@ export async function findUser(username) {
 }
 
 export async function createUser(username, password) {
-   const user = await users.findOne({ username });
+   const user = await findUser(username);
    if (user) {return { status: 'error', uid: 0 }}
 
       const hashedPassword = await bcrypt.hash(password, 10)
@@ -31,5 +31,5 @@ export async function createUser(username, password) {
       username,
       password: hashedPassword
    });
-   return { status: 'success', uid: insertedId };
+   return { status: 'success', uid: insertedId.toString() };
 }

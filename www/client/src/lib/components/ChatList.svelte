@@ -1,21 +1,45 @@
 <script lang="ts">
     import { page } from '$app/stores';
-    import { memory } from '$lib/stores/memory.svelte'
-    import { formatISODate } from '$lib/utils';
-    import type { Chat } from '$lib/types';
+    import { formatISODate, getCookie } from '$lib/utils';
+    import type { Chat, User } from '$lib/types';
     
 
     let { chats }: { chats: Chat[] } = $props();
+    let showAddChat = $state(false);
 </script> 
 
 {#each chats as chat} 
     <a href='{$page.url.origin}/{chat._id}' class="chat">
-        <img src={''} alt='{chat.users.find((name: string) => name !== memory.uid)}' class="profile-picture"> 
-        <h3 class="chat-name">{chat.users.find((name: string) => name !== memory.uid)}</h3>
+        <img src={''} alt='{chat.users.find((user: User) => user.uid !== getCookie("uid"))!.name}' class="profile-picture"> 
+        <h3 class="chat-name">{chat.users.find((user: User) => user.uid !== getCookie("uid"))!.name}</h3>
         <p class="chat-message">{chat.messages[chat.messages.length - 1].text}</p>
         <p class="send-date">{formatISODate(chat.lastModified)}</p>
     </a>
 {/each}
+
+<button id="add-chat" onclick={()=>showAddChat = true}>
+    <i class="fa-solid fa-square-plus"></i>
+</button>
+
+{#if showAddChat}
+    <div class="popup-menu" class:active={showAddChat}>
+        <form>
+            <div class="form-group">
+            <label for="name">Name:</label>
+            <input type="text" id="name" name="name" placeholder="Enter your name">
+            </div>
+            <div class="form-group">
+            <label for="email">Email:</label>
+            <input type="email" id="email" name="email" placeholder="Enter your email">
+            </div>
+            <div class="form-group">
+            <label for="message">Message:</label>
+            <textarea id="message" name="message" placeholder="Enter your message"></textarea>
+            </div>
+            <button type="submit">Submit</button>
+        </form>
+    </div>
+{/if}
 
 <style lang="scss"> 
 .chat {
@@ -60,4 +84,62 @@
         color: var(--primary-hover-text-color);
     }
 }
+#add-chat {
+    position: absolute;
+    inset-block-end: 0.1rem;
+    inset-inline-end: 0.5rem;
+    background-color: var(--primary-bg-color);
+    border: none;
+    cursor: pointer;
+
+     i {font-size: 2.6rem}
+}
+
+.popup-menu {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  background-color: white;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  z-index: 10;
+  padding: 1rem;
+  width: 300px;
+
+  .form-group {
+    margin-bottom: 1rem;
+
+        label {
+        display: block;
+        margin-bottom: 0.5rem;
+        font-weight: bold;
+        }
+
+        input, textarea {
+          width: 100%;
+          padding: 0.5rem;
+          border: 1px solid #ccc;
+          border-radius: 4px;
+          font-size: 1rem;
+        }
+
+    }
+
+    button[type="submit"] {
+      background-color: #007bff;
+      color: white;
+      border: none;
+      padding: 0.5rem 1rem;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 1rem;
+      &:hover {
+        background-color: #0056b3;
+      }
+    }
+}
+
+
+
 </style>

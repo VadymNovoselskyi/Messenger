@@ -3,6 +3,11 @@ export interface Link {
     title: string;
 }
 
+export interface User {
+    uid: string,
+    name: string
+}
+
 export interface Message {
     from: string; //User
     text: string;
@@ -12,7 +17,7 @@ export interface Message {
 
 export interface Chat {
     _id: string; //ID type?
-    users: string[]; //User[]
+    users: User[];
     messages: Message[];
     lastModified: string; //ISO-Date
 }
