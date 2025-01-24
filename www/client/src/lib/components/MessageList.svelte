@@ -3,7 +3,7 @@
     import type { Message } from '$lib/types';
 	import { memory } from '$lib/stores/memory.svelte';
 
-    let { messages}: { messages: Message[] | null} = $props();
+    let { messages }: { messages: Message[] | null} = $props();
 </script>
 
 {#if messages} 

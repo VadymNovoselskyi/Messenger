@@ -8,7 +8,7 @@ export async function getChats(uid) {
 }
 
 export async function sendMessage(uid, cid, message) {
-   chats.updateOne(
+   chats.updateOne (
       { "_id": new ObjectId(`${cid}`) },
       {
          $push: { "messages": { "from": uid, "text": message, "sendTime": new Date().toISOString() } },
@@ -23,13 +23,33 @@ export async function findUser(username) {
 }
 
 export async function createUser(username, password) {
-   const user = await findUser(username);
+   const user = await users.findOne({ username });
    if (user) {return { status: 'error', uid: 0 }}
 
-      const hashedPassword = await bcrypt.hash(password, 10)
-   const { insertedId } = await users.insertOne({
+   const hashedPassword = await bcrypt.hash(password, 10)
+   const { insertedId } = await users.insertOne ({
       username,
       password: hashedPassword
    });
    return { status: 'success', uid: insertedId.toString() };
+}
+
+export async function createChat(creatingUID, receivingUsername) {
+   const creatingUser = await users.findOne({ _id: new ObjectId(creatingUID) });
+   const receivingUser = await users.findOne({ username: receivingUsername });
+   if(!creatingUser || !receivingUser) return {};
+
+   const { insertedId } = await chats.insertOne ({
+      users: [{ 
+         uid: creatingUser._id,
+         username: creatingUser.username
+      },
+      { 
+         uid: receivingUser._id,
+         username: receivingUser.username 
+      }],
+      messages: [],
+      $currentDate: { lastModified: true }
+   });
+   return await chats.findOne({ _id: insertedId });
 }

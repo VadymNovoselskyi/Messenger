@@ -1,15 +1,17 @@
 <script lang="ts">
     import { onMount } from 'svelte';
-    import { memory } from '$lib/stores/memory.svelte';
     import { goto } from '$app/navigation';
-    import ChatList from '$lib/components/ChatList.svelte';
-    import MessageField from '$lib/components/MessageField.svelte';
-
+    import { browser } from '$app/environment';
+    
     import { requestChats } from '$lib/api.svelte'
     import { getCookie } from '$lib/utils';
 
+    import { memory } from '$lib/stores/memory.svelte';
+    import ChatList from '$lib/components/ChatList.svelte';
+
     onMount(() => {
         if (!getCookie("uid") || !getCookie("token")) {goto("/login")}
+        if(browser && !memory.chats.length) { requestChats() }
     });
 </script>
 
@@ -17,26 +19,13 @@
     <title>Chats</title>
 </svelte:head>
 
-
 <div id="wrapper">
     <section id="chats-list">
         <h1 id="chats-list-title">Chats</h1>
-        
         <ChatList chats={memory.chats} /> 
-        {#if !memory.chats.length}
-            {#await requestChats()}
-                <p>Fetching is in progress!</p>
-            {:catch error}
-                <p>{error.message}</p>
-            {/await}
-        {/if}
     </section>
 
     <section id="chat-display"></section>
-
-    <section id="message-field">
-        <MessageField />
-    </section>
 </div>
 
 
@@ -67,16 +56,6 @@
     #chat-display {
         grid-column: 2;
         grid-row: 1;
-        background-color: #3a506b;
-    }
-
-    #message-field {
-        grid-column: 2;
-        grid-row: 2;
-        justify-items: center;
-        width: 100%;
-
-        padding: 0.4rem;
         background-color: #3a506b;
     }
 }

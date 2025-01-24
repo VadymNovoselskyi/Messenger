@@ -15,19 +15,27 @@ export function getWS(): Promise<WebSocket> {
             resolve(memory.ws!);
         } else {
             memory.ws!.addEventListener('open', () => resolve(memory.ws!), { once: true });
-            memory.ws!.addEventListener('error', (error) => reject(error), { once: true });
+            memory.ws!.addEventListener('error', (event) => {
+                console.error("WebSocket connection error:", event);
+                reject(new Error("Failed to connect to WebSocket"));
+            }, { once: true });
         }
     });
-
 }
 
 export async function requestChats(): Promise<void> {
-    const ws = await getWS();
-    ws.send(JSON.stringify({
-        api: 'get_chats',
-        token: getCookie("token"),
-        payload: {}
-    }));
+    try {
+        const ws = await getWS();
+        ws.send(JSON.stringify({
+            api: 'get_chats',
+            token: getCookie("token"),
+            payload: {}
+        }));
+        return Promise.resolve();
+    } catch (error) {
+        console.error("Error in requestChats:", error);
+        return Promise.reject(error);
+    }
 }
 
 export async function sendMessage(event: Event): Promise<void> {
@@ -56,8 +64,25 @@ export async function sendMessage(event: Event): Promise<void> {
     }];
 }
 
+export async function addChat(event: SubmitEvent): Promise<void> {
+    event.preventDefault();
+    const usernameInput = (event.currentTarget as HTMLFormElement).username;
+    const username = usernameInput.value;
 
-export async function login(event: SubmitEvent) {
+    usernameInput.value = '';
+    console.log(username);
+
+    const ws = await getWS();
+    ws.send(JSON.stringify({
+        api: 'create_chat',
+        token: getCookie("token"),
+        payload: {
+            username
+        }
+    }));
+}
+
+export async function login(event: SubmitEvent): Promise<void> {
     const { usernameLogin, passwordLogin } = event.currentTarget as HTMLFormElement;
     const username = usernameLogin.value;
     const password = passwordLogin.value;
@@ -75,7 +100,7 @@ export async function login(event: SubmitEvent) {
     }));
 }
 
-export async function signup(event: SubmitEvent) {
+export async function signup(event: SubmitEvent): Promise<void> {
     const { usernameSignup, passwordSignup } = event.currentTarget as HTMLFormElement;
     const username = usernameSignup.value;
     const password = passwordSignup.value;
@@ -105,6 +130,11 @@ export function handleServerMessage(event: MessageEvent): void {
     switch(data.api) {
         case 'get_chats':
             memory.chats = data.payload.chats;
+            break;
+        
+        case 'create_chat':
+            const { createdChat } = data.payload;
+            memory.chats = [createdChat, ...memory.chats];
             break;
         
         case 'login':

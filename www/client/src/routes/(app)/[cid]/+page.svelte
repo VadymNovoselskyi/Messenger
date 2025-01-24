@@ -1,67 +1,54 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import { tick } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
+	import { browser } from '$app/environment';
 	import { memory } from '$lib/stores/memory.svelte';
-	import { requestChats, sendMessage } from '$lib/api.svelte';
-	import type { Chat, Message } from '$lib/types';
 
+	import { requestChats, sendMessage } from '$lib/api.svelte';
+	import { getCookie } from '$lib/utils';
+	import type { Chat, Message } from '$lib/types';
 
 	import ChatList from '$lib/components/ChatList.svelte';
 	import MessageList from '$lib/components/MessageList.svelte';
 	import MessageField from '$lib/components/MessageField.svelte';
 
-	import { goto } from '$app/navigation';
-    import { getCookie } from '$lib/utils';
-
-    onMount(() => {
-        if (!getCookie("uid") || !getCookie("token")) {goto("/login")}
-    });
-
-	let chatDisplay: HTMLElement;
-		
-	let chatCount = $derived(memory.chats.length);
-	// svelte-ignore state_referenced_locally
-	if(!chatCount) { requestChats() }
-	
-	let cid = $derived($page.params.cid);
-	function findMessages():Message[] | null {
-		const chat: Chat | undefined = memory.chats.find((chat: Chat) => chat._id === cid);
-		return chat ? chat.messages : null;
-	}
-
-
-	$effect(() => {
-		async function scrollToBottom() {
-			const { cid } = $page.params;
-			if (cid) {
-				await tick();
-				if (chatDisplay) {
-					chatDisplay.scrollTop = chatDisplay.scrollHeight;
-				}
-			}
-		}
-					
-		scrollToBottom();
+	onMount(() => {
+		if (!getCookie('uid') || !getCookie('token')) { goto('/login') }
+		if(browser && !memory.chats.length) { requestChats() }
 	});
+
+	
+	let messages: Message[] | null = $state()!;
+	$effect(() => {
+		const { cid } = $page.params;
+		const chat = memory.chats.find((chat) => chat._id === cid);
+		messages = chat ? chat.messages : null;
+	});
+	
+	let chatDisplay: HTMLElement;
+	async function scrollToBottom() {
+		await tick();
+		if (chatDisplay) {
+			chatDisplay.scrollTop = chatDisplay.scrollHeight;
+		}
+	}
+	$effect(() => {	scrollToBottom()});
 </script>
 
 <svelte:head>
 	<title>Chats</title>
 </svelte:head>
 
+
 <div id="wrapper">
 	<section id="chats-list">
 		<h1 id="chats-list-title">Chats</h1>
-
-		<ChatList chats={memory.chats} /> 
-        {#if chatCount == 0}
-			<p>Fetching is in progress!</p>
-        {/if}
+		<ChatList chats={memory.chats} />
 	</section>
 
 	<section id="chat-display" bind:this={chatDisplay}>
-		<MessageList messages={findMessages()} />
+		<MessageList {messages} />
 	</section>
 
 	<section id="message-field">

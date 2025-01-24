@@ -32,7 +32,7 @@
 			<input type="text" id="usernameSignup" placeholder="Username" required >
 
 			<label for="password">Password</label>
-			<input type="password" id="passwordSignup" placeholder="Password"required>
+			<input type="password" id="passwordSignup" placeholder="Password" required>
 
 			<button type="submit">Signup</button>
 		</form>
@@ -78,7 +78,6 @@
 					font-size: 1.4rem;
 					margin-top: 4rem;
 					padding: 1rem 2rem;
-
 				}
 			}
 		}
