@@ -21,47 +21,26 @@ wss.on('connection', ws => {
 
       if (api === 'signup') {
         const { username, password } = payload;
-        const { status, uid } = await createUser(username, password);
-
-        if (status === 'error') {
-          ws.send(JSON.stringify({
-            api,
-            payload: {
-              status,
-              message: "Username already exists"
-            }
-          }));
-          return;
-        }
-
-        const token = generateToken(uid);
+        const uid = await createUser(username, password);
+        const token = generateToken(uid.toString());
         ws.send(JSON.stringify({
           api,
           payload: {
-            status,
+            status: 'success',
             uid,
             token
           }
         }));
         ws.isAuthenticated = true;
-        ws.uid = uid;
+        ws.uid = uid.toString();
       }
 
       else if (api === 'login') {
         const { username, password } = payload;
 
         const user = await findUser(username);
-        if (!user) {
-          return ws.send(JSON.stringify({
-            api,
-            payload: {
-              status: 'error',
-              message: 'User not found'
-            }
-          }));
-        }
-
         const isPasswordValid = await bcrypt.compare(password, user.password);
+
         if (!isPasswordValid) {
           return ws.send(JSON.stringify({
             api,
@@ -72,7 +51,7 @@ wss.on('connection', ws => {
           }));
         }
 
-        const token = generateToken(user._id);
+        const token = generateToken(user._id.toString());
         ws.send(JSON.stringify({
           api,
           payload: {
@@ -85,7 +64,6 @@ wss.on('connection', ws => {
         ws.uid = user._id.toString();
       }
       else if (ws.isAuthenticated) {
-        console.log(ws.uid)
         await handleAuthenticatedCall(api, payload, ws.uid);
       }
       else {
@@ -104,62 +82,63 @@ wss.on('connection', ws => {
             api,
             payload: {
               status: 'error',
-              message: 'Invalid Token'
+              message: 'Invalid Token. Login again'
             }
           }));
         }
       }
-    }
-    catch (err) {
-      console.log(err);
+    } catch (error) {
       ws.send(JSON.stringify({
         payload: {
-          status: 'error',
-          message: 'Invalid api call'
+          status: "error",
+          message: error.message
         }
       }));
     }
   });
 
   async function handleAuthenticatedCall(api, payload, uid) {
-    switch (api) {
-      case "get_chats":
-        const chats = await getChats(uid);
-        ws.send(JSON.stringify({
-          api: 'get_chats',
-          payload: {
-            status: 'success',
-            chats
-          }
-        }));
-        break;
+    try {
+      switch (api) {
+        case "get_chats":
+          const chats = await getChats(uid);
 
-      case "send_message":
-        sendMessage(uid, payload.cid, payload.message);
-        break;
-
-      case "create_chat":
-        const createdChat = await createChat(uid, payload.username);
-        console.log(createdChat);
-
-        ws.send(JSON.stringify({
-          api: 'create_chat',
-          payload: {
-            status: 'success',
-            createdChat
-          }
-        }));
-        break;
-
-      default:
-        console.error(`Unknown api call: ${api}`);
-        ws.send(JSON.stringify({
-          api,
-          payload: {
-            status: 'error',
-            message: 'Invalid api call'
-          }
-        }));
+          ws.send(JSON.stringify({
+            api: 'get_chats',
+            payload: {
+              status: 'success',
+              chats
+            }
+          }));
+          break;
+  
+        case "send_message":
+          sendMessage(uid, payload.cid, payload.message);
+          break;
+  
+        case "create_chat":
+          const createdChat = await createChat(uid, payload.username);
+          ws.send(JSON.stringify({
+            api: 'create_chat',
+            payload: {
+              status: 'success',
+              createdChat
+            }
+          }));
+          break;
+  
+        default:
+          console.error(`Unknown api call: ${api}`);
+          ws.send(JSON.stringify({
+            api,
+            payload: {
+              status: 'error',
+              message: 'Invalid api call'
+            }
+          }));
+      }
+    } catch (error) {
+      throw error;
     }
   }
 

@@ -1,3 +1,5 @@
+import { memory } from "./stores/memory.svelte";
+
 export function formatISODate(isoDate: string): string {
     const date = new Date(isoDate);
     const now = new Date();
@@ -32,4 +34,12 @@ export function getCookie(name: string): string | null {
         if (key === name) return value;
     }
     return null;
+}
+ 
+export function sortChats(): void {
+    memory.chats = memory.chats.sort((a, b) => {
+        const aTime: number = new Date(a.lastModified).getTime();
+        const bTime: number = new Date(b.lastModified).getTime();
+        return bTime - aTime;
+    })
 }

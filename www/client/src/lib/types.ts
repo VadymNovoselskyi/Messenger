@@ -5,7 +5,7 @@ export interface Link {
 
 export interface User {
     uid: string,
-    name: string
+    username: string
 }
 
 export interface Message {

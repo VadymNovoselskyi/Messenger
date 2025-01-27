@@ -1,7 +1,6 @@
 <script lang="ts">
     import { formatISODate, getCookie } from '$lib/utils';
     import type { Message } from '$lib/types';
-	import { memory } from '$lib/stores/memory.svelte';
 
     let { messages }: { messages: Message[] | null} = $props();
 </script>

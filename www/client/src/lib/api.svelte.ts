@@ -2,7 +2,7 @@ import { get } from 'svelte/store';
 import { page } from '$app/stores';
 import { goto } from '$app/navigation';
 import { memory } from '$lib/stores/memory.svelte';
-import { setCookie, getCookie } from '$lib/utils';
+import { setCookie, getCookie, sortChats } from '$lib/utils';
 
 export function getWS(): Promise<WebSocket> {
     if(!memory.ws || memory.ws.readyState === WebSocket.CLOSING || memory.ws.readyState === WebSocket.CLOSED) {
@@ -62,6 +62,7 @@ export async function sendMessage(event: Event): Promise<void> {
         text: message,
         sendTime: new Date().toISOString()
     }];
+    sortChats();
 }
 
 export async function addChat(event: SubmitEvent): Promise<void> {
@@ -130,6 +131,7 @@ export function handleServerMessage(event: MessageEvent): void {
     switch(data.api) {
         case 'get_chats':
             memory.chats = data.payload.chats;
+            sortChats();
             break;
         
         case 'create_chat':

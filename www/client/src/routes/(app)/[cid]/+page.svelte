@@ -44,7 +44,7 @@
 <div id="wrapper">
 	<section id="chats-list">
 		<h1 id="chats-list-title">Chats</h1>
-		<ChatList chats={memory.chats} />
+		<ChatList bind:chats={memory.chats} />
 	</section>
 
 	<section id="chat-display" bind:this={chatDisplay}>

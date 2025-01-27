@@ -4,7 +4,7 @@
 	import { formatISODate, getCookie } from '$lib/utils';
 	import type { Chat, User } from '$lib/types';
 
-	let { chats }: { chats: Chat[] } = $props();
+	let { chats = $bindable() }: { chats: Chat[] } = $props();
 	let showAddChat = $state(false);
 </script>
 
@@ -16,13 +16,13 @@
 	<a href="{$page.url.origin}/{chat._id}" class="chat">
 		<img
 			src={''}
-			alt={chat.users.find((user: User) => user.uid !== getCookie('uid'))!.name}
+			alt={chat.users.find((user: User) => user.uid !== getCookie('uid'))!.username}
 			class="profile-picture"
 		/>
 		<h3 class="chat-name">
-			{chat.users.find((user: User) => user.uid !== getCookie('uid'))!.name}
+			{chat.users.find((user: User) => user.uid !== getCookie('uid'))!.username}
 		</h3>
-		<p class="chat-message">{chat.messages[chat.messages.length - 1].text}</p>
+		<p class="chat-message" class:system-message={!chat.messages.length}>{chat.messages[chat.messages.length - 1]?.text ?? 'No messages'}</p>
 		<p class="send-date">{formatISODate(chat.lastModified)}</p>
 	</a>
 {/each}
@@ -76,6 +76,10 @@
 			grid-row: 2;
 			max-height: 4rem;
 			overflow: hidden;
+		}
+
+		.system-message {
+			color: #0065e1;
 		}
 
 		.send-date {
