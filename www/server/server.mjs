@@ -3,13 +3,14 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import { getChats, sendMessage, findUser, createUser, createChat } from './mongodb/api.mjs';
 
+const secretKey = 'y8q6GA@0md8ySuNk';
 const generateToken = (uid) => {
   return jwt.sign({ uid }, secretKey, { expiresIn: '7d' });
 };
-const secretKey = 'y8q6GA@0md8ySuNk';
+
+const onlineUsers = {};
 
 const wss = new WebSocketServer({ port: 5000 });
-
 wss.on('connection', ws => {
   console.log('Client connected');
   ws.isAuthenticated = false;
@@ -33,6 +34,7 @@ wss.on('connection', ws => {
         }));
         ws.isAuthenticated = true;
         ws.uid = uid.toString();
+        onlineUsers[ws.uid] = ws;
       }
 
       else if (api === 'login') {
@@ -62,6 +64,7 @@ wss.on('connection', ws => {
         }));
         ws.isAuthenticated = true;
         ws.uid = user._id.toString();
+        onlineUsers[ws.uid] = ws;
       }
       else if (ws.isAuthenticated) {
         await handleAuthenticatedCall(api, payload, ws.uid);
@@ -74,6 +77,7 @@ wss.on('connection', ws => {
           const uid = decoded.uid;
           ws.isAuthenticated = true;
           ws.uid = uid;
+          onlineUsers[ws.uid] = ws;
 
           await handleAuthenticatedCall(api, payload, uid);
         } catch (err) {
@@ -113,7 +117,18 @@ wss.on('connection', ws => {
           break;
   
         case "send_message":
-          sendMessage(uid, payload.cid, payload.message);
+          const receivingUID = await sendMessage(uid, payload.cid, payload.message);
+          if(!onlineUsers[receivingUID.toString()]) return;
+          console.log("Receiver found:", receivingUID.toString(), uid);
+
+          onlineUsers[receivingUID.toString()].send(JSON.stringify({
+            api: 'receive_message',
+            payload: {
+              status: 'success',
+              cid: payload.cid,
+              message: payload.message
+            }
+          }));
           break;
   
         case "create_chat":

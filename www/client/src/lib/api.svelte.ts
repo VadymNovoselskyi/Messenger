@@ -56,12 +56,19 @@ export async function sendMessage(event: Event): Promise<void> {
         }
     }));
 
-    const chat = memory.chats.find(chat => chat._id === cid)!;
-    chat.messages = [...chat.messages, {
-        from: getCookie("uid") ?? '',
-        text: message,
-        sendTime: new Date().toISOString()
-    }];
+    const chat = memory.chats.find(chat => chat._id === cid);
+    if (!chat) {
+      throw new Error(`Chat with id ${cid} not found`);
+    }
+    
+    const currentTime = new Date().toISOString();
+    chat.messages.push({
+      from: getCookie("uid") ?? '',
+      text: message,
+      sendTime: currentTime
+    });
+    
+    chat.lastModified = currentTime;
     sortChats();
 }
 
@@ -69,9 +76,8 @@ export async function addChat(event: SubmitEvent): Promise<void> {
     event.preventDefault();
     const usernameInput = (event.currentTarget as HTMLFormElement).username;
     const username = usernameInput.value;
-
+    if(!username) return;
     usernameInput.value = '';
-    console.log(username);
 
     const ws = await getWS();
     ws.send(JSON.stringify({
@@ -129,6 +135,25 @@ export function handleServerMessage(event: MessageEvent): void {
     }
 
     switch(data.api) {
+        case 'receive_message':
+            const { cid, message } = data.payload;
+
+            const chat = memory.chats.find(chat => chat._id === cid);
+            if (!chat) {
+              throw new Error(`Chat with id ${cid} not found`);
+            }
+            
+            const currentTime = new Date().toISOString();
+            const sendingUID =  chat.users.find((user) => user.uid !== getCookie('uid'))!.uid;
+            chat.messages.push({
+              from: sendingUID,
+              text: message,
+              sendTime: currentTime
+            });
+            
+            chat.lastModified = currentTime;
+            sortChats();
+            break;
         case 'get_chats':
             memory.chats = data.payload.chats;
             sortChats();
@@ -140,9 +165,7 @@ export function handleServerMessage(event: MessageEvent): void {
             break;
         
         case 'login':
-        case 'signup':
-            console.log(data.api)
-            
+        case 'signup':            
             setCookie("uid", data.payload.uid, 28);
             setCookie("token", data.payload.token, 28);
             console.log(getCookie("token"));

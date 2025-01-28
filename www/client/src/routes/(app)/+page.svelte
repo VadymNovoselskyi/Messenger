@@ -10,8 +10,8 @@
     import ChatList from '$lib/components/ChatList.svelte';
 
     onMount(() => {
-        if (!getCookie("uid") || !getCookie("token")) {goto("/login")}
-        if(browser && !memory.chats.length) { requestChats() }
+        if (!getCookie("uid") || !getCookie("token")) goto("/login")
+        if(browser && !memory.chats.length) requestChats()
     });
 </script>
 

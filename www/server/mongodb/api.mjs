@@ -14,7 +14,7 @@ export async function getChats(uid) {
 export async function sendMessage(uid, cid, message) {
   try {
     const result = await chats.updateOne(
-      { "_id": new ObjectId(`${cid}`) },
+      { "_id": new ObjectId(cid) },
       {
         $push: { "messages": { "from": uid, "text": message, "sendTime": new Date() } },
         $currentDate: { lastModified: true }
@@ -23,6 +23,11 @@ export async function sendMessage(uid, cid, message) {
     if (result.modifiedCount === 0) {
       throw new Error(`Failed to send message in chat ID ${cid}.`);
     }
+    
+    const chat = await chats.findOne({ _id:  new ObjectId(cid) });
+    const recUID = chat.users.find(user => user.uid.toString() !== uid).uid;
+    console.log(recUID, uid);
+    return recUID
   } catch (error) {
     throw new Error(`Error sending message in chat ID ${cid}: ${error.message}`);
   }

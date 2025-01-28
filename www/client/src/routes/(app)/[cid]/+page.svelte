@@ -14,32 +14,33 @@
 	import MessageField from '$lib/components/MessageField.svelte';
 
 	onMount(() => {
-		if (!getCookie('uid') || !getCookie('token')) { goto('/login') }
-		if(browser && !memory.chats.length) { requestChats() }
+		if (!getCookie('uid') || !getCookie('token')) goto('/login');
+		if (browser && !memory.chats.length) requestChats();
 	});
 
-	
 	let messages: Message[] | null = $state()!;
 	$effect(() => {
-		const { cid } = $page.params;
-		const chat = memory.chats.find((chat) => chat._id === cid);
-		messages = chat ? chat.messages : null;
 	});
 	
 	let chatDisplay: HTMLElement;
-	async function scrollToBottom() {
-		await tick();
-		if (chatDisplay) {
-			chatDisplay.scrollTop = chatDisplay.scrollHeight;
+	$effect(() => {
+		async function scrollToBottom() {
+			await tick();
+			if (chatDisplay) {
+				chatDisplay.scrollTop = chatDisplay.scrollHeight;
+			}
 		}
-	}
-	$effect(() => {	scrollToBottom()});
+		const { cid } = $page.params;
+		const chat = memory.chats.find((chat) => chat._id === cid);
+		
+		messages = chat ? chat.messages : null;
+		scrollToBottom();
+	});
 </script>
 
 <svelte:head>
 	<title>Chats</title>
 </svelte:head>
-
 
 <div id="wrapper">
 	<section id="chats-list">
