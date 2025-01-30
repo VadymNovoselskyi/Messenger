@@ -119,7 +119,6 @@ wss.on('connection', ws => {
         case "send_message":
           const receivingUID = await sendMessage(uid, payload.cid, payload.message);
           if(!onlineUsers[receivingUID.toString()]) return;
-          console.log("Receiver found:", receivingUID.toString(), uid);
 
           onlineUsers[receivingUID.toString()].send(JSON.stringify({
             api: 'receive_message',
@@ -158,7 +157,8 @@ wss.on('connection', ws => {
   }
 
   ws.on('close', () => {
-    console.log('Client disconnected');
+    if(onlineUsers[ws.uid]) delete onlineUsers[ws.uid];
+    console.log(Object.keys(onlineUsers));
   });
 
 });

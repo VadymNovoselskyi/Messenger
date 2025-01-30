@@ -25,9 +25,7 @@ export async function sendMessage(uid, cid, message) {
     }
     
     const chat = await chats.findOne({ _id:  new ObjectId(cid) });
-    const recUID = chat.users.find(user => user.uid.toString() !== uid).uid;
-    console.log(recUID, uid);
-    return recUID
+    return chat.users.find(user => user.uid.toString() !== uid).uid;
   } catch (error) {
     throw new Error(`Error sending message in chat ID ${cid}: ${error.message}`);
   }

@@ -14,14 +14,14 @@
 	import MessageField from '$lib/components/MessageField.svelte';
 
 	onMount(() => {
-		if (!getCookie('uid') || !getCookie('token')) goto('/login');
+		if (!getCookie('uid') || !getCookie('token')) {
+			goto('/login');
+			return;
+		}
 		if (browser && !memory.chats.length) requestChats();
 	});
 
 	let messages: Message[] | null = $state()!;
-	$effect(() => {
-	});
-	
 	let chatDisplay: HTMLElement;
 	$effect(() => {
 		async function scrollToBottom() {
@@ -32,7 +32,7 @@
 		}
 		const { cid } = $page.params;
 		const chat = memory.chats.find((chat) => chat._id === cid);
-		
+
 		messages = chat ? chat.messages : null;
 		scrollToBottom();
 	});

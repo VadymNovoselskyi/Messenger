@@ -1,62 +1,64 @@
 <script lang="ts">
-    import { onMount } from 'svelte';
-    import { goto } from '$app/navigation';
-    import { browser } from '$app/environment';
-    
-    import { requestChats } from '$lib/api.svelte'
-    import { getCookie } from '$lib/utils';
+	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
+	import { browser } from '$app/environment';
 
-    import { memory } from '$lib/stores/memory.svelte';
-    import ChatList from '$lib/components/ChatList.svelte';
+	import { requestChats } from '$lib/api.svelte';
+	import { getCookie } from '$lib/utils';
 
-    onMount(() => {
-        if (!getCookie("uid") || !getCookie("token")) goto("/login")
-        if(browser && !memory.chats.length) requestChats()
-    });
+	import { memory } from '$lib/stores/memory.svelte';
+	import ChatList from '$lib/components/ChatList.svelte';
+
+	onMount(() => {
+		if (!getCookie('uid') || !getCookie('token')) {
+			goto('/login');
+			return;
+		}
+		if (browser && !memory.chats.length) requestChats();
+	});
 </script>
 
 <svelte:head>
-    <title>Chats</title>
+	<title>Chats</title>
 </svelte:head>
 
 <div id="wrapper">
-    <section id="chats-list">
-        <h1 id="chats-list-title">Chats</h1>
-        <ChatList bind:chats={memory.chats} /> 
-    </section>
+	<section id="chats-list">
+		<h1 id="chats-list-title">Chats</h1>
+		<ChatList bind:chats={memory.chats} />
+	</section>
 
-    <section id="chat-display"></section>
+	<section id="chat-display"></section>
 </div>
 
-
 <style lang="scss">
-#wrapper {
-    display: grid;
-    grid-template-columns: minmax(14rem, 3fr) 8fr;
-    grid-template-rows: 1fr auto;
-    height: 94vh;
-    overflow: hidden;
-    
-    #chats-list {
-        position: relative;
-        grid-column: 1;   
-        grid-row: span 2;     
-        padding: 2rem 0.4rem;
-        
-        background-color: var(--primary-bg-color);
-        max-height: 94vh;
-        overflow-y: auto;
-        scrollbar-width: thin;
+	#wrapper {
+		display: grid;
+		grid-template-columns: minmax(14rem, 3fr) 8fr;
+		grid-template-rows: 1fr auto;
+		height: 94vh;
+		overflow: hidden;
 
-        #chats-list-title {
-            justify-self: center;
-        }
-    }
+		#chats-list {
+			position: relative;
+			grid-column: 1;
+			grid-row: span 2;
+			padding: 2rem 0.4rem;
 
-    #chat-display {
-        grid-column: 2;
-        grid-row: 1;
-        background-color: #3a506b;
-    }
-}
+			background-color: var(--primary-bg-color);
+			max-height: 94vh;
+			overflow-y: auto;
+			scrollbar-width: thin;
+
+			#chats-list-title {
+				justify-self: center;
+			}
+		}
+
+		#chat-display {
+			grid-column: 2;
+			grid-row: 1;
+			background-color: #3a506b;
+		}
+	}
 </style>
