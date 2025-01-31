@@ -11,21 +11,24 @@ services:
   
 
   client:
-    image: node:latest
+    build:
+      context: ./www/client
+      dockerfile: Dockerfile
     container_name: client
-    working_dir: /www/client
     volumes:
       - ./www/client:/www/client
+      - /www/client/node_modules
     command: "npm run dev -- --host 0.0.0.0"
 
 
   server:
-    image: node:latest
+    build:
+      context: ./www/server 
+      dockerfile: Dockerfile
     container_name: server
-    working_dir: /usr/src/server
     volumes:
       - ./www/server:/usr/src/server
-      - ./www/server/node_modules:/usr/src/server/node_modules
+      - /usr/src/server/node_modules
     command: npm run dev
 
 
