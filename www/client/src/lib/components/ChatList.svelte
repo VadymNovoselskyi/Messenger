@@ -22,7 +22,9 @@
 		<h3 class="chat-name">
 			{chat.users.find((user: User) => user.uid !== getCookie('uid'))!.username}
 		</h3>
-		<p class="chat-message" class:system-message={!chat.messages.length}>{chat.messages[chat.messages.length - 1]?.text ?? 'No messages'}</p>
+		<p class="chat-message" class:system-message={!chat.messages.length}>
+			{chat.messages[chat.messages.length - 1]?.text ?? 'No messages'}
+		</p>
 		<p class="send-date">{formatISODate(chat.lastModified)}</p>
 	</a>
 {/each}
@@ -69,13 +71,19 @@
 		.chat-name {
 			grid-column: 2;
 			grid-row: 1;
+
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
 		}
 
 		.chat-message {
 			grid-column: 2;
 			grid-row: 2;
-			max-height: 4rem;
+
+			white-space: nowrap;
 			overflow: hidden;
+			text-overflow: ellipsis;
 		}
 
 		.system-message {

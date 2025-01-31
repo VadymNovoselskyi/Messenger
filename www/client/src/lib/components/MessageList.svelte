@@ -28,25 +28,27 @@
 
 <style lang="scss">
 	.message {
+		overflow-wrap: break-word;
 		overflow-anchor: none;
 		padding: 0.6rem;
 		border-radius: 1rem;
 		margin: 1rem 0;
+
+		&.received {
+			grid-column: 1/7;
+			background-color: #edf6f9;
+		}
+	
+		&.sent {
+			grid-column: 5/11;
+			background-color: #83c5be;
+		}
 
 		.sendTime {
 			justify-self: end;
 		}
 	}
 
-	.received {
-		grid-column: 1/7;
-		background-color: #edf6f9;
-	}
-
-	.sent {
-		grid-column: 5/11;
-		background-color: #83c5be;
-	}
 
 	#anchor {
         grid-column: 1 / -1;
