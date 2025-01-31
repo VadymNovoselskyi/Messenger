@@ -44,7 +44,6 @@
 
 <div id="wrapper">
 	<section id="chats-list">
-		<h1 id="chats-list-title">Chats</h1>
 		<ChatList bind:chats={memory.chats} />
 	</section>
 
@@ -66,19 +65,15 @@
 		overflow: hidden;
 
 		#chats-list {
+			display: grid;
+			grid-template-rows: auto 1fr;
+			
 			position: relative;
 			grid-column: 1;
 			grid-row: span 2;
-			padding: 2rem 0.4rem;
 
 			background-color: var(--primary-bg-color);
 			max-height: 94vh;
-			overflow-y: auto;
-			scrollbar-width: thin;
-
-			#chats-list-title {
-				justify-self: center;
-			}
 		}
 
 		#chat-display {
