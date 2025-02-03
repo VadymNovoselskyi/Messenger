@@ -11,42 +11,58 @@
 
 	let scrollableContent: HTMLElement;
 	let scrollableThumb: HTMLElement;
-	let isDragging = false;
-	let startY: number;
-	let startScrollTop: number;
+	let isDragging = $state(false);
+	let startY = 0;
+	let startScrollTop = 0;
+	let animationFrameId: number | null;
 
-	const updateThumbPosition = () => {
+	function updateThumbPosition(): void {
 		const contentHeight = scrollableContent.scrollHeight;
 		const visibleHeight = scrollableContent.clientHeight;
 		const scrollTop = scrollableContent.scrollTop;
 
-		const thumbHeight = (visibleHeight / contentHeight) * visibleHeight;
+		const thumbHeight = Math.max((visibleHeight / contentHeight) * visibleHeight, 20);
 		const thumbPosition = (scrollTop / contentHeight) * visibleHeight + scrollTop;
 
 		scrollableThumb.style.height = `${thumbHeight}px`;
 		scrollableThumb.style.transform = `translateY(${thumbPosition}px)`;
-	};
+	}
 
-	function onMouseDown(event: MouseEvent) {
+	function onMouseDown(event: MouseEvent): void {
 		isDragging = true;
 		startY = event.clientY;
 		startScrollTop = scrollableContent.scrollTop;
+
+		// Disable text selection while dragging.
+		document.body.style.userSelect = 'none';
+
 		document.addEventListener('mousemove', onMouseMove);
 		document.addEventListener('mouseup', onMouseUp);
 	}
 
-	function onMouseMove(event: MouseEvent) {
+	function onMouseMove(event: MouseEvent): void {
 		if (!isDragging) return;
 		const deltaY = event.clientY - startY;
 		const contentHeight = scrollableContent.scrollHeight;
 		const visibleHeight = scrollableContent.clientHeight;
+
+		// Ensure a minimum thumb height of 20px.
 		const thumbHeight = Math.max((visibleHeight / contentHeight) * visibleHeight, 20);
 		const scrollRatio = (contentHeight - visibleHeight) / (visibleHeight - thumbHeight);
 		scrollableContent.scrollTop = startScrollTop + deltaY * scrollRatio;
+
+		// Throttle thumb updates using requestAnimationFrame.
+		if (animationFrameId !== null) {
+			cancelAnimationFrame(animationFrameId);
+		}
+		animationFrameId = requestAnimationFrame(updateThumbPosition);
 	}
 
-	function onMouseUp() {
+	function onMouseUp(): void {
 		isDragging = false;
+
+		// Re-enable text selection.
+		document.body.style.userSelect = '';
 		document.removeEventListener('mousemove', onMouseMove);
 		document.removeEventListener('mouseup', onMouseUp);
 	}
@@ -57,48 +73,50 @@
 	});
 </script>
 
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<div
-	id="chats"
-	bind:this={scrollableContent}
-	onscroll={updateThumbPosition}
-	onmousedown={onMouseDown}
->
+<div id="chats-section">
 	<h1 id="chats-list-title">Chats</h1>
 
-	<div class="scrollable-thumb-container">
-		<div class="scrollable-thumb" bind:this={scrollableThumb}></div>
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<div
+		id="chats"
+		bind:this={scrollableContent}
+		onscroll={updateThumbPosition}
+		onmousedown={onMouseDown}
+	>
+		<div class="scrollable-thumb-container">
+			<div class="scrollable-thumb" bind:this={scrollableThumb} class:active={isDragging}></div>
+		</div>
+
+		{#each chats as chat}
+			<a href="{$page.url.origin}/{chat._id}" class="chat">
+				<img
+					src={''}
+					alt={chat.users.find((user: User) => user.uid !== getCookie('uid'))!.username}
+					class="profile-picture"
+				/>
+				<h3 class="chat-name">
+					{chat.users.find((user: User) => user.uid !== getCookie('uid'))!.username}
+				</h3>
+				<p class="chat-message" class:system-message={!chat.messages.length}>
+					{chat.messages[chat.messages.length - 1]?.text ?? 'No messages'}
+				</p>
+				<p class="send-date">{formatISODate(chat.lastModified)}</p>
+			</a>
+		{/each}
 	</div>
 
-	{#each chats as chat}
-		<a href="{$page.url.origin}/{chat._id}" class="chat">
-			<img
-				src={''}
-				alt={chat.users.find((user: User) => user.uid !== getCookie('uid'))!.username}
-				class="profile-picture"
-			/>
-			<h3 class="chat-name">
-				{chat.users.find((user: User) => user.uid !== getCookie('uid'))!.username}
-			</h3>
-			<p class="chat-message" class:system-message={!chat.messages.length}>
-				{chat.messages[chat.messages.length - 1]?.text ?? 'No messages'}
-			</p>
-			<p class="send-date">{formatISODate(chat.lastModified)}</p>
-		</a>
-	{/each}
-
-	<!-- svelte-ignore a11y_consider_explicit_label -->
+	<button
+		id="add-chat"
+		onclick={async () => {
+			showAddChat = !showAddChat;
+			await tick();
+			usernameInput.focus();
+		}}
+	>
+		<i>+</i>
+	</button>
 </div>
-<button
-	id="add-chat"
-	onclick={async () => {
-		showAddChat = !showAddChat;
-		await tick();
-		usernameInput.focus();
-	}}
->
-	<i>+</i>
-</button>
+<!-- svelte-ignore a11y_no_static_element_interactions -->
 
 {#if showAddChat}
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -126,15 +144,23 @@
 {/if}
 
 <style lang="scss">
+	#chats-section {
+		height: 94vh;
+		display: grid;
+		grid-template-rows: auto 0 1fr;
+	}
+
+	#chats-list-title {
+		grid-row: 1;
+		padding: 0.6rem 0 0.4rem 0;
+		justify-self: center;
+	}
+
 	#chats {
+		grid-row: 3;
 		position: relative;
 		overflow: scroll;
 		padding: 0.2rem 0.3rem;
-
-		#chats-list-title {
-			padding: 1rem 0;
-			justify-self: center;
-		}
 
 		.scrollable-thumb-container {
 			position: absolute;
@@ -151,6 +177,12 @@
 				border-radius: 8px;
 				opacity: 0;
 				transition: opacity 0.1s ease-in-out;
+
+				will-change: transform;
+
+				&.active {
+					opacity: 1 !important;
+				}
 			}
 		}
 
@@ -222,16 +254,20 @@
 	}
 
 	#add-chat {
+		grid-row: 2;
+
 		position: sticky;
-		margin-top: calc(100% + 5.8rem);
-		margin-left: calc(100% - 3rem);
-		transform: translate(-0.2rem, calc(11.8rem - 94vh));
+
+		height: 3rem;
+		margin-top: calc(94vh - 5.8rem);
+		margin-left: calc(100% - 3.2rem);
+		transform: translateX(-0.6rem);
 
 		background-color: #0065e1;
 		border: none;
 		cursor: pointer;
 		border-radius: 0.6rem;
-		z-index: 10	;
+		z-index: 10;
 
 		i {
 			color: var(--primary-bg-color);
