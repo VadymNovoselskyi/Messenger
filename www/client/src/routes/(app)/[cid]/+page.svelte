@@ -66,7 +66,7 @@
 
 		#chats-list {
 			display: grid;
-			grid-template-rows: auto 1fr;
+			grid-template-rows: 94vh auto;
 			
 			position: relative;
 			grid-column: 1;
@@ -95,7 +95,6 @@
 			grid-column: 2;
 			grid-row: 2;
 			justify-items: center;
-			width: 100%;
 
 			padding: 0.4rem;
 			background-color: #3a506b;

@@ -40,7 +40,7 @@
 
 		#chats-list {
 			display: grid;
-			grid-template-rows: auto 1fr;
+			grid-template-rows: 94vh auto;
 			
 			position: relative;
 			grid-column: 1;
