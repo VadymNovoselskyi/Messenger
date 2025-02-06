@@ -5,7 +5,7 @@
     import './app-style.scss';
 
     const links: Link[] = [
-        { path: '/', title: 'Chats' },
+        { path: '/', title: 'Chats', pathsToCheck: ['/', '/chat'] },
         { path: '/search', title: 'Search' },
         { path: '/profile', title: 'Profile' },
         { path: '/settings', title: 'Settings' }

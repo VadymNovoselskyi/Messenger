@@ -1,6 +1,7 @@
 export interface Link {
     path: string;
     title: string;
+    pathsToCheck?: string[];
 }
 
 export interface User {

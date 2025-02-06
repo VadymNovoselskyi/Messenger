@@ -1,6 +1,5 @@
 <script lang="ts">
-	import { onMount, tick } from 'svelte';
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 
 	function defaultFN(event: Event) {
 		event.preventDefault();
@@ -9,7 +8,7 @@
 	let textInput: HTMLInputElement;
 
 	$effect(() => {
-		const { cid } = $page.params;
+		const { cid } = page.params;
 
 		requestAnimationFrame(() => {
 			if (textInput) {
@@ -19,7 +18,7 @@
 		});
 	});
 
-	let { submitFn = defaultFN } = $props();
+	let { submitFn = defaultFN }: { submitFn: (event: SubmitEvent) => void } = $props();
 </script>
 
 <svelte:head>
@@ -35,7 +34,7 @@
 		placeholder="Type your text here"
 		autocomplete="off"
 	/>
-	<button id="send-icon">
+	<button id="send-icon" aria-label="Send message">
 		<i class="fa-solid fa-paper-plane"></i>
 	</button>
 </form>
@@ -54,6 +53,10 @@
 			border: none;
 			font-size: 17px;
 			border-radius: 4px;
+
+			&:focus {
+				outline: none;
+			}
 		}
 
 		#send-icon {

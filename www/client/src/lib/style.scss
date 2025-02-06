@@ -1,8 +1,8 @@
 :root {
     --primary-bg-color: #f8f4ec;
     --primary-text-color: #222222;
-    --primary-hover-bg-color: #dedede; /* Warm gray */
-    --primary-hover-text-color: #000000; /* Deep black */
+    --primary-hover-bg-color: #dedede; 
+    --primary-hover-text-color: #000000;
                     
 
     --secondary-bg-color: #333333;
@@ -15,6 +15,11 @@
     padding: 0;
 }
 
+html,
+body {
+    font-family: 'Roboto', sans-serif;
+    font-weight: 500;
+}
 
 main {
     background-color: var(--primary-bg-color);

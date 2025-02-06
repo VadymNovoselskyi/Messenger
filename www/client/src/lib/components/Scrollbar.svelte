@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onMount } from 'svelte'
-	let { scrollableContent }: { scrollableContent: HTMLElement } = $props();
+	let { scrollableContent, chatsScroll = $bindable() }: { scrollableContent: HTMLElement, chatsScroll: number } = $props();
 
 	let scrollableThumb: HTMLElement;
 	let isDragging = $state(false);
@@ -12,6 +12,7 @@
 		const contentHeight = scrollableContent.scrollHeight;
 		const visibleHeight = scrollableContent.clientHeight;
 		const scrollTop = scrollableContent.scrollTop;
+		chatsScroll = scrollTop;
 
 		const thumbHeight = Math.max((visibleHeight / contentHeight) * visibleHeight, 20);
 		const thumbPosition = (scrollTop / contentHeight) * visibleHeight + scrollTop;
@@ -92,7 +93,7 @@
 			will-change: transform;
 
 			&.active {
-				// opacity: 1 !important;
+				opacity: 1 !important;
 			}
 		}
 	}

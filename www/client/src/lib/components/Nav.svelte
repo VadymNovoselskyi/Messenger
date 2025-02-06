@@ -1,16 +1,16 @@
 <script lang="ts">
-    import { page } from '$app/stores';
+    import { page } from '$app/state';
     import type { Link } from '$lib/types';
 
     let { links, id }: { links: Link[], id: string} = $props();
-
+    const currentPath = page.url.pathname;
 </script>
 
 
 <nav>
     <ul id={id}>
-        {#each links as { path, title }}
-            <li><a href={path} class:current={$page.url.pathname === path}>{title}</a></li>
+        {#each links as { path, title, pathsToCheck }}
+            <li><a href={path} class:current={pathsToCheck?.includes(path) ?? currentPath === path}>{title}</a></li>
         {/each}
     </ul>
 </nav>

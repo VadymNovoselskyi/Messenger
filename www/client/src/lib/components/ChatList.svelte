@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount, tick } from 'svelte';
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
+	import { memory } from '$lib/stores/memory.svelte';
 	import { addChat } from '$lib/api.svelte';
 	import Scrollbar from '$lib/components/Scrollbar.svelte';
 
@@ -9,37 +10,48 @@
 
 	let { chats = $bindable() }: { chats: Chat[] } = $props();
 	let showAddChat = $state(false);
-	let usernameInput: HTMLInputElement;
+	let usernameInput = $state() as HTMLInputElement;
 
 	let scrollableContent = $state() as HTMLElement;
 	let scrollBar = $state() as Scrollbar;
+
+	onMount(() => {
+		if (scrollableContent) {
+			scrollableContent.scrollTop = memory.chatsScroll;
+		}
+	});
 </script>
 
 <div id="chats-section">
 	<h1 id="chats-list-title">Chats</h1>
 
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<!-- svelte-ignore a11y_mouse_events_have_key_events -->
 	<div
 		id="chats"
 		bind:this={scrollableContent}
 		onmouseover={scrollBar.show}
 		onmouseleave={scrollBar.hide}
+		onfocus={scrollBar.show}
+		onblur={scrollBar.hide}
 		onscroll={scrollBar.updateThumbPosition}
 		onmousedown={scrollBar.onMouseDown}
 	>
-		<Scrollbar bind:this={scrollBar} {scrollableContent} />
+		<Scrollbar bind:this={scrollBar} bind:chatsScroll={memory.chatsScroll} {scrollableContent} />
 
 		{#each chats as chat}
-			<a href="{$page.url.origin}/{chat._id}" class="chat">
+			<a
+				href="{page.url.origin}/chat/{chat._id}"
+				class="chat"
+				class:current={page.url.pathname === `/chat/${chat._id}`}
+			>
 				<img
 					src={''}
 					alt={chat.users.find((user: User) => user.uid !== getCookie('uid'))!.username}
 					class="profile-picture"
 				/>
-				<h3 class="chat-name">
+				<p class="chat-name">
 					{chat.users.find((user: User) => user.uid !== getCookie('uid'))!.username}
-				</h3>
+				</p>
 				<p class="chat-message" class:system-message={!chat.messages.length}>
 					{chat.messages[chat.messages.length - 1]?.text ?? 'No messages'}
 				</p>
@@ -59,11 +71,10 @@
 		<i>+</i>
 	</button>
 </div>
-<!-- svelte-ignore a11y_no_static_element_interactions -->
 
 {#if showAddChat}
-	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<div class="popup-overlay" onclick={() => (showAddChat = false)}></div>
 	<div class="popup-menu" class:active={showAddChat}>
 		<button class="close-popup" onclick={() => (showAddChat = false)}>x</button>
@@ -117,6 +128,16 @@
 			border: 1px solid var(--secondary-bg-color);
 			text-decoration: none;
 
+			&:hover {
+				cursor: pointer;
+				background-color: var(--primary-hover-bg-color);
+				color: var(--primary-hover-text-color);
+			}
+
+			&.current {
+				background-color: rgba(51, 102, 153, 0.5);
+			}
+
 			.profile-picture {
 				grid-column: 1;
 				grid-row: span 2;
@@ -131,6 +152,7 @@
 				white-space: nowrap;
 				overflow: hidden;
 				text-overflow: ellipsis;
+				font-weight: 600;
 			}
 
 			.chat-message {
@@ -151,12 +173,8 @@
 				grid-row: 3;
 
 				justify-self: end;
-			}
-
-			&:hover {
-				cursor: pointer;
-				background-color: var(--primary-hover-bg-color);
-				color: var(--primary-hover-text-color);
+				font-size: 0.9rem;
+				font-weight: 300;
 			}
 		}
 
@@ -176,7 +194,7 @@
 		position: sticky;
 
 		height: 3rem;
-		margin-top: calc(94vh - 5.8rem);
+		margin-top: calc(94vh - 6.2rem);
 		margin-left: calc(100% - 3.2rem);
 		transform: translateX(-0.6rem);
 

@@ -1,31 +1,53 @@
 <script lang="ts">
 	import { tick } from 'svelte';
+	import { page } from '$app/state';
 	import MessageField from '$lib/components/MessageField.svelte';
 	import Scrollbar from '$lib/components/Scrollbar.svelte';
 	import { formatISODate, getCookie } from '$lib/utils';
 	import type { Message } from '$lib/types';
 
-	let { messages, submitFn }: { messages: Message[] | null, submitFn: (event: Event) => void } = $props();
+	let {
+		messages,
+		submitFn
+	}: { messages: Message[] | null; submitFn: (event: SubmitEvent) => void } = $props();
 
 	let scrollableContent = $state() as HTMLElement;
+	let anchor = $state() as HTMLElement;
 	let scrollBar = $state() as Scrollbar;
 
-	export async function scrollToBottom() {
-		await tick();
-		scrollableContent.scrollTop = scrollableContent.scrollHeight;
-	}
+	$effect(() => {
+		async function scrollToBottom() {
+			await tick();
+			if (!anchor) {
+				requestAnimationFrame(scrollToBottom);
+				return;
+			}
+			scrollableContent.scrollTop = 0;
+			requestAnimationFrame(() => {
+				scrollableContent.scrollTo({
+					top: anchor.offsetTop,
+					behavior: 'instant'
+				});
+			});
+		}
+
+		const { cid } = page.params;
+		scrollToBottom();
+	});
 </script>
 
 <div id="message-list">
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<!-- svelte-ignore a11y_mouse_events_have_key_events -->
-	<div
+	<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+	<section
 		id="messages"
 		bind:this={scrollableContent}
 		onmouseover={scrollBar.show}
 		onmouseleave={scrollBar.hide}
+		onfocus={scrollBar.show}
+		onblur={scrollBar.hide}
 		onscroll={scrollBar.updateThumbPosition}
 		onmousedown={scrollBar.onMouseDown}
+		aria-label="Messages"
 	>
 		<Scrollbar bind:this={scrollBar} {scrollableContent} />
 		{#if messages}
@@ -35,11 +57,11 @@
 					class:sent={message.from === getCookie('uid')}
 					class:received={message.from !== getCookie('uid')}
 				>
-					<h3 class="text">{message.text}</h3>
+					<p class="text">{message.text}</p>
 					<p class="sendTime">{formatISODate(message.sendTime)}</p>
 				</div>
 			{/each}
-			<div id="anchor"></div>
+			<div bind:this={anchor} id="anchor"></div>
 		{:else}
 			<div class="error-container">
 				<div id="error_message">
@@ -47,7 +69,7 @@
 				</div>
 			</div>
 		{/if}
-	</div>
+	</section>
 	<MessageField {submitFn} />
 </div>
 
@@ -76,6 +98,7 @@
 			padding: 0.6rem;
 			border-radius: 1rem;
 			margin: 0.8rem 0;
+			font-size: 1.1rem;
 
 			&.received {
 				grid-column: 1/7;
@@ -89,6 +112,8 @@
 
 			.sendTime {
 				justify-self: end;
+				font-size: 0.9rem;
+				font-weight: 300;
 			}
 		}
 

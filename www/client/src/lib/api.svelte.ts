@@ -1,12 +1,12 @@
 import { get } from 'svelte/store';
-import { page } from '$app/stores';
+import { page } from '$app/state';
 import { goto } from '$app/navigation';
 import { memory } from '$lib/stores/memory.svelte';
 import { setCookie, getCookie, sortChats } from '$lib/utils';
 
 export function getWS(): Promise<WebSocket> {
     if(!memory.ws || memory.ws.readyState === WebSocket.CLOSING || memory.ws.readyState === WebSocket.CLOSED) {
-        memory.ws = new WebSocket(`${get(page).url.origin}/api/`);
+        memory.ws = new WebSocket(`${page.url.origin}/api/`);
         memory.ws.addEventListener('message', handleServerMessage);
     }
 
@@ -46,7 +46,7 @@ export async function sendMessage(event: Event): Promise<void> {
     messageInput.value = '';
     
     const ws = await getWS();
-    const cid = get(page).params.cid;
+    const cid = page.params.cid;
     ws.send(JSON.stringify({
         api: 'send_message',
         token: getCookie("token"),

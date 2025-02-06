@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount, tick } from 'svelte';
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
 	import { memory } from '$lib/stores/memory.svelte';
@@ -11,7 +11,6 @@
 
 	import ChatList from '$lib/components/ChatList.svelte';
 	import MessageList from '$lib/components/MessageList.svelte';
-	import MessageField from '$lib/components/MessageField.svelte';
 
 	onMount(() => {
 		if (!getCookie('uid') || !getCookie('token')) {
@@ -22,13 +21,11 @@
 	});
 
 	let messages: Message[] | null = $state()!;
-	let chatDisplay: MessageList;
 	$effect(() => {
-		const { cid } = $page.params;
+		const { cid } = page.params;
 		const chat = memory.chats.find((chat) => chat._id === cid);
 
 		messages = chat ? chat.messages : null;
-		chatDisplay.scrollToBottom();
 	});
 </script>
 
@@ -41,7 +38,7 @@
 		<ChatList bind:chats={memory.chats} />
 	</section>
 
-	<MessageList bind:this={chatDisplay} {messages} submitFn={sendMessage} />
+	<MessageList {messages} submitFn={sendMessage} />
 </div>
 
 <style lang="scss">
