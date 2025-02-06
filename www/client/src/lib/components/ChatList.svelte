@@ -2,6 +2,8 @@
 	import { onMount, tick } from 'svelte';
 	import { page } from '$app/stores';
 	import { addChat } from '$lib/api.svelte';
+	import Scrollbar from '$lib/components/Scrollbar.svelte';
+
 	import { formatISODate, getCookie } from '$lib/utils';
 	import type { Chat, User } from '$lib/types';
 
@@ -9,83 +11,24 @@
 	let showAddChat = $state(false);
 	let usernameInput: HTMLInputElement;
 
-	let scrollableContent: HTMLElement;
-	let scrollableThumb: HTMLElement;
-	let isDragging = $state(false);
-	let startY = 0;
-	let startScrollTop = 0;
-	let animationFrameId: number | null;
-
-	function updateThumbPosition(): void {
-		const contentHeight = scrollableContent.scrollHeight;
-		const visibleHeight = scrollableContent.clientHeight;
-		const scrollTop = scrollableContent.scrollTop;
-
-		const thumbHeight = Math.max((visibleHeight / contentHeight) * visibleHeight, 20);
-		const thumbPosition = (scrollTop / contentHeight) * visibleHeight + scrollTop;
-
-		scrollableThumb.style.height = `${thumbHeight}px`;
-		scrollableThumb.style.transform = `translateY(${thumbPosition}px)`;
-	}
-
-	function onMouseDown(event: MouseEvent): void {
-		isDragging = true;
-		startY = event.clientY;
-		startScrollTop = scrollableContent.scrollTop;
-
-		// Disable text selection while dragging.
-		document.body.style.userSelect = 'none';
-
-		document.addEventListener('mousemove', onMouseMove);
-		document.addEventListener('mouseup', onMouseUp);
-	}
-
-	function onMouseMove(event: MouseEvent): void {
-		if (!isDragging) return;
-		const deltaY = event.clientY - startY;
-		const contentHeight = scrollableContent.scrollHeight;
-		const visibleHeight = scrollableContent.clientHeight;
-
-		// Ensure a minimum thumb height of 20px.
-		const thumbHeight = Math.max((visibleHeight / contentHeight) * visibleHeight, 20);
-		const scrollRatio = (contentHeight - visibleHeight) / (visibleHeight - thumbHeight);
-		scrollableContent.scrollTop = startScrollTop + deltaY * scrollRatio;
-
-		// Throttle thumb updates using requestAnimationFrame.
-		if (animationFrameId !== null) {
-			cancelAnimationFrame(animationFrameId);
-		}
-		animationFrameId = requestAnimationFrame(updateThumbPosition);
-	}
-
-	function onMouseUp(): void {
-		isDragging = false;
-
-		// Re-enable text selection.
-		document.body.style.userSelect = '';
-		document.removeEventListener('mousemove', onMouseMove);
-		document.removeEventListener('mouseup', onMouseUp);
-	}
-
-	onMount(() => {
-		window.addEventListener('resize', updateThumbPosition);
-		updateThumbPosition();
-	});
+	let scrollableContent = $state() as HTMLElement;
+	let scrollBar = $state() as Scrollbar;
 </script>
 
 <div id="chats-section">
 	<h1 id="chats-list-title">Chats</h1>
 
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<!-- svelte-ignore a11y_mouse_events_have_key_events -->
 	<div
 		id="chats"
 		bind:this={scrollableContent}
-		onscroll={updateThumbPosition}
-		onmousedown={onMouseDown}
+		onmouseover={scrollBar.show}
+		onmouseleave={scrollBar.hide}
+		onscroll={scrollBar.updateThumbPosition}
+		onmousedown={scrollBar.onMouseDown}
 	>
-		<div class="scrollable-thumb-container">
-			<div class="scrollable-thumb" bind:this={scrollableThumb} class:active={isDragging}></div>
-		</div>
+		<Scrollbar bind:this={scrollBar} {scrollableContent} />
 
 		{#each chats as chat}
 			<a href="{$page.url.origin}/{chat._id}" class="chat">
@@ -148,6 +91,8 @@
 		height: 94vh;
 		display: grid;
 		grid-template-rows: auto 0 1fr;
+
+		background-color: var(--primary-bg-color);
 	}
 
 	#chats-list-title {
@@ -161,34 +106,6 @@
 		position: relative;
 		overflow: scroll;
 		padding: 0.2rem 0.3rem;
-
-		.scrollable-thumb-container {
-			position: absolute;
-			top: 0;
-			right: 0rem;
-			width: 0.3rem;
-			height: 100%;
-			z-index: 5;
-
-			.scrollable-thumb {
-				position: absolute;
-				width: 100%;
-				background-color: var(--scrollbar-color, #888);
-				border-radius: 8px;
-				opacity: 0;
-				transition: opacity 0.1s ease-in-out;
-
-				will-change: transform;
-
-				&.active {
-					opacity: 1 !important;
-				}
-			}
-		}
-
-		&:hover .scrollable-thumb {
-			opacity: 1;
-		}
 
 		.chat {
 			display: grid;
@@ -267,7 +184,7 @@
 		border: none;
 		cursor: pointer;
 		border-radius: 0.6rem;
-		z-index: 10;
+		z-index: 5;
 
 		i {
 			color: var(--primary-bg-color);

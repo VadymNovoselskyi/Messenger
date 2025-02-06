@@ -22,19 +22,13 @@
 	});
 
 	let messages: Message[] | null = $state()!;
-	let chatDisplay: HTMLElement;
+	let chatDisplay: MessageList;
 	$effect(() => {
-		async function scrollToBottom() {
-			await tick();
-			if (chatDisplay) {
-				chatDisplay.scrollTop = chatDisplay.scrollHeight;
-			}
-		}
 		const { cid } = $page.params;
 		const chat = memory.chats.find((chat) => chat._id === cid);
 
 		messages = chat ? chat.messages : null;
-		scrollToBottom();
+		chatDisplay.scrollToBottom();
 	});
 </script>
 
@@ -47,54 +41,13 @@
 		<ChatList bind:chats={memory.chats} />
 	</section>
 
-	<section id="chat-display" bind:this={chatDisplay}>
-		<MessageList {messages} />
-	</section>
-
-	<section id="message-field">
-		<MessageField submitFn={sendMessage} />
-	</section>
+	<MessageList bind:this={chatDisplay} {messages} submitFn={sendMessage} />
 </div>
 
 <style lang="scss">
 	#wrapper {
 		display: grid;
 		grid-template-columns: minmax(14rem, 3fr) 8fr;
-		grid-template-rows: 1fr auto;
 		height: 94vh;
-		overflow: hidden;
-
-		#chats-list {
-			position: relative;
-			grid-column: 1;
-			grid-row: span 2;
-
-			background-color: var(--primary-bg-color);
-			max-height: 94vh;
-		}
-
-		#chat-display {
-			grid-column: 2;
-			grid-row: 1;
-			padding: 0 1rem;
-
-			display: grid;
-			grid-template-columns: repeat(10, 1fr);
-			grid-auto-rows: max-content;
-
-			background-color: #3a506b;
-			max-height: 94vh;
-			overflow-y: auto;
-			scrollbar-width: thin;
-		}
-
-		#message-field {
-			grid-column: 2;
-			grid-row: 2;
-			justify-items: center;
-
-			padding: 0.4rem;
-			background-color: #3a506b;
-		}
 	}
 </style>

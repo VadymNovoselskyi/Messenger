@@ -34,26 +34,8 @@
 	#wrapper {
 		display: grid;
 		grid-template-columns: minmax(14rem, 3fr) 8fr;
-		grid-template-rows: 1fr auto;
 		height: 94vh;
-		overflow: hidden;
 
-		#chats-list {
-			display: grid;
-			grid-template-rows: 94vh auto;
-			
-			position: relative;
-			grid-column: 1;
-			grid-row: span 2;
-
-			background-color: var(--primary-bg-color);
-			max-height: 94vh;
-		}
-
-		#chat-display {
-			grid-column: 2;
-			grid-row: 1;
-			background-color: #3a506b;
-		}
+		#chat-display { background-color: #3a506b }
 	}
 </style>
