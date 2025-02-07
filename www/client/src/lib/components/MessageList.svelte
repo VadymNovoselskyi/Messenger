@@ -36,20 +36,20 @@
 	});
 </script>
 
-<div id="message-list">
-	<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div
+	id="message-list"
+	onmouseover={scrollBar.show}
+	onmouseleave={scrollBar.hide}
+	onfocus={scrollBar.show}
+	onblur={scrollBar.hide}
+>
 	<section
 		id="messages"
 		bind:this={scrollableContent}
-		onmouseover={scrollBar.show}
-		onmouseleave={scrollBar.hide}
-		onfocus={scrollBar.show}
-		onblur={scrollBar.hide}
 		onscroll={scrollBar.updateThumbPosition}
-		onmousedown={scrollBar.onMouseDown}
 		aria-label="Messages"
 	>
-		<Scrollbar bind:this={scrollBar} {scrollableContent} />
 		{#if messages}
 			{#each messages as message}
 				<div
@@ -71,6 +71,7 @@
 		{/if}
 	</section>
 	<MessageField {submitFn} />
+	<Scrollbar bind:this={scrollBar} {scrollableContent} width={0.4} />
 </div>
 
 <style lang="scss">
@@ -78,6 +79,7 @@
 		display: grid;
 		grid-template-rows: 1fr auto;
 
+		position: relative;
 		height: 94vh;
 	}
 
@@ -86,13 +88,13 @@
 		grid-template-columns: repeat(10, 1fr);
 		grid-auto-rows: max-content;
 
-		padding: 0 0.6rem;
+		padding: 0 0.8rem;
 		background-color: #3a506b;
 
-		position: relative;
 		overflow-y: scroll;
 
 		.message {
+			position: relative;
 			overflow-wrap: break-word;
 			overflow-anchor: none;
 			padding: 0.6rem;

@@ -1,6 +1,14 @@
 <script lang="ts">
-    import { onMount } from 'svelte'
-	let { scrollableContent, chatsScroll = $bindable() }: { scrollableContent: HTMLElement, chatsScroll: number } = $props();
+	import { onMount } from 'svelte';
+	let {
+		scrollableContent,
+		width,
+		lastScroll = $bindable()
+	}: {
+		scrollableContent: HTMLElement;
+		width: number;
+		lastScroll?: number;
+	} = $props();
 
 	let scrollableThumb: HTMLElement;
 	let isDragging = $state(false);
@@ -9,16 +17,37 @@
 	let animationFrameId: number | null;
 
 	export function updateThumbPosition(): void {
-		const contentHeight = scrollableContent.scrollHeight;
-		const visibleHeight = scrollableContent.clientHeight;
-		const scrollTop = scrollableContent.scrollTop;
-		chatsScroll = scrollTop;
+		// If there's already a scheduled frame, cancel it.
+		if (animationFrameId !== null) {
+			cancelAnimationFrame(animationFrameId);
+		}
 
-		const thumbHeight = Math.max((visibleHeight / contentHeight) * visibleHeight, 20);
-		const thumbPosition = (scrollTop / contentHeight) * visibleHeight + scrollTop;
+		animationFrameId = requestAnimationFrame(() => {
+			const contentHeight = scrollableContent.scrollHeight;
+			const visibleHeight = scrollableContent.clientHeight;
+			const scrollTop = scrollableContent.scrollTop;
+			if (lastScroll !== undefined) lastScroll = scrollTop;
 
-		scrollableThumb.style.height = `${thumbHeight}px`;
-		scrollableThumb.style.transform = `translateY(${thumbPosition}px)`;
+			// Calculate thumb height proportionally, but not less than 20px.
+			const computedThumbHeight = (visibleHeight / contentHeight) * visibleHeight;
+			const thumbHeight = Math.max(computedThumbHeight, 20);
+
+			// The track is the area available for the thumb to move.
+			const trackHeight = visibleHeight - thumbHeight;
+			const maxScrollTop = contentHeight - visibleHeight;
+			// Calculate the thumb's position relative to the scrollable content.
+			const relativeThumbPosition = (scrollTop / maxScrollTop) * trackHeight;
+
+			const containerRect = scrollableContent.getBoundingClientRect();
+			// The final thumb position is the offset plus the relative movement.
+			const thumbPosition = relativeThumbPosition + containerRect.top;
+
+			scrollableThumb.style.height = `${thumbHeight}px`;
+			scrollableThumb.style.transform = `translateY(${thumbPosition}px)`;
+
+			// Clear the frame id after the frame has executed.
+			animationFrameId = null;
+		});
 	}
 
 	export function onMouseDown(event: MouseEvent): void {
@@ -33,24 +62,6 @@
 		document.addEventListener('mouseup', onMouseUp);
 	}
 
-	export function onMouseMove(event: MouseEvent): void {
-		if (!isDragging) return;
-		const deltaY = event.clientY - startY;
-		const contentHeight = scrollableContent.scrollHeight;
-		const visibleHeight = scrollableContent.clientHeight;
-
-		// Ensure a minimum thumb height of 20px.
-		const thumbHeight = Math.max((visibleHeight / contentHeight) * visibleHeight, 20);
-		const scrollRatio = (contentHeight - visibleHeight) / (visibleHeight - thumbHeight);
-		scrollableContent.scrollTop = startScrollTop + deltaY * scrollRatio;
-
-		// Throttle thumb updates using requestAnimationFrame.
-		if (animationFrameId !== null) {
-			cancelAnimationFrame(animationFrameId);
-		}
-		animationFrameId = requestAnimationFrame(updateThumbPosition);
-	}
-
 	export function onMouseUp(): void {
 		isDragging = false;
 
@@ -60,16 +71,46 @@
 		document.removeEventListener('mouseup', onMouseUp);
 	}
 
-	export function show(): void { scrollableThumb.style.opacity = "1" }
-    export function hide(): void { scrollableThumb.style.opacity = "0" }
+	export function onMouseMove(event: MouseEvent): void {
+		if (!isDragging) return;
+		const deltaY = event.clientY - startY;
+		const contentHeight = scrollableContent.scrollHeight;
+		const visibleHeight = scrollableContent.clientHeight;
 
-    onMount(() => {
+		const computedThumbHeight = (visibleHeight / contentHeight) * visibleHeight;
+		const thumbHeight = Math.max(computedThumbHeight, 20);
+
+		const trackHeight = visibleHeight - thumbHeight;
+		const maxScrollTop = contentHeight - visibleHeight;
+		const scrollRatio = maxScrollTop / trackHeight;
+
+		// Compute new scrollTop and ensure it doesn't exceed bounds.
+		let newScrollTop = startScrollTop + deltaY * scrollRatio;
+		newScrollTop = Math.max(0, Math.min(newScrollTop, maxScrollTop));
+		scrollableContent.scrollTop = newScrollTop;
+
+		updateThumbPosition();
+	}
+
+	export function show(): void {
+		scrollableThumb.style.backgroundColor = 'rgba(43, 43, 43, 0.8)';
+	}
+	export function hide(): void {
+		scrollableThumb.style.backgroundColor = 'rgba(90, 90, 90, 0.7)';
+	}
+
+	onMount(() => {
 		window.addEventListener('resize', updateThumbPosition);
 		setTimeout(updateThumbPosition, 100);
 	});
 </script>
 
-<div class="scrollable-thumb-container">
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div class="scrollable-thumb-container" 
+	onmousedown={onMouseDown}
+	onmouseup={onMouseUp}
+	style={`width: ${width}rem`}
+>
 	<div class="scrollable-thumb" bind:this={scrollableThumb} class:active={isDragging}></div>
 </div>
 
@@ -78,23 +119,25 @@
 		position: absolute;
 		top: 0;
 		right: 0rem;
-		width: 0.3rem;
 		height: 100%;
 		z-index: 5;
 
 		.scrollable-thumb {
 			position: absolute;
 			width: 100%;
-			background-color: #888;
+			background-color: rgba(90, 90, 90, 0.7);
 			border-radius: 8px;
-			opacity: 0;
 			transition: opacity 0.1s ease-in-out;
 
 			will-change: transform;
 
 			&.active {
-				opacity: 1 !important;
+				background-color: rgba(43, 43, 43, 0.8) !important;
 			}
+		}
+
+		&:hover .scrollable-thumb {
+			background-color: rgba(43, 43, 43, 0.8) !important;
 		}
 	}
 </style>

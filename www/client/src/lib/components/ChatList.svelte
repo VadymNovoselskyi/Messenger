@@ -18,26 +18,22 @@
 	onMount(() => {
 		if (scrollableContent) {
 			scrollableContent.scrollTop = memory.chatsScroll;
+			console.log(memory.chatsScroll);
 		}
 	});
 </script>
 
-<div id="chats-section">
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div
+	id="chats-section"
+	onmouseover={scrollBar.show}
+	onmouseleave={scrollBar.hide}
+	onfocus={scrollBar.show}
+	onblur={scrollBar.hide}
+>
 	<h1 id="chats-list-title">Chats</h1>
 
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div
-		id="chats"
-		bind:this={scrollableContent}
-		onmouseover={scrollBar.show}
-		onmouseleave={scrollBar.hide}
-		onfocus={scrollBar.show}
-		onblur={scrollBar.hide}
-		onscroll={scrollBar.updateThumbPosition}
-		onmousedown={scrollBar.onMouseDown}
-	>
-		<Scrollbar bind:this={scrollBar} bind:chatsScroll={memory.chatsScroll} {scrollableContent} />
-
+	<div id="chats" bind:this={scrollableContent} onscroll={scrollBar.updateThumbPosition}>
 		{#each chats as chat}
 			<a
 				href="{page.url.origin}/chat/{chat._id}"
@@ -59,6 +55,12 @@
 			</a>
 		{/each}
 	</div>
+	<Scrollbar
+		bind:this={scrollBar}
+		{scrollableContent}
+		width={0.4}
+		bind:lastScroll={memory.chatsScroll}
+	/>
 
 	<button
 		id="add-chat"
@@ -103,6 +105,7 @@
 		display: grid;
 		grid-template-rows: auto 0 1fr;
 
+		position: relative;
 		background-color: var(--primary-bg-color);
 	}
 
@@ -114,9 +117,8 @@
 
 	#chats {
 		grid-row: 3;
-		position: relative;
 		overflow: scroll;
-		padding: 0.2rem 0.3rem;
+		padding: 0 0.4rem;
 
 		.chat {
 			display: grid;
