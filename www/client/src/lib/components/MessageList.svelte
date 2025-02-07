@@ -34,6 +34,9 @@
 		const { cid } = page.params;
 		scrollToBottom();
 	});
+
+	let messagesToShow = $derived((messages?.length ?? 0) > 49 ? -50 : -(messages?.length || 0));
+	let lastMessages = $derived(messages?.slice(messagesToShow));
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -50,8 +53,8 @@
 		onscroll={scrollBar.updateThumbPosition}
 		aria-label="Messages"
 	>
-		{#if messages}
-			{#each messages as message}
+		{#if lastMessages}
+			{#each lastMessages as message}
 				<div
 					class="message"
 					class:sent={message.from === getCookie('uid')}
