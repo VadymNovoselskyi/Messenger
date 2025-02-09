@@ -14,6 +14,7 @@
 
 	let scrollableContent = $state() as HTMLElement;
 	let scrollBar = $state() as Scrollbar;
+	let bottom_anchor = $state() as HTMLElement;
 
 	let showScrollbar = $state<boolean>();
 	async function checkContentHeight() {
@@ -22,8 +23,10 @@
 			requestAnimationFrame(checkContentHeight);
 			return;
 		}
+		//check if scrollbar is needed
 		showScrollbar = scrollableContent.scrollHeight !== scrollableContent.clientHeight;
 
+		//scroll to the last position
 		scrollableContent.scrollTop = 0;
 		requestAnimationFrame(() => {
 			scrollableContent.scrollTo({
@@ -31,15 +34,39 @@
 				behavior: 'instant'
 			});
 		});
-
 	}
 
-	$effect(()=> {
-		chats;
+	$effect(() => {
+		lastChats;
 		checkContentHeight();
 	});
 
-	onMount(checkContentHeight);
+	onMount(async () => {
+		await checkContentHeight();
+
+		await tick();
+
+		//add bottom_anchor observer for lazy loading
+		const observer = new IntersectionObserver(
+			(entries) => {
+				entries.forEach(async (entry) => {
+					if (entry.isIntersecting) {
+						//load more messages
+						stacksLoaded++;
+					}
+				});
+			},
+			{ threshold: 0.1 }
+		);
+		observer.observe(bottom_anchor);
+	});
+
+	//dynamic loading of messages
+	let stacksLoaded = $state(1);
+	let indexesToShow = $derived(
+		(chats?.length || 0) >= stacksLoaded * 15 ? stacksLoaded * 15 : chats?.length || 0
+	);
+	let lastChats = $derived(chats?.slice(0, indexesToShow));
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -57,7 +84,7 @@
 		bind:this={scrollableContent}
 		onscroll={showScrollbar ? scrollBar.updateThumbPosition : null}
 	>
-		{#each chats as chat}
+		{#each lastChats as chat}
 			<a
 				href="{page.url.origin}/chat/{chat._id}"
 				class="chat"
@@ -77,6 +104,7 @@
 				<p class="send-date">{formatISODate(chat.lastModified)}</p>
 			</a>
 		{/each}
+		<div bind:this={bottom_anchor} class="anchor"></div>
 	</div>
 	{#if showScrollbar}
 		<Scrollbar
@@ -203,6 +231,11 @@
 				font-size: 0.9rem;
 				font-weight: 300;
 			}
+		}
+
+		.anchor {
+			height: 1px;
+			width: 100%;
 		}
 
 		/* Hide scrollbar for IE, Edge, and Firefox */

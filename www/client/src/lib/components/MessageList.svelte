@@ -12,34 +12,70 @@
 	}: { messages: Message[] | null; submitFn: (event: SubmitEvent) => void } = $props();
 
 	let scrollableContent = $state() as HTMLElement;
-	let anchor = $state() as HTMLElement;
+	let top_anchor = $state() as HTMLElement;
+	let bottom_anchor = $state() as HTMLElement;
 	let scrollBar = $state() as Scrollbar;
 	let showScrollbar = $state<boolean>();
 
 	$effect(() => {
-		async function scrollToBottom() {
+		async function setAnchors() {
+			//wait for the messages to load
 			await tick();
-			if (!anchor) {
-				requestAnimationFrame(scrollToBottom);
+			if (!bottom_anchor) {
+				requestAnimationFrame(setAnchors);
 				return;
 			}
-			showScrollbar = scrollableContent.scrollHeight !== scrollableContent.clientHeight; 
+			//hides scrollbar if not needed
+			showScrollbar = scrollableContent.scrollHeight !== scrollableContent.clientHeight;
 
+			//scroll to the bottom of the messages
 			scrollableContent.scrollTop = 0;
 			requestAnimationFrame(() => {
 				scrollableContent.scrollTo({
-					top: anchor.offsetTop,
+					top: bottom_anchor.offsetTop,
 					behavior: 'instant'
 				});
 			});
+
+			//add top_anchor observer for lazy loading
+			await tick();
+			requestAnimationFrame(() => {
+				const observer = new IntersectionObserver(
+					(entries) => {
+						entries.forEach(async (entry) => {
+							if (entry.isIntersecting) {
+								//saves the current height of the scrollable content, to keep the scroll position later
+								const prevHeight = scrollableContent.scrollHeight;
+
+								//load more messages
+								stacksLoaded++;
+
+								await tick();
+								scrollableContent.scrollTo({
+									top: scrollableContent.scrollHeight - prevHeight,
+									behavior: 'instant'
+								});
+							}
+						});
+					},
+					{ threshold: 0.1 }
+				);
+				observer.observe(top_anchor);
+			});
 		}
 
-		const { cid } = page.params;
-		scrollToBottom();
+		const { cid } = page.params; //needed to cause the effect
+		setAnchors();
 	});
 
-	let messagesToShow = $derived((messages?.length ?? 0) > 49 ? -50 : -(messages?.length || 0));
-	let lastMessages = $derived(messages?.slice(messagesToShow));
+	//dynamic loading of messages
+	let stacksLoaded = $state(0);
+	let indexesToShow = $derived(
+		(messages?.length ?? 0) >= (stacksLoaded + 1) * 10
+			? (stacksLoaded + 1) * 10
+			: messages?.length || 0
+	);
+	let lastMessages = $derived(messages?.slice(-indexesToShow));
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -57,6 +93,7 @@
 		aria-label="Messages"
 	>
 		{#if lastMessages}
+			<div bind:this={top_anchor} class="anchor"></div>
 			{#each lastMessages as message}
 				<div
 					class="message"
@@ -67,7 +104,7 @@
 					<p class="sendTime">{formatISODate(message.sendTime)}</p>
 				</div>
 			{/each}
-			<div bind:this={anchor} id="anchor"></div>
+			<div bind:this={bottom_anchor} id="bottom-anchor" class="anchor"></div>
 		{:else}
 			<div class="error-container">
 				<div id="error_message">
@@ -127,13 +164,15 @@
 			}
 		}
 
-		#anchor {
+		.anchor {
 			grid-column: 1 / -1;
-			grid-row: auto;
-
-			overflow-anchor: auto;
 			height: 1px;
 			width: 100%;
+		}
+
+		#bottom-anchor {
+			grid-row: auto;
+			overflow-anchor: auto;
 		}
 
 		.error-container {
