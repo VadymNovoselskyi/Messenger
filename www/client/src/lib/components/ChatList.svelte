@@ -15,25 +15,48 @@
 	let scrollableContent = $state() as HTMLElement;
 	let scrollBar = $state() as Scrollbar;
 
-	onMount(() => {
-		if (scrollableContent) {
-			scrollableContent.scrollTop = memory.chatsScroll;
-			console.log(memory.chatsScroll);
+	let showScrollbar = $state<boolean>();
+	async function checkContentHeight() {
+		await tick();
+		if (!scrollableContent) {
+			requestAnimationFrame(checkContentHeight);
+			return;
 		}
+		showScrollbar = scrollableContent.scrollHeight !== scrollableContent.clientHeight;
+
+		scrollableContent.scrollTop = 0;
+		requestAnimationFrame(() => {
+			scrollableContent.scrollTo({
+				top: memory.chatsScroll,
+				behavior: 'instant'
+			});
+		});
+
+	}
+
+	$effect(()=> {
+		chats;
+		checkContentHeight();
 	});
+
+	onMount(checkContentHeight);
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
 	id="chats-section"
-	onmouseover={scrollBar.show}
-	onmouseleave={scrollBar.hide}
-	onfocus={scrollBar.show}
-	onblur={scrollBar.hide}
+	onmouseover={showScrollbar ? scrollBar.show : null}
+	onmouseleave={showScrollbar ? scrollBar.hide : null}
+	onfocus={showScrollbar ? scrollBar.show : null}
+	onblur={showScrollbar ? scrollBar.hide : null}
 >
 	<h1 id="chats-list-title">Chats</h1>
 
-	<div id="chats" bind:this={scrollableContent} onscroll={scrollBar.updateThumbPosition}>
+	<div
+		id="chats"
+		bind:this={scrollableContent}
+		onscroll={showScrollbar ? scrollBar.updateThumbPosition : null}
+	>
 		{#each chats as chat}
 			<a
 				href="{page.url.origin}/chat/{chat._id}"
@@ -55,12 +78,14 @@
 			</a>
 		{/each}
 	</div>
-	<Scrollbar
-		bind:this={scrollBar}
-		{scrollableContent}
-		width={0.4}
-		bind:lastScroll={memory.chatsScroll}
-	/>
+	{#if showScrollbar}
+		<Scrollbar
+			bind:this={scrollBar}
+			{scrollableContent}
+			width={0.4}
+			bind:lastScroll={memory.chatsScroll}
+		/>
+	{/if}
 
 	<button
 		id="add-chat"

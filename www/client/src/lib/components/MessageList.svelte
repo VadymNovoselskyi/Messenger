@@ -14,6 +14,7 @@
 	let scrollableContent = $state() as HTMLElement;
 	let anchor = $state() as HTMLElement;
 	let scrollBar = $state() as Scrollbar;
+	let showScrollbar = $state<boolean>();
 
 	$effect(() => {
 		async function scrollToBottom() {
@@ -22,6 +23,8 @@
 				requestAnimationFrame(scrollToBottom);
 				return;
 			}
+			showScrollbar = scrollableContent.scrollHeight !== scrollableContent.clientHeight; 
+
 			scrollableContent.scrollTop = 0;
 			requestAnimationFrame(() => {
 				scrollableContent.scrollTo({
@@ -42,15 +45,15 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
 	id="message-list"
-	onmouseover={scrollBar.show}
-	onmouseleave={scrollBar.hide}
-	onfocus={scrollBar.show}
-	onblur={scrollBar.hide}
+	onmouseover={showScrollbar ? scrollBar.show : null}
+	onmouseleave={showScrollbar ? scrollBar.hide : null}
+	onfocus={showScrollbar ? scrollBar.show : null}
+	onblur={showScrollbar ? scrollBar.hide : null}
 >
 	<section
 		id="messages"
 		bind:this={scrollableContent}
-		onscroll={scrollBar.updateThumbPosition}
+		onscroll={showScrollbar ? scrollBar.updateThumbPosition : null}
 		aria-label="Messages"
 	>
 		{#if lastMessages}
@@ -74,7 +77,9 @@
 		{/if}
 	</section>
 	<MessageField {submitFn} />
-	<Scrollbar bind:this={scrollBar} {scrollableContent} width={0.4} />
+	{#if showScrollbar}
+		<Scrollbar bind:this={scrollBar} {scrollableContent} width={0.4} />
+	{/if}
 </div>
 
 <style lang="scss">
