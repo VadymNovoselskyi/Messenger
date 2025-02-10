@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { tick } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { page } from '$app/state';
 	import MessageField from '$lib/components/MessageField.svelte';
 	import Scrollbar from '$lib/components/Scrollbar.svelte';
@@ -38,41 +38,54 @@
 			});
 
 			//add top_anchor observer for lazy loading
-			await tick();
-			requestAnimationFrame(() => {
-				const observer = new IntersectionObserver(
-					(entries) => {
-						entries.forEach(async (entry) => {
-							if (entry.isIntersecting) {
-								//saves the current height of the scrollable content, to keep the scroll position later
-								const prevHeight = scrollableContent.scrollHeight;
-
-								//load more messages
-								stacksLoaded++;
-
-								await tick();
-								scrollableContent.scrollTo({
-									top: scrollableContent.scrollHeight - prevHeight,
-									behavior: 'instant'
-								});
-							}
-						});
-					},
-					{ threshold: 0.1 }
-				);
-				observer.observe(top_anchor);
-			});
+			if (scrollBar) {
+				await tick();
+				requestAnimationFrame(() => observer.observe(top_anchor));
+			}
 		}
 
 		const { cid } = page.params; //needed to cause the effect
 		setAnchors();
 	});
 
+	let observer: IntersectionObserver;
+	onMount(async () => {
+		observer = new IntersectionObserver(
+			(entries) => {
+				entries.forEach(async (entry) => {
+					if (entry.isIntersecting) {
+						//saves the current height of the scrollable content, to keep the scroll position later
+						const prevHeight = scrollableContent.scrollHeight - scrollableContent.scrollTop;
+
+						//check if anchor was reached by drag
+						const isDragging = scrollBar.isDraggingOn();
+						if (isDragging) scrollBar.onMouseUp();
+
+						//load more messages
+						stacksLoaded++;
+
+						await tick();
+						scrollableContent.scrollTo({
+							top: scrollableContent.scrollHeight - prevHeight,
+							behavior: 'instant'
+						});
+
+						if (isDragging) {
+							await tick();
+							scrollBar.onMouseDown();
+						}
+					}
+				});
+			},
+			{ threshold: 0.1 }
+		);
+	});
+
 	//dynamic loading of messages
 	let stacksLoaded = $state(0);
 	let indexesToShow = $derived(
-		(messages?.length ?? 0) >= (stacksLoaded + 1) * 10
-			? (stacksLoaded + 1) * 10
+		(messages?.length ?? 0) >= (stacksLoaded + 1) * 20
+			? (stacksLoaded + 1) * 20
 			: messages?.length || 0
 	);
 	let lastMessages = $derived(messages?.slice(-indexesToShow));
@@ -93,8 +106,10 @@
 		aria-label="Messages"
 	>
 		{#if lastMessages}
-			<div bind:this={top_anchor} class="anchor"></div>
-			{#each lastMessages as message}
+			{#each lastMessages as message, i}
+				{#if i === 4}
+					<div bind:this={top_anchor} class="anchor"></div>
+				{/if}
 				<div
 					class="message"
 					class:sent={message.from === getCookie('uid')}

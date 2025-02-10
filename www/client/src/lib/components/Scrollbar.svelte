@@ -13,6 +13,7 @@
 	let scrollableThumb: HTMLElement;
 	let isDragging = $state(false);
 	let startY = 0;
+	let lastY = 0;
 	let startScrollTop = 0;
 	let animationFrameId: number | null;
 
@@ -50,9 +51,9 @@
 		});
 	}
 
-	export function onMouseDown(event: MouseEvent): void {
+	export function onMouseDown(event?: MouseEvent): void {
 		isDragging = true;
-		startY = event.clientY;
+		startY = event?.clientY || lastY;
 		startScrollTop = scrollableContent.scrollTop;
 
 		// Disable text selection while dragging.
@@ -74,6 +75,7 @@
 	export function onMouseMove(event: MouseEvent): void {
 		if (!isDragging) return;
 		const deltaY = event.clientY - startY;
+		lastY = event.clientY;
 		const contentHeight = scrollableContent.scrollHeight;
 		const visibleHeight = scrollableContent.clientHeight;
 
@@ -98,6 +100,9 @@
 	export function hide(): void {
 		scrollableThumb.style.backgroundColor = 'rgba(90, 90, 90, 0.7)';
 	}
+	export function isDraggingOn(): boolean {
+		return isDragging;
+	}
 
 	onMount(() => {
 		window.addEventListener('resize', updateThumbPosition);
@@ -106,12 +111,14 @@
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="scrollable-thumb-container" 
-	onmousedown={onMouseDown}
-	onmouseup={onMouseUp}
-	style={`width: ${width}rem`}
->
-	<div class="scrollable-thumb" bind:this={scrollableThumb} class:active={isDragging}></div>
+<div class="scrollable-thumb-container" style={`width: ${width}rem`}>
+	<div
+		class="scrollable-thumb"
+		bind:this={scrollableThumb}
+		class:active={isDragging}
+		onmousedown={onMouseDown}
+		onmouseup={onMouseUp}
+	></div>
 </div>
 
 <style lang="scss">
@@ -131,13 +138,10 @@
 
 			will-change: transform;
 
-			&.active {
+			&.active,
+			&:hover {
 				background-color: rgba(43, 43, 43, 0.8) !important;
 			}
-		}
-
-		&:hover .scrollable-thumb {
-			background-color: rgba(43, 43, 43, 0.8) !important;
 		}
 	}
 </style>

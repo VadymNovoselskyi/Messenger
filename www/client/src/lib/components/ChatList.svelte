@@ -39,32 +39,46 @@
 	$effect(() => {
 		lastChats;
 		checkContentHeight();
+
+		requestAnimationFrame(async () => {
+			await tick();
+			if (scrollBar) observer.observe(bottom_anchor);
+		});
 	});
 
+	let observer: IntersectionObserver;
 	onMount(async () => {
 		await checkContentHeight();
 
-		await tick();
-
-		//add bottom_anchor observer for lazy loading
-		const observer = new IntersectionObserver(
+		//bottom_anchor observer for lazy loading
+		observer = new IntersectionObserver(
 			(entries) => {
 				entries.forEach(async (entry) => {
 					if (entry.isIntersecting) {
+						const isDragging = scrollBar.isDraggingOn();
+						if (isDragging) scrollBar.onMouseUp();
+
 						//load more messages
 						stacksLoaded++;
+
+						if (isDragging) {
+							await tick();
+							scrollBar.onMouseDown();
+						}
 					}
 				});
 			},
 			{ threshold: 0.1 }
 		);
-		observer.observe(bottom_anchor);
 	});
 
+	const chatsPerStack = 2;
 	//dynamic loading of messages
 	let stacksLoaded = $state(1);
 	let indexesToShow = $derived(
-		(chats?.length || 0) >= stacksLoaded * 15 ? stacksLoaded * 15 : chats?.length || 0
+		(chats?.length || 0) >= stacksLoaded * chatsPerStack
+			? stacksLoaded * chatsPerStack
+			: chats?.length || 0
 	);
 	let lastChats = $derived(chats?.slice(0, indexesToShow));
 </script>
@@ -179,7 +193,7 @@
 			grid-template-rows: auto 4rem auto;
 			grid-gap: 0 1rem;
 			align-items: center;
-			padding: 0.4rem;
+			padding: 8rem;
 			border: 1px solid var(--secondary-bg-color);
 			text-decoration: none;
 
