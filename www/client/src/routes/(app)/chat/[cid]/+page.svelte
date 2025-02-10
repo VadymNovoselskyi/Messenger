@@ -21,9 +21,11 @@
 	});
 
 	let messages: Message[] | null = $state()!;
+	let index: number = $state(0);
 	$effect(() => {
 		const { cid } = page.params;
 		const chat = memory.chats.find((chat) => chat._id === cid);
+		if(chat) index = memory.chats.indexOf(chat);
 
 		messages = chat ? chat.messages : null;
 	});
@@ -35,7 +37,7 @@
 
 <div id="wrapper">
 	<section id="chats-list">
-		<ChatList bind:chats={memory.chats} />
+		<ChatList bind:chats={memory.chats} openedIndex={index}/>
 	</section>
 
 	<MessageList {messages} submitFn={sendMessage} />

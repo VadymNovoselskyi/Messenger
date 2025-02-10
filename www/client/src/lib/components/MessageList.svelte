@@ -38,14 +38,19 @@
 			});
 
 			//add top_anchor observer for lazy loading
-			if (scrollBar) {
+			requestAnimationFrame(async () => {
 				await tick();
-				requestAnimationFrame(() => observer.observe(top_anchor));
-			}
+				if (scrollBar) observer.observe(top_anchor);
+			});
 		}
 
 		const { cid } = page.params; //needed to cause the effect
 		setAnchors();
+	});
+
+	$effect(()=> {
+		messages?.length;
+		if(messages?.length && !showScrollbar) showScrollbar = scrollableContent.scrollHeight !== scrollableContent.clientHeight;
 	});
 
 	let observer: IntersectionObserver;
@@ -81,11 +86,12 @@
 		);
 	});
 
+	const indexesPerStack = 20;
 	//dynamic loading of messages
 	let stacksLoaded = $state(0);
 	let indexesToShow = $derived(
-		(messages?.length ?? 0) >= (stacksLoaded + 1) * 20
-			? (stacksLoaded + 1) * 20
+		(messages?.length ?? 0) >= (stacksLoaded + 1) * indexesPerStack
+			? (stacksLoaded + 1) * indexesPerStack
 			: messages?.length || 0
 	);
 	let lastMessages = $derived(messages?.slice(-indexesToShow));

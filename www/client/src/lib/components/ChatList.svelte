@@ -8,7 +8,7 @@
 	import { formatISODate, getCookie } from '$lib/utils';
 	import type { Chat, User } from '$lib/types';
 
-	let { chats = $bindable() }: { chats: Chat[] } = $props();
+	let { chats = $bindable(), openedIndex }: { chats: Chat[], openedIndex?: number } = $props();
 	let showAddChat = $state(false);
 	let usernameInput = $state() as HTMLInputElement;
 
@@ -28,6 +28,11 @@
 
 		//scroll to the last position
 		scrollableContent.scrollTop = 0;
+		// while (scrollableContent.scrollHeight < memory.chatsScroll) {
+		// 	await tick();
+		// 	requestAnimationFrame(()=> stacksLoaded++);
+		// 	await tick()
+		// }
 		requestAnimationFrame(() => {
 			scrollableContent.scrollTo({
 				top: memory.chatsScroll,
@@ -70,14 +75,18 @@
 			},
 			{ threshold: 0.1 }
 		);
+
+		const { cid } = page.params;
+		const index = chats.findIndex((chat: Chat) => chat._id === cid);
+		console.log(index);
 	});
 
-	const chatsPerStack = 2;
+	const chatsPerStack = 14;
 	//dynamic loading of messages
 	let stacksLoaded = $state(1);
 	let indexesToShow = $derived(
-		(chats?.length || 0) >= stacksLoaded * chatsPerStack
-			? stacksLoaded * chatsPerStack
+		(chats?.length || 0) >= stacksLoaded * chatsPerStack + (openedIndex ?? 0)
+			? stacksLoaded * chatsPerStack + (openedIndex ?? 0)
 			: chats?.length || 0
 	);
 	let lastChats = $derived(chats?.slice(0, indexesToShow));
@@ -193,7 +202,7 @@
 			grid-template-rows: auto 4rem auto;
 			grid-gap: 0 1rem;
 			align-items: center;
-			padding: 8rem;
+			padding: 0.4rem;
 			border: 1px solid var(--secondary-bg-color);
 			text-decoration: none;
 

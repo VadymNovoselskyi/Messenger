@@ -2,37 +2,43 @@
 	import { login, signup } from '$lib/api.svelte';
 
 	let signupSelected: boolean = false;
-</script>	
+	const nameRegex = /[A-Za-z]{3, 20}/;
+</script>
 
-<div id="wrapper" class:signupSelected={signupSelected}>
-	<div id="login" role="none" 
-	class:inactive={signupSelected}
-	onmouseover={() => signupSelected = false}
-	onfocus={() => signupSelected = false}>
+<div id="wrapper" class:signupSelected>
+	<div
+		id="login"
+		role="none"
+		class:inactive={signupSelected}
+		onmouseover={() => (signupSelected = false)}
+		onfocus={() => (signupSelected = false)}
+	>
 		<h1 class="title">Login</h1>
 		<form action="" onsubmit={login}>
 			<label for="username">Username</label>
-			<input type="text" id="usernameLogin" placeholder="Username" required >
-			
+			<input type="text" id="usernameLogin" placeholder="Username" maxlength="25" autocomplete="username" required />
+
 			<label for="password">Password</label>
-			<input type="password" id="passwordLogin" placeholder="Password" required >
-			
+			<input type="password" id="passwordLogin" placeholder="Password" maxlength="64" required />
+
 			<button type="submit">Login</button>
 		</form>
-    </div>
+	</div>
 
-	<div id="signup" role="none"  
-	class:inactive={!signupSelected} 
-	onmouseover={() => signupSelected = true} 
-	onfocus={() => signupSelected = true}>
-
+	<div
+		id="signup"
+		role="none"
+		class:inactive={!signupSelected}
+		onmouseover={() => (signupSelected = true)}
+		onfocus={() => (signupSelected = true)}
+	>
 		<h1 class="title">Signup</h1>
 		<form action="" onsubmit={signup}>
 			<label for="username">Username</label>
-			<input type="text" id="usernameSignup" placeholder="Username" required >
+			<input type="text" id="usernameSignup" placeholder="Username" maxlength="25" autocomplete="username" required />
 
 			<label for="password">Password</label>
-			<input type="password" id="passwordSignup" placeholder="Password" required>
+			<input type="password" id="passwordSignup" placeholder="Password" maxlength="64" required />
 
 			<button type="submit">Signup</button>
 		</form>
@@ -40,19 +46,20 @@
 </div>
 
 <style lang="scss">
-    #wrapper {
-        display: grid;
-        grid-template-columns: 55fr 45fr;
+	#wrapper {
+		display: grid;
+		grid-template-columns: 55fr 45fr;
 		transition: grid-template-columns 0.4s ease;
 
 		&.signupSelected {
 			grid-template-columns: 45fr 55fr;
 		}
 
-		#login, #signup {
+		#login,
+		#signup {
 			padding: 4rem 6rem;
 			transition: background-color 0.4s ease;
-			
+
 			form {
 				display: grid;
 				transition: opacity 0.4s ease;
@@ -70,7 +77,7 @@
 					border: 1px solid transparent;
 				}
 
-				button[type="submit"] {
+				button[type='submit'] {
 					border: 1px solid #8f97a0;
 					border-radius: 4rem;
 					background: linear-gradient(45deg, #a6adb5 0%, #5d6769 100%);
@@ -86,23 +93,26 @@
 			grid-column: 1;
 			background-color: var(--primary-bg-color);
 			color: var(--primary-text-color);
-			
+
 			&.inactive {
 				background-color: #fdfffc;
-				form {opacity: 0;}
+				form {
+					opacity: 0;
+				}
 			}
 		}
-		
+
 		#signup {
 			grid-column: 2;
 			background-color: var(--secondary-bg-color);
 			color: var(--secondary-text-color);
-			
+
 			&.inactive {
 				background-color: #011627;
-				form {opacity: 0;}
+				form {
+					opacity: 0;
+				}
 			}
 		}
-
-    }
+	}
 </style>

@@ -33,6 +33,7 @@
 		name="message"
 		placeholder="Type your text here"
 		autocomplete="off"
+		maxlength="1000"
 	/>
 	<button id="send-icon" aria-label="Send message">
 		<i class="fa-solid fa-paper-plane"></i>
