@@ -28,11 +28,6 @@
 
 		//scroll to the last position
 		scrollableContent.scrollTop = 0;
-		// while (scrollableContent.scrollHeight < memory.chatsScroll) {
-		// 	await tick();
-		// 	requestAnimationFrame(()=> stacksLoaded++);
-		// 	await tick()
-		// }
 		requestAnimationFrame(() => {
 			scrollableContent.scrollTo({
 				top: memory.chatsScroll,
@@ -78,7 +73,6 @@
 
 		const { cid } = page.params;
 		const index = chats.findIndex((chat: Chat) => chat._id === cid);
-		console.log(index);
 	});
 
 	const chatsPerStack = 14;
@@ -107,7 +101,7 @@
 		bind:this={scrollableContent}
 		onscroll={showScrollbar ? scrollBar.updateThumbPosition : null}
 	>
-		{#each lastChats as chat}
+		{#each lastChats as chat, i}
 			<a
 				href="{page.url.origin}/chat/{chat._id}"
 				class="chat"
@@ -126,8 +120,11 @@
 				</p>
 				<p class="send-date">{formatISODate(chat.lastModified)}</p>
 			</a>
+			{#if i === (indexesToShow > 8 ? indexesToShow - 4 : indexesToShow - 1)}
+				<div bind:this={bottom_anchor} class="anchor"></div>
+			{/if}
+
 		{/each}
-		<div bind:this={bottom_anchor} class="anchor"></div>
 	</div>
 	{#if showScrollbar}
 		<Scrollbar
