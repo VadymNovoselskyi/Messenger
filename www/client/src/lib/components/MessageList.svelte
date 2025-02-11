@@ -120,6 +120,7 @@
 					class="message"
 					class:sent={message.from === getCookie('uid')}
 					class:received={message.from !== getCookie('uid')}
+					class:sending={message.isReceived === false}
 				>
 					<p class="text">{message.text}</p>
 					<p class="sendTime">{formatISODate(message.sendTime)}</p>
@@ -176,6 +177,10 @@
 			&.sent {
 				grid-column: 5/11;
 				background-color: #83c5be;
+			}
+
+			&.sending {
+				background-color: #83c5c08f;
 			}
 
 			.sendTime {

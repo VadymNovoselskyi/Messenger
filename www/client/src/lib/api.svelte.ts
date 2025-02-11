@@ -2,7 +2,8 @@ import { get } from 'svelte/store';
 import { page } from '$app/state';
 import { goto } from '$app/navigation';
 import { memory } from '$lib/stores/memory.svelte';
-import { setCookie, getCookie, sortChats } from '$lib/utils';
+import { generateTempId, setCookie, getCookie, sortChats } from '$lib/utils';
+import type { Message } from '$lib/types';
 
 export function getWS(): Promise<WebSocket> {
 	if (
@@ -57,13 +58,15 @@ export async function sendMessage(event: Event): Promise<void> {
 
 	const ws = await getWS();
 	const cid = page.params.cid;
+	const tempMID = generateTempId();
 	ws.send(
 		JSON.stringify({
 			api: 'send_message',
 			token: getCookie('token'),
 			payload: {
 				cid,
-				message
+				message,
+				tempMID
 			}
 		})
 	);
@@ -75,9 +78,11 @@ export async function sendMessage(event: Event): Promise<void> {
 
 	const currentTime = new Date().toISOString();
 	chat.messages.push({
+		mid: tempMID,
 		from: getCookie('uid') ?? '',
 		text: message,
-		sendTime: currentTime
+		sendTime: currentTime,
+		isReceived: false
 	});
 
 	chat.lastModified = currentTime;
@@ -147,31 +152,37 @@ export function handleServerMessage(event: MessageEvent): void {
 	const response = event.data;
 	const data = JSON.parse(response);
 	console.log(data);
-	if (data.payload.status === 'error') {
+	if (data.status === 'error') {
 		alert(data.payload.message);
 		return;
 	}
 
 	switch (data.api) {
 		case 'receive_message':
-			const { cid, message } = data.payload;
+			const { cid, message, tempMID }:
+				{ cid: string, message: Message, tempMID?: string }
+				= data.payload;
 
 			const chat = memory.chats.find((chat) => chat._id === cid);
 			if (!chat) {
 				throw new Error(`Chat with id ${cid} not found`);
 			}
 
-			const currentTime = new Date().toISOString();
-			const sendingUID = chat.users.find((user) => user.uid !== getCookie('uid'))!.uid;
-			chat.messages.push({
-				from: sendingUID,
-				text: message,
-				sendTime: currentTime
-			});
+			if (tempMID) {
+				const index = chat.messages.findIndex((msg) => msg.mid === tempMID);
+				if (index === -1) {
+					alert(`Couldn't find message with tempMID: ${tempMID}`);
+					return;
+				}
+				chat.messages[index] = { ...message };
+			} else chat.messages.push(message)
 
+
+			const currentTime = new Date().toISOString();
 			chat.lastModified = currentTime;
 			sortChats();
 			break;
+
 		case 'get_chats':
 			memory.chats = data.payload.chats;
 			sortChats();

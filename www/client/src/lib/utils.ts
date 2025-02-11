@@ -20,6 +20,12 @@ export function formatISODate(isoDate: string): string {
     return `${hours}:${minutes}`;
 }
 
+export function generateTempId(): string {
+    const timestampPart = Date.now().toString(36);
+    const randomPart = Math.random().toString(36).substring(2, 8);
+    return timestampPart + randomPart;
+  }
+
 export function setCookie(name: string, value: string, days: number): void {
     const date = new Date();
     date.setTime(date.getTime() + days * 24 * 60 * 60 * 1000); // Expiry in days

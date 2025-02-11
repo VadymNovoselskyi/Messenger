@@ -10,10 +10,11 @@ export interface User {
 }
 
 export interface Message {
+    mid: string
     from: string; //User
     text: string;
     sendTime: string; //ISO-date
-    
+    isReceived?: boolean;
 }
 
 export interface Chat {
