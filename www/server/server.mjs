@@ -26,8 +26,8 @@ wss.on('connection', ws => {
         const token = generateToken(uid.toString());
         ws.send(JSON.stringify({
           api,
+          status: 'success',
           payload: {
-            status: 'success',
             uid,
             token
           }
@@ -46,8 +46,8 @@ wss.on('connection', ws => {
         if (!isPasswordValid) {
           return ws.send(JSON.stringify({
             api,
+            status: 'error',
             payload: {
-              status: 'error',
               message: 'Invalid password'
             }
           }));
@@ -56,8 +56,8 @@ wss.on('connection', ws => {
         const token = generateToken(user._id.toString());
         ws.send(JSON.stringify({
           api,
+          status: 'success',
           payload: {
-            status: 'success',
             uid: user._id,
             token
           }
@@ -84,8 +84,8 @@ wss.on('connection', ws => {
           console.log(err)
           ws.send(JSON.stringify({
             api,
+            status: 'error',
             payload: {
-              status: 'error',
               message: 'Invalid Token. Login again'
             }
           }));
@@ -93,8 +93,8 @@ wss.on('connection', ws => {
       }
     } catch (error) {
       ws.send(JSON.stringify({
+        status: "error",
         payload: {
-          status: "error",
           message: error.message
         }
       }));
@@ -109,44 +109,65 @@ wss.on('connection', ws => {
 
           ws.send(JSON.stringify({
             api: 'get_chats',
+            status: 'success',
             payload: {
-              status: 'success',
               chats
             }
           }));
           break;
-  
-        case "send_message":
-          const receivingUID = await sendMessage(uid, payload.cid, payload.message);
-          if(!onlineUsers[receivingUID.toString()]) return;
 
-          onlineUsers[receivingUID.toString()].send(JSON.stringify({
-            api: 'receive_message',
-            payload: {
+        case "send_message": {
+          const { tempMID } = payload;
+          const { message, receivingUID } = await sendMessage(uid, payload.cid, payload.message);
+          if (onlineUsers[receivingUID.toString()]) {
+            onlineUsers[receivingUID.toString()].send(JSON.stringify({
+              api: 'receive_message',
               status: 'success',
+              payload: {
+                cid: payload.cid,
+                message
+              }
+            }));
+          };
+          ws.send(JSON.stringify({
+            api: 'receive_message',
+            status: 'success',
+            payload: {
               cid: payload.cid,
-              message: payload.message
+              message,
+              tempMID
             }
           }));
           break;
-  
+        }
+
         case "create_chat":
-          const createdChat = await createChat(uid, payload.username);
+          const { createdChat, receivingUID } = await createChat(uid, payload.username);
           ws.send(JSON.stringify({
             api: 'create_chat',
+            status: 'success',
             payload: {
-              status: 'success',
               createdChat
             }
           }));
+
+          if (onlineUsers[receivingUID.toString()]) {
+            onlineUsers[receivingUID.toString()].send(JSON.stringify({
+              api: 'create_chat',
+              status: 'success',
+              payload: {
+                createdChat
+              }
+            }));
+          };
           break;
-  
+
         default:
           console.error(`Unknown api call: ${api}`);
           ws.send(JSON.stringify({
             api,
+            status: 'error',
             payload: {
-              status: 'error',
               message: 'Invalid api call'
             }
           }));
@@ -157,7 +178,7 @@ wss.on('connection', ws => {
   }
 
   ws.on('close', () => {
-    if(onlineUsers[ws.uid]) delete onlineUsers[ws.uid];
+    if (onlineUsers[ws.uid]) delete onlineUsers[ws.uid];
     console.log(Object.keys(onlineUsers));
   });
 

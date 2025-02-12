@@ -12,20 +12,30 @@ export async function getChats(uid) {
 }
 
 export async function sendMessage(uid, cid, message) {
+  const mid = new ObjectId();
   try {
     const result = await chats.updateOne(
       { "_id": new ObjectId(cid) },
       {
-        $push: { "messages": { "from": uid, "text": message, "sendTime": new Date() } },
+        $push: {
+          "messages": {
+            "mid": mid,
+            "from": uid,
+            "text": message,
+            "sendTime": new Date()
+          }
+        },
         $currentDate: { lastModified: true }
       }
     );
+
     if (result.modifiedCount === 0) {
       throw new Error(`Failed to send message in chat ID ${cid}.`);
     }
-    
+
     const chat = await chats.findOne({ _id:  new ObjectId(cid) });
-    return chat.users.find(user => user.uid.toString() !== uid).uid;
+    const receivingUID = chat.users.find(user => user.uid.toString() !== uid).uid
+    return { message: chat.messages[chat.messages.length - 1], receivingUID };
   } catch (error) {
     throw new Error(`Error sending message in chat ID ${cid}: ${error.message}`);
   }
@@ -81,7 +91,7 @@ export async function createChat(creatingUID, receivingUsername) {
     });
 
     if (presentChat) {
-      throw new Error(`Chat between "${creatingUser.username}" and "${receivingUser.username}"   already exists.`);
+      throw new Error(`Chat between "${creatingUser.username}" and "${receivingUser.username}" already exists.`);
     }
 
     const result = await chats.insertOne({
@@ -92,17 +102,17 @@ export async function createChat(creatingUID, receivingUsername) {
       messages: [],
       lastModified: new Date()
     });
-    
+
     if (!result.acknowledged || !result.insertedId) {
       throw new Error("Failed to create chat. Insert operation was not acknowledged.");
     }
-    
+
     const createdChat = await chats.findOne({ _id: result.insertedId });
     if (!createdChat) {
       throw new Error("Failed to retrieve the newly created chat.");
     }
-    
-    return createdChat;
+
+    return { createdChat, receivingUID: receivingUser._id };
   } catch (error) {
     throw new Error(`Error creating chat: ${error.message}`);
   }
