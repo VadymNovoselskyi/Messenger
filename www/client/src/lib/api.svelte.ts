@@ -216,7 +216,7 @@ export function handleServerMessage(event: MessageEvent): void {
 				alert("No chat to add extra messages");
 				return;
 			}
-			chat.messages = [...chat.messages, data.payload.extraMessages];
+			chat.messages = [...extraMessages, ...chat.messages];
 			break;
 
 		case 'create_chat':

@@ -142,7 +142,8 @@ wss.on('connection', ws => {
 
         case "extra_messages":
           const { cid, currentIndex } = payload;
-          const extraMessages = await getExtraMessages(cid, currentIndex)
+          const extraMessages = await getExtraMessages(cid, currentIndex);
+          console.log(extraMessages);
 
           ws.send(JSON.stringify({
             api: 'extra_messages',

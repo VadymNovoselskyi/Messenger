@@ -35,9 +35,11 @@ export async function getExtraMessages(cid, currentIndex) {
   try {
     const extraMessages = await messages
       .find({ cid: new ObjectId(cid) })
+      .sort({ sendTime: -1 })
       .skip(currentIndex)
       .limit(INIT_MESSAGES)
       .toArray();
+    return extraMessages.reverse();
   } catch (error) {
     throw new Error(
       `Error getting extra messages in chat ID ${cid}: ${error.message}`

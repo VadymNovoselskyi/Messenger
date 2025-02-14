@@ -3,6 +3,7 @@
 	import { page } from '$app/state';
 	import MessageField from '$lib/components/MessageField.svelte';
 	import Scrollbar from '$lib/components/Scrollbar.svelte';
+	import { getExtraMessages } from '$lib/api.svelte';
 	import { formatISODate, getCookie } from '$lib/utils';
 	import type { Message } from '$lib/types';
 
@@ -68,7 +69,8 @@
 
 						//load more messages
 						stacksLoaded++;
-						// if(indexesToShow > (messages?.length ?? 0)) 
+						console.log(indexesToShow, messages?.length);
+						if(indexesToShow >= (messages?.length ?? 0)) getExtraMessages(page.params.cid, messages?.length ?? 0);
 
 						await tick();
 						scrollableContent.scrollTo({
