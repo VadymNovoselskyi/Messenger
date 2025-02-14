@@ -7,3 +7,4 @@ const db = client.db('messenger');
 
 export const chats = db.collection('chats');
 export const users = db.collection('users');
+export const messages = db.collection('messages');

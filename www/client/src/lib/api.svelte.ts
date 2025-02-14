@@ -78,7 +78,7 @@ export async function sendMessage(event: Event): Promise<void> {
 
 	const currentTime = new Date().toISOString();
 	chat.messages.push({
-		mid: tempMID,
+		_id: tempMID,
 		from: getCookie('uid') ?? '',
 		text: message,
 		sendTime: currentTime,
@@ -169,7 +169,7 @@ export function handleServerMessage(event: MessageEvent): void {
 			}
 
 			if (tempMID) {
-				const index = chat.messages.findIndex((msg) => msg.mid === tempMID);
+				const index = chat.messages.findIndex((msg) => msg._id === tempMID);
 				if (index === -1) {
 					alert(`Couldn't find message with tempMID: ${tempMID}`);
 					return;

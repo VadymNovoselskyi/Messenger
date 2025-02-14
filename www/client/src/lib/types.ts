@@ -5,12 +5,12 @@ export interface Link {
 }
 
 export interface User {
-    uid: string,
+    _id: string,
     username: string
 }
 
 export interface Message {
-    mid: string
+    _id: string
     from: string; //User
     text: string;
     sendTime: string; //ISO-date

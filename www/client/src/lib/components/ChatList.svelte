@@ -109,11 +109,11 @@
 			>
 				<img
 					src={''}
-					alt={chat.users.find((user: User) => user.uid !== getCookie('uid'))!.username}
+					alt={chat.users.find((user: User) => user._id !== getCookie('uid'))!.username}
 					class="profile-picture"
 				/>
 				<p class="chat-name">
-					{chat.users.find((user: User) => user.uid !== getCookie('uid'))!.username}
+					{chat.users.find((user: User) => user._id !== getCookie('uid'))!.username}
 				</p>
 				<p class="chat-message" class:system-message={!chat.messages.length}>
 					{chat.messages[chat.messages.length - 1]?.text ?? 'No messages'}

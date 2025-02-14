@@ -106,6 +106,7 @@ wss.on('connection', ws => {
       switch (api) {
         case "get_chats":
           const chats = await getChats(uid);
+          console.log(chats);
 
           ws.send(JSON.stringify({
             api: 'get_chats',
@@ -179,7 +180,7 @@ wss.on('connection', ws => {
 
   ws.on('close', () => {
     if (onlineUsers[ws.uid]) delete onlineUsers[ws.uid];
-    console.log(Object.keys(onlineUsers));
+    console.log('Client disconnected', Object.keys(onlineUsers));
   });
 
 });
