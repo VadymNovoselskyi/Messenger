@@ -49,6 +49,26 @@ export async function requestChats(): Promise<void> {
 	}
 }
 
+export async function getExtraMessages(cid: string, currentIndex: number): Promise<void> {
+	try {
+		const ws = await getWS();
+		ws.send(
+			JSON.stringify({
+				api: 'extra_messages',
+				token: getCookie('token'),
+				payload: {
+					cid,
+					currentIndex
+				}
+			})
+		);
+		return Promise.resolve();
+	} catch (error) {
+		console.error('Error in requestChats:', error);
+		return Promise.reject(error);
+	}
+}
+
 export async function sendMessage(event: Event): Promise<void> {
 	event.preventDefault();
 	const messageInput: HTMLInputElement = (event.currentTarget as HTMLFormElement).message;
@@ -158,7 +178,7 @@ export function handleServerMessage(event: MessageEvent): void {
 	}
 
 	switch (data.api) {
-		case 'receive_message':
+		case 'receive_message': {
 			const { cid, message, tempMID }:
 				{ cid: string, message: Message, tempMID?: string }
 				= data.payload;
@@ -182,10 +202,21 @@ export function handleServerMessage(event: MessageEvent): void {
 			chat.lastModified = currentTime;
 			sortChats();
 			break;
+		}
 
 		case 'get_chats':
 			memory.chats = data.payload.chats;
 			sortChats();
+			break;
+
+		case 'extra_messages':
+			const { cid, extraMessages }: { cid: string, extraMessages: Message[] } = data.payload;
+			const chat = memory.chats.find((chat) => chat._id === cid);
+			if(!chat) {
+				alert("No chat to add extra messages");
+				return;
+			}
+			chat.messages = [...chat.messages, data.payload.extraMessages];
 			break;
 
 		case 'create_chat':

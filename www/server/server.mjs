@@ -1,7 +1,7 @@
 import WebSocket, { WebSocketServer } from 'ws';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
-import { getChats, sendMessage, findUser, createUser, createChat } from './mongodb/api.mjs';
+import { getChats, getExtraMessages, sendMessage, findUser, createUser, createChat } from './mongodb/api.mjs';
 
 const secretKey = 'y8q6GA@0md8ySuNk';
 const generateToken = (uid) => {
@@ -106,8 +106,6 @@ wss.on('connection', ws => {
       switch (api) {
         case "get_chats":
           const chats = await getChats(uid);
-          console.log(chats);
-
           ws.send(JSON.stringify({
             api: 'get_chats',
             status: 'success',
@@ -141,6 +139,20 @@ wss.on('connection', ws => {
           }));
           break;
         }
+
+        case "extra_messages":
+          const { cid, currentIndex } = payload;
+          const extraMessages = await getExtraMessages(cid, currentIndex)
+
+          ws.send(JSON.stringify({
+            api: 'extra_messages',
+            status: 'success',
+            payload: {
+              cid,
+              extraMessages
+            }
+          }));
+          break;
 
         case "create_chat":
           const { createdChat, receivingUID } = await createChat(uid, payload.username);

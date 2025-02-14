@@ -68,6 +68,7 @@
 
 						//load more messages
 						stacksLoaded++;
+						// if(indexesToShow > (messages?.length ?? 0)) 
 
 						await tick();
 						scrollableContent.scrollTo({
@@ -88,10 +89,10 @@
 
 	const indexesPerStack = 20;
 	//dynamic loading of messages
-	let stacksLoaded = $state(0);
+	let stacksLoaded = $state(1);
 	let indexesToShow = $derived(
-		(messages?.length ?? 0) >= (stacksLoaded + 1) * indexesPerStack
-			? (stacksLoaded + 1) * indexesPerStack
+		(messages?.length ?? 0) >= stacksLoaded * indexesPerStack
+			? stacksLoaded * indexesPerStack
 			: messages?.length || 0
 	);
 	let lastMessages = $derived(messages?.slice(-indexesToShow));
