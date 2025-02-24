@@ -9,14 +9,17 @@
 	import type { Chat, User } from '$lib/types';
 
 	let { chats = $bindable(), openedIndex }: { chats: Chat[], openedIndex?: number } = $props();
+
+	let observer: IntersectionObserver;
 	let showAddChat = $state(false);
 	let usernameInput = $state() as HTMLInputElement;
 
 	let scrollableContent = $state() as HTMLElement;
 	let scrollBar = $state() as Scrollbar;
+	let showScrollbar = $state<boolean>();
 	let bottom_anchor = $state() as HTMLElement;
 
-	let showScrollbar = $state<boolean>();
+
 	async function checkContentHeight() {
 		await tick();
 		if (!scrollableContent) {
@@ -46,7 +49,6 @@
 		});
 	});
 
-	let observer: IntersectionObserver;
 	onMount(async () => {
 		await checkContentHeight();
 
@@ -72,15 +74,14 @@
 		);
 
 		const { cid } = page.params;
-		const index = chats.findIndex((chat: Chat) => chat._id === cid);
 	});
 
-	const chatsPerStack = 14;
+	const INDEXES_PER_STACK = 14;
 	//dynamic loading of messages
 	let stacksLoaded = $state(1);
 	let indexesToShow = $derived(
-		(chats?.length || 0) >= stacksLoaded * chatsPerStack + (openedIndex ?? 0)
-			? stacksLoaded * chatsPerStack + (openedIndex ?? 0)
+		(chats?.length || 0) >= stacksLoaded * INDEXES_PER_STACK + (openedIndex ?? 0)
+			? stacksLoaded * INDEXES_PER_STACK + (openedIndex ?? 0)
 			: chats?.length || 0
 	);
 	let lastChats = $derived(chats?.slice(0, indexesToShow));

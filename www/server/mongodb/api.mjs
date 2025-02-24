@@ -3,7 +3,8 @@ import { chats, users, messages } from "./connect.mjs";
 import bcrypt from "bcrypt";
 
 const INIT_CHATS = 20;
-const INIT_MESSAGES = 40;
+const INIT_MESSAGES = 50;
+const EXTRA_MESSAGES = 100;
 
 export async function getChats(uid) {
   try {
@@ -14,6 +15,7 @@ export async function getChats(uid) {
       .toArray();
 
     userChats = await Promise.all(userChats.map(async (chat) => {
+      const totalMessages = await messages.countDocuments({ cid: chat._id });
       const chatMessages = await messages
         .find({ cid: chat._id })
         .sort({ sendTime: -1 })
@@ -37,7 +39,7 @@ export async function getExtraMessages(cid, currentIndex) {
       .find({ cid: new ObjectId(cid) })
       .sort({ sendTime: -1 })
       .skip(currentIndex)
-      .limit(INIT_MESSAGES)
+      .limit(EXTRA_MESSAGES)
       .toArray();
     return extraMessages.reverse();
   } catch (error) {

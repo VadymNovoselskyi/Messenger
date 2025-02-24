@@ -31,7 +31,7 @@
 
 			// Calculate thumb height proportionally, but not less than 20px.
 			const computedThumbHeight = (visibleHeight / contentHeight) * visibleHeight;
-			const thumbHeight = Math.max(computedThumbHeight, 20);
+			const thumbHeight = Math.max(computedThumbHeight, 40);
 
 			// The track is the area available for the thumb to move.
 			const trackHeight = visibleHeight - thumbHeight;

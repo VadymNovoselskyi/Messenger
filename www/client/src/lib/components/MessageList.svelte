@@ -12,92 +12,105 @@
 		submitFn
 	}: { messages: Message[] | null; submitFn: (event: SubmitEvent) => void } = $props();
 
+	let observer: IntersectionObserver;
 	let scrollableContent = $state() as HTMLElement;
 	let top_anchor = $state() as HTMLElement;
 	let bottom_anchor = $state() as HTMLElement;
 	let scrollBar = $state() as Scrollbar;
 	let showScrollbar = $state<boolean>();
 
-	$effect(() => {
-		async function setAnchors() {
-			//wait for the messages to load
+	async function handleIntersection(): Promise<void> {
+		//saves the current height of the scrollable content, to keep the scroll position later
+		const prevHeight = scrollableContent.scrollHeight - scrollableContent.scrollTop;
+
+		//check if anchor was reached by drag
+		const isDragging = scrollBar.isDraggingOn();
+		if (isDragging) scrollBar.onMouseUp();
+
+		//load more messages
+		stacksLoaded++;
+		console.log(indexesToShow, messages?.length, topAnchorIndex);
+		if(indexesToShow >= (messages?.length ?? 0)) getExtraMessages(page.params.cid, messages?.length ?? 0);
+
+		await tick();
+		observer.disconnect();
+		observer.observe(top_anchor);
+		scrollableContent.scrollTo({
+			top: scrollableContent.scrollHeight - prevHeight,
+			behavior: 'instant'
+		});
+
+		if (isDragging) {
 			await tick();
-			if (!bottom_anchor) {
-				requestAnimationFrame(setAnchors);
-				return;
-			}
-			//hides scrollbar if not needed
-			showScrollbar = scrollableContent.scrollHeight !== scrollableContent.clientHeight;
-
-			//scroll to the bottom of the messages
-			scrollableContent.scrollTop = 0;
-			requestAnimationFrame(() => {
-				scrollableContent.scrollTo({
-					top: bottom_anchor.offsetTop,
-					behavior: 'instant'
-				});
-			});
-
-			//add top_anchor observer for lazy loading
-			requestAnimationFrame(async () => {
-				await tick();
-				if (scrollBar) observer.observe(top_anchor);
-			});
+			scrollBar.onMouseDown();
 		}
+	}
 
+	async function setAnchors() {
+		//wait for the messages to load
+		await tick();
+		if (!bottom_anchor) {
+			requestAnimationFrame(setAnchors);
+			return;
+		}
+		//hides scrollbar if not needed
+		showScrollbar = scrollableContent.scrollHeight !== scrollableContent.clientHeight;
+
+		//scroll to the bottom of the messages
+		scrollableContent.scrollTop = 0;
+		requestAnimationFrame(() => {
+			scrollableContent.scrollTo({
+				top: bottom_anchor.offsetTop,
+				behavior: 'instant'
+			});
+		});
+
+		//add top_anchor observer for lazy loading
+		requestAnimationFrame(async () => {
+			await tick();
+			if (scrollBar) observer.observe(top_anchor);
+		});
+	}
+
+	$effect(() => {
 		const { cid } = page.params; //needed to cause the effect
 		setAnchors();
 	});
-
 	$effect(()=> {
 		messages?.length;
-		if(messages?.length && !showScrollbar) showScrollbar = scrollableContent.scrollHeight !== scrollableContent.clientHeight;
+		if(!showScrollbar && messages?.length) {
+			showScrollbar = scrollableContent.scrollHeight !== scrollableContent.clientHeight;
+		}
 	});
 
-	let observer: IntersectionObserver;
-	onMount(async () => {
+	onMount(() => {
 		observer = new IntersectionObserver(
 			(entries) => {
-				entries.forEach(async (entry) => {
+				entries.forEach((entry) => {
 					if (entry.isIntersecting) {
-						//saves the current height of the scrollable content, to keep the scroll position later
-						const prevHeight = scrollableContent.scrollHeight - scrollableContent.scrollTop;
-
-						//check if anchor was reached by drag
-						const isDragging = scrollBar.isDraggingOn();
-						if (isDragging) scrollBar.onMouseUp();
-
-						//load more messages
-						stacksLoaded++;
-						console.log(indexesToShow, messages?.length);
-						if(indexesToShow >= (messages?.length ?? 0)) getExtraMessages(page.params.cid, messages?.length ?? 0);
-
-						await tick();
-						scrollableContent.scrollTo({
-							top: scrollableContent.scrollHeight - prevHeight,
-							behavior: 'instant'
-						});
-
-						if (isDragging) {
-							await tick();
-							scrollBar.onMouseDown();
-						}
+						handleIntersection();
 					}
+					if(!entry.isIntersecting) console.log('No intersection');
 				});
 			},
 			{ threshold: 0.1 }
 		);
 	});
 
-	const indexesPerStack = 20;
+	const INDEXES_PER_STACK = 25;
 	//dynamic loading of messages
 	let stacksLoaded = $state(1);
 	let indexesToShow = $derived(
-		(messages?.length ?? 0) >= stacksLoaded * indexesPerStack
-			? stacksLoaded * indexesPerStack
+		(messages?.length ?? 0) >= stacksLoaded * INDEXES_PER_STACK
+			? stacksLoaded * INDEXES_PER_STACK
 			: messages?.length || 0
 	);
 	let lastMessages = $derived(messages?.slice(-indexesToShow));
+	let topAnchorIndex = $derived(
+		Math.min(10,
+			Math.max(1, 
+				Math.ceil(indexesToShow * 0.1)
+	))); 
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -116,7 +129,7 @@
 	>
 		{#if lastMessages}
 			{#each lastMessages as message, i}
-				{#if i === 4}
+				{#if i === topAnchorIndex}
 					<div bind:this={top_anchor} class="anchor"></div>
 				{/if}
 				<div
@@ -140,7 +153,7 @@
 	</section>
 	<MessageField {submitFn} />
 	{#if showScrollbar}
-		<Scrollbar bind:this={scrollBar} {scrollableContent} width={0.4} />
+		<Scrollbar bind:this={scrollBar} {scrollableContent} width={1} />
 	{/if}
 </div>
 
