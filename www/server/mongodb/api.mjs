@@ -2,9 +2,9 @@ import { ObjectId } from "mongodb";
 import { chats, users, messages } from "./connect.mjs";
 import bcrypt from "bcrypt";
 
-const INIT_CHATS = 20;
-const INIT_MESSAGES = 50;
-const EXTRA_MESSAGES = 100;
+const INIT_CHATS = 10;
+const INIT_MESSAGES = 40;
+const EXTRA_MESSAGES = 60;
 
 export async function getChats(uid) {
   try {
@@ -15,9 +15,12 @@ export async function getChats(uid) {
       .toArray();
 
     userChats = await Promise.all(userChats.map(async (chat) => {
-      const totalMessages = await messages.countDocuments({ cid: chat._id });
+      const lastOpened = chat.users
+        .find((user) => user._id.toString() === uid)
+        .lastOpened
+
       const chatMessages = await messages
-        .find({ cid: chat._id })
+        .find({ cid: chat._id, sendTime: { $lt: lastOpened } })
         .sort({ sendTime: -1 })
         .limit(INIT_MESSAGES)
         .toArray();
@@ -87,6 +90,28 @@ export async function sendMessage(uid, cid, message) {
       `Error sending message in chat ID ${cid}: ${error.message}`
     );
   }
+}
+
+export async function openChat(uid, cid) {
+  const chat = await chats.findOne({ _id: new ObjectId(cid) });
+  const lastOpened = chat.users
+  .find((user) => user._id.toString() === uid)
+  .lastOpened;
+
+  await chats.updateOne(
+    { _id: new ObjectId(cid) },
+    { $set: { "users.$[user].lastOpened": new Date() } },
+    { arrayFilters: [{ "user._id": new ObjectId(uid) }] }
+  );
+
+  const missedMessages = await messages
+  .find({ cid: cid, sendTime: { $gt: lastOpened } })
+  .sort({ sendTime: -1 })
+  .limit(EXTRA_MESSAGES)
+  .toArray();
+  console.log(missedMessages, new Date().toISOString(), lastOpened);
+
+  return missedMessages.reverse();
 }
 
 export async function findUser(username) {

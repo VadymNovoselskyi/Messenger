@@ -5,12 +5,13 @@
 	import Scrollbar from '$lib/components/Scrollbar.svelte';
 	import { getExtraMessages } from '$lib/api.svelte';
 	import { formatISODate, getCookie } from '$lib/utils';
-	import type { Message } from '$lib/types';
+	import type { Chat, Message } from '$lib/types';
 
 	let {
-		messages,
+		chat,
 		submitFn
-	}: { messages: Message[] | null; submitFn: (event: SubmitEvent) => void } = $props();
+	}: { chat: Chat; submitFn: (event: SubmitEvent) => void } = $props();
+	let messages = $derived(chat.messages);
 
 	let observer: IntersectionObserver;
 	let scrollableContent = $state() as HTMLElement;
@@ -29,12 +30,16 @@
 
 		//load more messages
 		stacksLoaded++;
-		console.log(indexesToShow, messages?.length, topAnchorIndex);
-		if(indexesToShow >= (messages?.length ?? 0)) getExtraMessages(page.params.cid, messages?.length ?? 0);
+		console.log(indexesToShow, messages?.length);
+		if(indexesToShow >= (messages?.length ?? 0)) getExtraMessages(chat._id, messages.length);
 
 		await tick();
-		observer.disconnect();
-		observer.observe(top_anchor);
+		requestAnimationFrame(async () => {
+			await tick();
+			observer.disconnect();
+			observer.observe(top_anchor);
+		});
+
 		scrollableContent.scrollTo({
 			top: scrollableContent.scrollHeight - prevHeight,
 			behavior: 'instant'
@@ -73,12 +78,12 @@
 	}
 
 	$effect(() => {
-		const { cid } = page.params; //needed to cause the effect
+		chat; //needed to cause the effect
 		setAnchors();
 	});
 	$effect(()=> {
-		messages?.length;
-		if(!showScrollbar && messages?.length) {
+		messages.length;
+		if(!showScrollbar && messages.length) {
 			showScrollbar = scrollableContent.scrollHeight !== scrollableContent.clientHeight;
 		}
 	});
@@ -90,27 +95,22 @@
 					if (entry.isIntersecting) {
 						handleIntersection();
 					}
-					if(!entry.isIntersecting) console.log('No intersection');
 				});
 			},
-			{ threshold: 0.1 }
+			{ threshold: 0.9 }
 		);
 	});
 
-	const INDEXES_PER_STACK = 25;
+	const TOP_ANCHOR_INDEX = 6; 
+
+	//THIS SHOULD BE A MULTIPLE OF THE INIT_MESSAGES ON THE SERVER IN api.mjs
+	//OTHERWISE THE MESSAGES WILL JUMP TO THE LOWEST MULTIPLE
+	const INDEXES_PER_STACK = 20;
+
 	//dynamic loading of messages
 	let stacksLoaded = $state(1);
-	let indexesToShow = $derived(
-		(messages?.length ?? 0) >= stacksLoaded * INDEXES_PER_STACK
-			? stacksLoaded * INDEXES_PER_STACK
-			: messages?.length || 0
-	);
-	let lastMessages = $derived(messages?.slice(-indexesToShow));
-	let topAnchorIndex = $derived(
-		Math.min(10,
-			Math.max(1, 
-				Math.ceil(indexesToShow * 0.1)
-	))); 
+	let indexesToShow = $derived(Math.min(messages.length, stacksLoaded * INDEXES_PER_STACK));
+	let lastMessages = $derived(messages.slice(-indexesToShow));
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -129,7 +129,7 @@
 	>
 		{#if lastMessages}
 			{#each lastMessages as message, i}
-				{#if i === topAnchorIndex}
+				{#if i === TOP_ANCHOR_INDEX}
 					<div bind:this={top_anchor} class="anchor"></div>
 				{/if}
 				<div
@@ -153,7 +153,7 @@
 	</section>
 	<MessageField {submitFn} />
 	{#if showScrollbar}
-		<Scrollbar bind:this={scrollBar} {scrollableContent} width={1} />
+		<Scrollbar bind:this={scrollBar} {scrollableContent} width={0.4} />
 	{/if}
 </div>
 

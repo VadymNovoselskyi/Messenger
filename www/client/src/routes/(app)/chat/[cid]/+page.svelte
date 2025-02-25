@@ -20,14 +20,12 @@
 		if (browser && !memory.chats.length) requestChats();
 	});
 
-	let messages: Message[] | null = $state()!;
-	let index: number = $state(0);
+	let chat: Chat | undefined = $state();
+	let index: number | undefined = $state();
 	$effect(() => {
 		const { cid } = page.params;
-		const chat = memory.chats.find((chat) => chat._id === cid);
+		chat = memory.chats.find((chat) => chat._id === cid);
 		if(chat) index = memory.chats.indexOf(chat);
-
-		messages = chat ? chat.messages : null;
 	});
 </script>
 
@@ -40,7 +38,9 @@
 		<ChatList bind:chats={memory.chats} openedIndex={index}/>
 	</section>
 
-	<MessageList {messages} submitFn={sendMessage} />
+	{#if chat}
+		<MessageList {chat} submitFn={sendMessage} />
+	{/if}
 </div>
 
 <style lang="scss">

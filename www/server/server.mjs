@@ -1,7 +1,8 @@
 import WebSocket, { WebSocketServer } from 'ws';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
-import { getChats, getExtraMessages, sendMessage, findUser, createUser, createChat } from './mongodb/api.mjs';
+import { getChats, getExtraMessages, sendMessage, findUser, createUser, openChat, createChat } from './mongodb/api.mjs';
+
 
 const secretKey = 'y8q6GA@0md8ySuNk';
 const generateToken = (uid) => {
@@ -95,7 +96,7 @@ wss.on('connection', ws => {
       ws.send(JSON.stringify({
         status: "error",
         payload: {
-          message: error.message
+          message: `${error.message}, Received message: ${message}`
         }
       }));
     }
@@ -143,7 +144,6 @@ wss.on('connection', ws => {
         case "extra_messages":
           const { cid, currentIndex } = payload;
           const extraMessages = await getExtraMessages(cid, currentIndex);
-          console.log(extraMessages);
 
           ws.send(JSON.stringify({
             api: 'extra_messages',
@@ -154,6 +154,21 @@ wss.on('connection', ws => {
             }
           }));
           break;
+        
+        case "open_chat": {
+          const { cid } = payload;
+          const missedMessages = await openChat(uid, cid);
+          if(!missedMessages.length) return;
+          ws.send(JSON.stringify({
+            api: 'missed_messages',
+            status: 'success',
+            payload: {
+              cid,
+              missedMessages
+            }
+          }));
+          break;
+        }
 
         case "create_chat":
           const { createdChat, receivingUID } = await createChat(uid, payload.username);

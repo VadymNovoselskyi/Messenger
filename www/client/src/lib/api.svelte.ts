@@ -109,6 +109,17 @@ export async function sendMessage(event: Event): Promise<void> {
 	sortChats();
 }
 
+export async function openChat(cid: string): Promise<void> {
+	const ws = await getWS();
+	ws.send(
+		JSON.stringify({
+			api: 'open_chat',
+			payload: {
+				cid
+			}
+		})
+	);}
+
 export async function addChat(event: SubmitEvent): Promise<void> {
 	event.preventDefault();
 	const usernameInput = (event.currentTarget as HTMLFormElement).username;
@@ -210,15 +221,27 @@ export function handleServerMessage(event: MessageEvent): void {
 			sortChats();
 			break;
 
+		case 'missed_messages': {
+			const { cid, missedMessages }: { cid: string, missedMessages: Message[] } = data.payload;
+			const chat = memory.chats.find((chat) => chat._id === cid);
+			if(!chat) {
+				alert(`No chat toadd missed messages ${cid}`)
+				return;
+			};
+			chat.messages = [...missedMessages, ...chat.messages]
+			sortChats();
+			break;
+		}
+
 		case 'extra_messages':
 			const { cid, extraMessages }: { cid: string, extraMessages: Message[] } = data.payload;
 			const chat = memory.chats.find((chat) => chat._id === cid);
 			if(!chat) {
-				alert("No chat to add extra messages");
+				alert(`No chat to add extra messages ${cid}`);
 				return;
 			}
 			chat.messages = [...extraMessages, ...chat.messages];
-			break;
+			break;	
 
 		case 'create_chat':
 			const { createdChat } = data.payload;

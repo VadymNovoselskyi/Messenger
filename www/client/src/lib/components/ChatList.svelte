@@ -6,6 +6,7 @@
 	import Scrollbar from '$lib/components/Scrollbar.svelte';
 
 	import { formatISODate, getCookie } from '$lib/utils';
+	import { openChat } from '$lib/api.svelte'
 	import type { Chat, User } from '$lib/types';
 
 	let { chats = $bindable(), openedIndex }: { chats: Chat[], openedIndex?: number } = $props();
@@ -106,6 +107,7 @@
 			<a
 				href="{page.url.origin}/chat/{chat._id}"
 				class="chat"
+				onclick={() => openChat(chat._id)}
 				class:current={page.url.pathname === `/chat/${chat._id}`}
 			>
 				<img
