@@ -20,11 +20,15 @@ export async function getChats(uid) {
         .lastOpened
 
       const chatMessages = await messages
-        .find({ cid: chat._id, sendTime: { $lt: lastOpened } })
+        .find({ cid: chat._id })
         .sort({ sendTime: -1 })
         .limit(INIT_MESSAGES)
         .toArray();
+
+      const unreadMessagesCount = await messages
+        .countDocuments({ cid: chat._id, sendTime: { $gt: lastOpened } });
       chat.messages = chatMessages.reverse();
+      chat.unreadMessagesCount = unreadMessagesCount;
       return chat;
     }));
 
@@ -93,25 +97,11 @@ export async function sendMessage(uid, cid, message) {
 }
 
 export async function openChat(uid, cid) {
-  const chat = await chats.findOne({ _id: new ObjectId(cid) });
-  const lastOpened = chat.users
-  .find((user) => user._id.toString() === uid)
-  .lastOpened;
-
   await chats.updateOne(
     { _id: new ObjectId(cid) },
     { $set: { "users.$[user].lastOpened": new Date() } },
     { arrayFilters: [{ "user._id": new ObjectId(uid) }] }
   );
-
-  const missedMessages = await messages
-  .find({ cid: cid, sendTime: { $gt: lastOpened } })
-  .sort({ sendTime: -1 })
-  .limit(EXTRA_MESSAGES)
-  .toArray();
-  console.log(missedMessages, new Date().toISOString(), lastOpened);
-
-  return missedMessages.reverse();
 }
 
 export async function findUser(username) {

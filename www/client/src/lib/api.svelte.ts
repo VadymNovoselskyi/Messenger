@@ -185,7 +185,7 @@ export function handleServerMessage(event: MessageEvent): void {
 	console.log(data);
 	if (data.status === 'error') {
 		if (data.payload.message === 'Invalid Token. Login again') goto("/login");
-		alert(data.payload.message);
+		else alert(data.payload.message);
 		return;
 	}
 

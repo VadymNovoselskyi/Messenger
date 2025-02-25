@@ -156,17 +156,7 @@ wss.on('connection', ws => {
           break;
         
         case "open_chat": {
-          const { cid } = payload;
-          const missedMessages = await openChat(uid, cid);
-          if(!missedMessages.length) return;
-          ws.send(JSON.stringify({
-            api: 'missed_messages',
-            status: 'success',
-            payload: {
-              cid,
-              missedMessages
-            }
-          }));
+          await openChat(uid, cid);
           break;
         }
 

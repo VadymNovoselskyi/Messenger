@@ -21,5 +21,6 @@ export interface Chat {
     _id: string; //ID type?
     users: User[];
     messages: Message[];
+    unreadMessagesCount: number;
     lastModified: string; //ISO-Date
 }

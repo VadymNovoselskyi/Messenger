@@ -118,6 +118,9 @@
 				<p class="chat-name">
 					{chat.users.find((user: User) => user._id !== getCookie('uid'))!.username}
 				</p>
+				<p class="unread-count">
+					{chat.unreadMessagesCount}
+				</p>
 				<p class="chat-message" class:system-message={!chat.messages.length}>
 					{chat.messages[chat.messages.length - 1]?.text ?? 'No messages'}
 				</p>
@@ -198,7 +201,7 @@
 
 		.chat {
 			display: grid;
-			grid-template-columns: auto 1fr;
+			grid-template-columns: auto 1fr auto;
 			grid-template-rows: auto 4rem auto;
 			grid-gap: 0 1rem;
 			align-items: center;
@@ -233,21 +236,42 @@
 				font-weight: 600;
 			}
 
+			.unread-count {
+				grid-column: 3;
+				grid-row: 1;
+
+				text-align: center;
+				justify-self: center;
+
+				min-width: 1.6rem;
+				height: 1.6rem;
+				padding: 0.1rem 0.2rem;
+				
+				border: solid #0065e1;
+				border-radius: 0.8rem;
+
+				font-size: 1rem;
+				font-weight: 600;
+				color: #0065e1;
+				white-space: nowrap;
+			}
+
 			.chat-message {
-				grid-column: 2;
+				grid-column: 2/4;
 				grid-row: 2;
 
 				white-space: nowrap;
 				overflow: hidden;
 				text-overflow: ellipsis;
+				
+				&.system-message {
+					color: #0065e1;
+				}
 			}
 
-			.system-message {
-				color: #0065e1;
-			}
 
 			.send-date {
-				grid-column: span 2;
+				grid-column: span 3;
 				grid-row: 3;
 
 				justify-self: end;
