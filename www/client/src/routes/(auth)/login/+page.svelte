@@ -16,7 +16,14 @@
 		<h1 class="title">Login</h1>
 		<form action="" onsubmit={login}>
 			<label for="username">Username</label>
-			<input type="text" id="usernameLogin" placeholder="Username" maxlength="25" autocomplete="username" required />
+			<input
+				type="text"
+				id="usernameLogin"
+				placeholder="Username"
+				maxlength="25"
+				autocomplete="username"
+				required
+			/>
 
 			<label for="password">Password</label>
 			<input type="password" id="passwordLogin" placeholder="Password" maxlength="64" required />
@@ -35,7 +42,14 @@
 		<h1 class="title">Signup</h1>
 		<form action="" onsubmit={signup}>
 			<label for="username">Username</label>
-			<input type="text" id="usernameSignup" placeholder="Username" maxlength="25" autocomplete="username" required />
+			<input
+				type="text"
+				id="usernameSignup"
+				placeholder="Username"
+				maxlength="25"
+				autocomplete="username"
+				required
+			/>
 
 			<label for="password">Password</label>
 			<input type="password" id="passwordSignup" placeholder="Password" maxlength="64" required />

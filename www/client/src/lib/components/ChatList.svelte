@@ -6,10 +6,10 @@
 	import Scrollbar from '$lib/components/Scrollbar.svelte';
 
 	import { formatISODate, getCookie } from '$lib/utils';
-	import { openChat } from '$lib/api.svelte'
+	import { openChat } from '$lib/api.svelte';
 	import type { Chat, User } from '$lib/types';
 
-	let { chats = $bindable(), openedIndex }: { chats: Chat[], openedIndex?: number } = $props();
+	let { chats = $bindable(), openedIndex }: { chats: Chat[]; openedIndex?: number } = $props();
 
 	let observer: IntersectionObserver;
 	let showAddChat = $state(false);
@@ -19,7 +19,6 @@
 	let scrollBar = $state() as Scrollbar;
 	let showScrollbar = $state<boolean>();
 	let bottom_anchor = $state() as HTMLElement;
-
 
 	async function checkContentHeight() {
 		await tick();
@@ -129,7 +128,6 @@
 			{#if i === (indexesToShow > 8 ? indexesToShow - 4 : indexesToShow - 1)}
 				<div bind:this={bottom_anchor} class="anchor"></div>
 			{/if}
-
 		{/each}
 	</div>
 	{#if showScrollbar}
@@ -246,7 +244,7 @@
 				min-width: 1.6rem;
 				height: 1.6rem;
 				padding: 0.1rem 0.2rem;
-				
+
 				border: solid #0065e1;
 				border-radius: 0.8rem;
 
@@ -263,12 +261,11 @@
 				white-space: nowrap;
 				overflow: hidden;
 				text-overflow: ellipsis;
-				
+
 				&.system-message {
 					color: #0065e1;
 				}
 			}
-
 
 			.send-date {
 				grid-column: span 3;

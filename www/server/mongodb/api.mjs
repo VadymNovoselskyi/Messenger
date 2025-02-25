@@ -14,23 +14,27 @@ export async function getChats(uid) {
       .limit(INIT_CHATS)
       .toArray();
 
-    userChats = await Promise.all(userChats.map(async (chat) => {
-      const lastOpened = chat.users
-        .find((user) => user._id.toString() === uid)
-        .lastOpened
+    userChats = await Promise.all(
+      userChats.map(async chat => {
+        const lastOpened = chat.users.find(
+          user => user._id.toString() === uid
+        ).lastOpened;
 
-      const chatMessages = await messages
-        .find({ cid: chat._id })
-        .sort({ sendTime: -1 })
-        .limit(INIT_MESSAGES)
-        .toArray();
+        const chatMessages = await messages
+          .find({ cid: chat._id })
+          .sort({ sendTime: -1 })
+          .limit(INIT_MESSAGES)
+          .toArray();
 
-      const unreadMessagesCount = await messages
-        .countDocuments({ cid: chat._id, sendTime: { $gt: lastOpened } });
-      chat.messages = chatMessages.reverse();
-      chat.unreadMessagesCount = unreadMessagesCount;
-      return chat;
-    }));
+        const unreadMessagesCount = await messages.countDocuments({
+          cid: chat._id,
+          sendTime: { $gt: lastOpened },
+        });
+        chat.messages = chatMessages.reverse();
+        chat.unreadMessagesCount = unreadMessagesCount;
+        return chat;
+      })
+    );
 
     return userChats;
   } catch (error) {
@@ -82,7 +86,7 @@ export async function sendMessage(uid, cid, message) {
 
     const chat = await chats.findOne({ _id: new ObjectId(cid) });
     const receivingUID = chat.users.find(
-      (user) => user._id.toString() !== uid
+      user => user._id.toString() !== uid
     )._id;
     const sentMessage = await messages.findOne({ _id: insertedId });
     return {

@@ -25,7 +25,7 @@
 	$effect(() => {
 		const { cid } = page.params;
 		chat = memory.chats.find((chat) => chat._id === cid);
-		if(chat) index = memory.chats.indexOf(chat);
+		if (chat) index = memory.chats.indexOf(chat);
 	});
 </script>
 
@@ -35,7 +35,7 @@
 
 <div id="wrapper">
 	<section id="chats-list">
-		<ChatList bind:chats={memory.chats} openedIndex={index}/>
+		<ChatList bind:chats={memory.chats} openedIndex={index} />
 	</section>
 
 	{#if chat}

@@ -36,6 +36,8 @@
 		grid-template-columns: minmax(14rem, 3fr) 8fr;
 		height: 94vh;
 
-		#chat-display { background-color: #3a506b }
+		#chat-display {
+			background-color: #3a506b;
+		}
 	}
 </style>

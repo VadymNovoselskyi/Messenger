@@ -118,7 +118,8 @@ export async function openChat(cid: string): Promise<void> {
 				cid
 			}
 		})
-	);}
+	);
+}
 
 export async function addChat(event: SubmitEvent): Promise<void> {
 	event.preventDefault();
@@ -184,16 +185,15 @@ export function handleServerMessage(event: MessageEvent): void {
 	const data = JSON.parse(response);
 	console.log(data);
 	if (data.status === 'error') {
-		if (data.payload.message === 'Invalid Token. Login again') goto("/login");
+		if (data.payload.message === 'Invalid Token. Login again') goto('/login');
 		else alert(data.payload.message);
 		return;
 	}
 
 	switch (data.api) {
 		case 'receive_message': {
-			const { cid, message, tempMID }:
-				{ cid: string, message: Message, tempMID?: string }
-				= data.payload;
+			const { cid, message, tempMID }: { cid: string; message: Message; tempMID?: string } =
+				data.payload;
 
 			const chat = memory.chats.find((chat) => chat._id === cid);
 			if (!chat) {
@@ -207,8 +207,7 @@ export function handleServerMessage(event: MessageEvent): void {
 					return;
 				}
 				chat.messages[index] = { ...message };
-			} else chat.messages.push(message)
-
+			} else chat.messages.push(message);
 
 			const currentTime = new Date().toISOString();
 			chat.lastModified = currentTime;
@@ -222,26 +221,26 @@ export function handleServerMessage(event: MessageEvent): void {
 			break;
 
 		case 'missed_messages': {
-			const { cid, missedMessages }: { cid: string, missedMessages: Message[] } = data.payload;
+			const { cid, missedMessages }: { cid: string; missedMessages: Message[] } = data.payload;
 			const chat = memory.chats.find((chat) => chat._id === cid);
-			if(!chat) {
-				alert(`No chat toadd missed messages ${cid}`)
+			if (!chat) {
+				alert(`No chat toadd missed messages ${cid}`);
 				return;
-			};
-			chat.messages = [...missedMessages, ...chat.messages]
+			}
+			chat.messages = [...missedMessages, ...chat.messages];
 			sortChats();
 			break;
 		}
 
 		case 'extra_messages':
-			const { cid, extraMessages }: { cid: string, extraMessages: Message[] } = data.payload;
+			const { cid, extraMessages }: { cid: string; extraMessages: Message[] } = data.payload;
 			const chat = memory.chats.find((chat) => chat._id === cid);
-			if(!chat) {
+			if (!chat) {
 				alert(`No chat to add extra messages ${cid}`);
 				return;
 			}
 			chat.messages = [...extraMessages, ...chat.messages];
-			break;	
+			break;
 
 		case 'create_chat':
 			const { createdChat } = data.payload;

@@ -43,7 +43,7 @@
 <style lang="scss">
 	form {
 		display: flex;
-		justify-content: center; 
+		justify-content: center;
 		align-items: center;
 		padding: 0.4rem;
 		background-color: #3a506b;

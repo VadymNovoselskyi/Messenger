@@ -7,10 +7,7 @@
 	import { formatISODate, getCookie } from '$lib/utils';
 	import type { Chat, Message } from '$lib/types';
 
-	let {
-		chat,
-		submitFn
-	}: { chat: Chat; submitFn: (event: SubmitEvent) => void } = $props();
+	let { chat, submitFn }: { chat: Chat; submitFn: (event: SubmitEvent) => void } = $props();
 	let messages = $derived(chat.messages);
 
 	let observer: IntersectionObserver;
@@ -31,7 +28,7 @@
 		//load more messages
 		stacksLoaded++;
 		console.log(indexesToShow, messages?.length);
-		if(indexesToShow >= (messages?.length ?? 0)) getExtraMessages(chat._id, messages.length);
+		if (indexesToShow >= (messages?.length ?? 0)) getExtraMessages(chat._id, messages.length);
 
 		await tick();
 		requestAnimationFrame(async () => {
@@ -81,9 +78,9 @@
 		chat; //needed to cause the effect
 		setAnchors();
 	});
-	$effect(()=> {
+	$effect(() => {
 		messages.length;
-		if(!showScrollbar && messages.length) {
+		if (!showScrollbar && messages.length) {
 			showScrollbar = scrollableContent.scrollHeight !== scrollableContent.clientHeight;
 		}
 	});
@@ -101,7 +98,7 @@
 		);
 	});
 
-	const TOP_ANCHOR_INDEX = 6; 
+	const TOP_ANCHOR_INDEX = 6;
 
 	//THIS SHOULD BE A MULTIPLE OF THE INIT_MESSAGES ON THE SERVER IN api.mjs
 	//OTHERWISE THE MESSAGES WILL JUMP TO THE LOWEST MULTIPLE
