@@ -117,9 +117,11 @@
 				<p class="chat-name">
 					{chat.users.find((user: User) => user._id !== getCookie('uid'))!.username}
 				</p>
-				<p class="unread-count">
-					{chat.unreadMessagesCount}
-				</p>
+				{#if chat.unreadMessagesCount}
+					<p class="unread-count">
+						{chat.unreadMessagesCount}
+					</p>
+				{/if}
 				<p class="chat-message" class:system-message={!chat.messages.length}>
 					{chat.messages[chat.messages.length - 1]?.text ?? 'No messages'}
 				</p>

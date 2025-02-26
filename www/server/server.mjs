@@ -181,6 +181,7 @@ wss.on("connection", ws => {
           break;
 
         case "open_chat": {
+          const { cid } = payload;
           await openChat(uid, cid);
           break;
         }
