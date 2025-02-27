@@ -3,21 +3,25 @@
 	import { page } from '$app/state';
 	import MessageField from '$lib/components/MessageField.svelte';
 	import Scrollbar from '$lib/components/Scrollbar.svelte';
-	import { getExtraMessages } from '$lib/api.svelte';
+	import { getExtraMessages, getExtraNewMessages } from '$lib/api.svelte';
 	import { formatISODate, getCookie } from '$lib/utils';
 	import type { Chat, Message } from '$lib/types';
 
 	let { chat, submitFn }: { chat: Chat; submitFn: (event: SubmitEvent) => void } = $props();
-	let messages = $derived(chat.messages);
+	let { messages, unreadMessagesCount, sentUnreadMessagesCount } = $derived(chat);
 
-	let observer: IntersectionObserver;
+	let topObserver: IntersectionObserver;
+	let bottomObserver: IntersectionObserver;
+
 	let scrollableContent = $state() as HTMLElement;
 	let top_anchor = $state() as HTMLElement;
+	let unread_anchor = $state() as HTMLElement;
 	let bottom_anchor = $state() as HTMLElement;
+
 	let scrollBar = $state() as Scrollbar;
 	let showScrollbar = $state<boolean>();
 
-	async function handleIntersection(): Promise<void> {
+	async function handleTopIntersection(): Promise<void> {
 		//saves the current height of the scrollable content, to keep the scroll position later
 		const prevHeight = scrollableContent.scrollHeight - scrollableContent.scrollTop;
 
@@ -33,8 +37,8 @@
 		await tick();
 		requestAnimationFrame(async () => {
 			await tick();
-			observer.disconnect();
-			observer.observe(top_anchor);
+			topObserver.disconnect();
+			topObserver.observe(top_anchor);
 		});
 
 		scrollableContent.scrollTo({
@@ -48,10 +52,30 @@
 		}
 	}
 
+	async function handleBottomIntersection(): Promise<void> {
+		//check if anchor was reached by drag
+		const isDragging = scrollBar.isDraggingOn();
+		if (isDragging) scrollBar.onMouseUp();
+
+		getExtraNewMessages(chat._id, unreadMessagesCount);
+
+		await tick();
+		requestAnimationFrame(async () => {
+			await tick();
+			bottomObserver.disconnect();
+			bottomObserver.observe(bottom_anchor);
+		});
+
+		if (isDragging) {
+			await tick();
+			scrollBar.onMouseDown();
+		}
+	}
+
 	async function setAnchors() {
 		//wait for the messages to load
 		await tick();
-		if (!bottom_anchor) {
+		if (!top_anchor && !bottom_anchor) {
 			requestAnimationFrame(setAnchors);
 			return;
 		}
@@ -59,18 +83,18 @@
 		showScrollbar = scrollableContent.scrollHeight !== scrollableContent.clientHeight;
 
 		//scroll to the bottom of the messages
-		scrollableContent.scrollTop = 0;
 		requestAnimationFrame(() => {
 			scrollableContent.scrollTo({
-				top: bottom_anchor.offsetTop,
+				top: unread_anchor.offsetTop - scrollableContent.clientHeight + 30,
 				behavior: 'instant'
 			});
 		});
 
-		//add top_anchor observer for lazy loading
+		//add top_anchor observer for lazy loading and bottom_anchor for new messages
 		requestAnimationFrame(async () => {
 			await tick();
-			if (scrollBar) observer.observe(top_anchor);
+			bottomObserver.observe(bottom_anchor);
+			if (scrollBar) topObserver.observe(top_anchor);
 		});
 	}
 
@@ -86,19 +110,29 @@
 	});
 
 	onMount(() => {
-		observer = new IntersectionObserver(
+		topObserver = new IntersectionObserver(
 			(entries) => {
 				entries.forEach((entry) => {
 					if (entry.isIntersecting) {
-						handleIntersection();
+						handleTopIntersection();
 					}
 				});
 			},
-			{ threshold: 0.9 }
+			{ threshold: 0.1 }
+		);
+		bottomObserver = new IntersectionObserver(
+			(entries) => {
+				entries.forEach((entry) => {
+					if (entry.isIntersecting) {
+						handleBottomIntersection();
+					}
+				});
+			},
+			{ threshold: 0.1 }
 		);
 	});
 
-	const TOP_ANCHOR_INDEX = 6;
+	const TOP_ANCHOR_INDEX = 0;
 
 	//THIS SHOULD BE A MULTIPLE OF THE INIT_MESSAGES ON THE SERVER IN api.mjs
 	//OTHERWISE THE MESSAGES WILL JUMP TO THE LOWEST MULTIPLE
@@ -106,7 +140,9 @@
 
 	//dynamic loading of messages
 	let stacksLoaded = $state(1);
-	let indexesToShow = $derived(Math.min(messages.length, stacksLoaded * INDEXES_PER_STACK));
+	let indexesToShow = $derived(
+		Math.min(messages.length, stacksLoaded * INDEXES_PER_STACK) + sentUnreadMessagesCount
+	);
 	let lastMessages = $derived(messages.slice(-indexesToShow));
 </script>
 
@@ -138,6 +174,9 @@
 					<p class="text">{message.text}</p>
 					<p class="sendTime">{formatISODate(message.sendTime)}</p>
 				</div>
+				{#if unreadMessagesCount && i === lastMessages.length - sentUnreadMessagesCount - 1}
+					<div bind:this={unread_anchor} id="unread-anchor" class="anchor">Unread Messages</div>
+				{/if}
 			{/each}
 			<div bind:this={bottom_anchor} id="bottom-anchor" class="anchor"></div>
 		{:else}
@@ -204,14 +243,40 @@
 		}
 
 		.anchor {
-			grid-column: 1 / -1;
+			grid-column: 1/-1;
 			height: 1px;
 			width: 100%;
-		}
 
-		#bottom-anchor {
-			grid-row: auto;
-			overflow-anchor: auto;
+			&#unread-anchor {
+				grid-column: 1/-1;
+				display: flex;
+				align-items: center;
+				margin: 1rem 0;
+				color: var(--primary-text-color);
+
+				/* Create the left and right lines with pseudo-elements on the container */
+				&::before,
+				&::after {
+					content: '';
+					flex-grow: 1;
+					height: 2px;
+					background-color: #0065e1;
+				}
+
+				/* Reserve a 2rem gap between the text and the lines */
+				&::before {
+					margin-right: 2rem;
+				}
+
+				&::after {
+					margin-left: 2rem;
+				}
+			}
+
+			&#bottom-anchor {
+				grid-row: auto;
+				overflow-anchor: auto;
+			}
 		}
 
 		.error-container {

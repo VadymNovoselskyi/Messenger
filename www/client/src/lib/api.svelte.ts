@@ -69,6 +69,26 @@ export async function getExtraMessages(cid: string, currentIndex: number): Promi
 	}
 }
 
+export async function getExtraNewMessages(cid: string, unreadMessagesCount: number): Promise<void> {
+	try {
+		const ws = await getWS();
+		ws.send(
+			JSON.stringify({
+				api: 'extra_new_messages',
+				token: getCookie('token'),
+				payload: {
+					cid,
+					unreadMessagesCount
+				}
+			})
+		);
+		return Promise.resolve();
+	} catch (error) {
+		console.error('Error in requestChats:', error);
+		return Promise.reject(error);
+	}
+}
+
 export async function sendMessage(event: Event): Promise<void> {
 	event.preventDefault();
 	const messageInput: HTMLInputElement = (event.currentTarget as HTMLFormElement).message;
@@ -114,6 +134,7 @@ export async function openChat(cid: string): Promise<void> {
 	ws.send(
 		JSON.stringify({
 			api: 'open_chat',
+			token: getCookie('token'),
 			payload: {
 				cid
 			}
@@ -241,6 +262,17 @@ export function handleServerMessage(event: MessageEvent): void {
 			}
 			chat.messages = [...extraMessages, ...chat.messages];
 			break;
+
+		case "extra_new_messages": {
+			const { cid, extraNewMessages }: { cid: string; extraNewMessages: Message[] } = data.payload;
+			const chat = memory.chats.find((chat) => chat._id === cid);
+			if (!chat) {
+				alert(`No chat to add extra messages ${cid}`);
+				return;
+			}
+			chat.messages = [...chat.messages, ...extraNewMessages];
+			break;
+		}
 
 		case 'create_chat':
 			const { createdChat } = data.payload;

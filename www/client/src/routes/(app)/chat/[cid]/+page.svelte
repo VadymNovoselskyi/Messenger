@@ -14,6 +14,7 @@
 
 	onMount(() => {
 		if (!getCookie('uid') || !getCookie('token')) {
+			console.log(getCookie('uid'), getCookie('token'))
 			goto('/login');
 			return;
 		}

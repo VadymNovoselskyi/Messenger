@@ -19,19 +19,22 @@ export async function getChats(uid) {
         const lastOpened = chat.users.find(
           user => user._id.toString() === uid
         ).lastOpened;
-
-        const chatMessages = await messages
-          .find({ cid: chat._id })
-          .sort({ sendTime: -1 })
-          .limit(INIT_MESSAGES)
-          .toArray();
-
         const unreadMessagesCount = await messages.countDocuments({
           cid: chat._id,
           sendTime: { $gt: lastOpened },
         });
+
+        const unreadMessagesSkip = unreadMessagesCount > INIT_MESSAGES ? unreadMessagesCount - INIT_MESSAGES : 0
+        const chatMessages = await messages
+          .find({ cid: chat._id })
+          .sort({ sendTime: -1 })
+          .skip(unreadMessagesSkip)
+          .limit(INIT_MESSAGES + Math.min(unreadMessagesCount, INIT_MESSAGES))
+          .toArray();
+
         chat.messages = chatMessages.reverse();
         chat.unreadMessagesCount = unreadMessagesCount;
+        chat.sentUnreadMessagesCount = Math.min(unreadMessagesCount, INIT_MESSAGES);
         return chat;
       })
     );
@@ -56,6 +59,24 @@ export async function getExtraMessages(cid, currentIndex) {
   } catch (error) {
     throw new Error(
       `Error getting extra messages in chat ID ${cid}: ${error.message}`
+    );
+  }
+}
+
+export async function getExtraNewMessages(cid, unreadMessagesCount) {
+  try {
+    const unreadMessagesSkip = unreadMessagesCount > INIT_MESSAGES ? unreadMessagesCount - INIT_MESSAGES : 0
+
+    const extraNewMessages = await messages
+      .find({ cid: new ObjectId(cid) })
+      .sort({ sendTime: -1 })
+      .skip(unreadMessagesSkip)
+      .limit(Math.min(unreadMessagesCount, INIT_MESSAGES))
+      .toArray();
+    return extraNewMessages.reverse();
+  } catch (error) {
+    throw new Error(
+      `Error getting new messages in chat ID ${cid}: ${error.message}`
     );
   }
 }
