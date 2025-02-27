@@ -6,12 +6,18 @@
 	import { getExtraMessages, getExtraNewMessages } from '$lib/api.svelte';
 	import { formatISODate, getCookie } from '$lib/utils';
 	import type { Chat, Message } from '$lib/types';
+	import { memory } from '$lib/stores/memory.svelte';
 
 	let { chat, submitFn }: { chat: Chat; submitFn: (event: SubmitEvent) => void } = $props();
-	let { messages, unreadMessagesCount, sentUnreadMessagesCount } = $derived(chat);
+	let { messages } = $derived(chat);
+	let showingUnreadMessages = $state(chat.sentUnreadMessagesCount);
+	const receivedUnreadMessagesCount = chat.sentUnreadMessagesCount;
+	let unreadMessagesCount = $state(0);
+	unreadMessagesCount = chat.unreadMessagesCount;
 
 	let topObserver: IntersectionObserver;
 	let bottomObserver: IntersectionObserver;
+	let readObserver: IntersectionObserver;
 
 	let scrollableContent = $state() as HTMLElement;
 	let top_anchor = $state() as HTMLElement;
@@ -54,22 +60,23 @@
 
 	async function handleBottomIntersection(): Promise<void> {
 		//check if anchor was reached by drag
-		const isDragging = scrollBar.isDraggingOn();
+		let isDragging = false;
+		if (scrollBar) isDragging = scrollBar.isDraggingOn();
 		if (isDragging) scrollBar.onMouseUp();
 
-		getExtraNewMessages(chat._id, unreadMessagesCount);
-
-		await tick();
-		requestAnimationFrame(async () => {
-			await tick();
-			bottomObserver.disconnect();
-			bottomObserver.observe(bottom_anchor);
-		});
+		if (unreadMessagesCount) getExtraNewMessages(chat._id, unreadMessagesCount);
 
 		if (isDragging) {
 			await tick();
 			scrollBar.onMouseDown();
 		}
+	}
+
+	async function handleMessageRead() {
+		showingUnreadMessages--;
+		memory.chats.find((c) => c._id === chat._id)!.unreadMessagesCount--;
+		unreadMessagesCount--;
+		console.log('showingUnreadMessages', showingUnreadMessages);
 	}
 
 	async function setAnchors() {
@@ -82,24 +89,36 @@
 		//hides scrollbar if not needed
 		showScrollbar = scrollableContent.scrollHeight !== scrollableContent.clientHeight;
 
+		await tick();
 		//scroll to the bottom of the messages
-		requestAnimationFrame(() => {
+		requestAnimationFrame(async () => {
+			const scrollTop = unread_anchor
+				? unread_anchor.offsetTop - scrollableContent.clientHeight + 24
+				: bottom_anchor.offsetTop;
+
 			scrollableContent.scrollTo({
-				top: unread_anchor.offsetTop - scrollableContent.clientHeight + 30,
+				top: scrollTop,
 				behavior: 'instant'
 			});
 		});
 
-		//add top_anchor observer for lazy loading and bottom_anchor for new messages
+		//add anchors lazy loading and new messages
 		requestAnimationFrame(async () => {
 			await tick();
+			const lastMessages = Array.from(scrollableContent.querySelectorAll('.message'));
+
 			bottomObserver.observe(bottom_anchor);
 			if (scrollBar) topObserver.observe(top_anchor);
+			if (unreadMessagesCount) {
+				lastMessages
+					.slice(-showingUnreadMessages)
+					.forEach((message) => readObserver.observe(message));
+			}
 		});
 	}
 
 	$effect(() => {
-		chat; //needed to cause the effect
+		chat;
 		setAnchors();
 	});
 	$effect(() => {
@@ -109,7 +128,9 @@
 		}
 	});
 
-	onMount(() => {
+	onMount(async () => {
+		stacksLoaded++;
+
 		topObserver = new IntersectionObserver(
 			(entries) => {
 				entries.forEach((entry) => {
@@ -118,7 +139,7 @@
 					}
 				});
 			},
-			{ threshold: 0.1 }
+			{ threshold: 0.5 }
 		);
 		bottomObserver = new IntersectionObserver(
 			(entries) => {
@@ -128,20 +149,31 @@
 					}
 				});
 			},
-			{ threshold: 0.1 }
+			{ threshold: 0.5 }
+		);
+
+		readObserver = new IntersectionObserver(
+			(entries) => {
+				entries.forEach((entry) => {
+					if (entry.isIntersecting) {
+						readObserver.unobserve(entry.target);
+						handleMessageRead();
+					}
+				});
+			},
+			{ threshold: 0.9 }
 		);
 	});
 
 	const TOP_ANCHOR_INDEX = 0;
-
 	//THIS SHOULD BE A MULTIPLE OF THE INIT_MESSAGES ON THE SERVER IN api.mjs
 	//OTHERWISE THE MESSAGES WILL JUMP TO THE LOWEST MULTIPLE
 	const INDEXES_PER_STACK = 20;
 
 	//dynamic loading of messages
-	let stacksLoaded = $state(1);
-	let indexesToShow = $derived(
-		Math.min(messages.length, stacksLoaded * INDEXES_PER_STACK) + sentUnreadMessagesCount
+	let stacksLoaded = $state(0);
+	let indexesToShow: number = $derived(
+		Math.min(messages.length, stacksLoaded * INDEXES_PER_STACK) + receivedUnreadMessagesCount
 	);
 	let lastMessages = $derived(messages.slice(-indexesToShow));
 </script>
@@ -174,7 +206,7 @@
 					<p class="text">{message.text}</p>
 					<p class="sendTime">{formatISODate(message.sendTime)}</p>
 				</div>
-				{#if unreadMessagesCount && i === lastMessages.length - sentUnreadMessagesCount - 1}
+				{#if unreadMessagesCount && i === lastMessages.length - showingUnreadMessages - 1}
 					<div bind:this={unread_anchor} id="unread-anchor" class="anchor">Unread Messages</div>
 				{/if}
 			{/each}

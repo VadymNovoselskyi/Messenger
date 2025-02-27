@@ -8,7 +8,6 @@ import {
   sendMessage,
   findUser,
   createUser,
-  openChat,
   createChat,
 } from "./mongodb/api.mjs";
 
@@ -180,14 +179,17 @@ wss.on("connection", ws => {
             })
           );
           break;
-        
-        case "extra_new_messages" : {
+
+        case "extra_new_messages": {
           const { cid, unreadMessagesCount } = payload;
-          const extraNewMessages = await getExtraNewMessages(cid, unreadMessagesCount);
+          const extraNewMessages = await getExtraNewMessages(
+            cid,
+            unreadMessagesCount
+          );
 
           ws.send(
             JSON.stringify({
-              api: "extra_messages",
+              api: "extra_new_messages",
               status: "success",
               payload: {
                 cid,
@@ -195,12 +197,6 @@ wss.on("connection", ws => {
               },
             })
           );
-          break;
-        }
-
-        case "open_chat": {
-          const { cid } = payload;
-          await openChat(uid, cid);
           break;
         }
 

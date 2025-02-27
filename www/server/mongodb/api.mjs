@@ -24,7 +24,10 @@ export async function getChats(uid) {
           sendTime: { $gt: lastOpened },
         });
 
-        const unreadMessagesSkip = unreadMessagesCount > INIT_MESSAGES ? unreadMessagesCount - INIT_MESSAGES : 0
+        const unreadMessagesSkip =
+          unreadMessagesCount > INIT_MESSAGES
+            ? unreadMessagesCount - INIT_MESSAGES
+            : 0;
         const chatMessages = await messages
           .find({ cid: chat._id })
           .sort({ sendTime: -1 })
@@ -34,7 +37,10 @@ export async function getChats(uid) {
 
         chat.messages = chatMessages.reverse();
         chat.unreadMessagesCount = unreadMessagesCount;
-        chat.sentUnreadMessagesCount = Math.min(unreadMessagesCount, INIT_MESSAGES);
+        chat.sentUnreadMessagesCount = Math.min(
+          unreadMessagesCount,
+          INIT_MESSAGES
+        );
         return chat;
       })
     );
@@ -65,7 +71,10 @@ export async function getExtraMessages(cid, currentIndex) {
 
 export async function getExtraNewMessages(cid, unreadMessagesCount) {
   try {
-    const unreadMessagesSkip = unreadMessagesCount > INIT_MESSAGES ? unreadMessagesCount - INIT_MESSAGES : 0
+    const unreadMessagesSkip =
+      unreadMessagesCount > INIT_MESSAGES
+        ? unreadMessagesCount - INIT_MESSAGES
+        : 0;
 
     const extraNewMessages = await messages
       .find({ cid: new ObjectId(cid) })
@@ -119,14 +128,6 @@ export async function sendMessage(uid, cid, message) {
       `Error sending message in chat ID ${cid}: ${error.message}`
     );
   }
-}
-
-export async function openChat(uid, cid) {
-  await chats.updateOne(
-    { _id: new ObjectId(cid) },
-    { $set: { "users.$[user].lastOpened": new Date() } },
-    { arrayFilters: [{ "user._id": new ObjectId(uid) }] }
-  );
 }
 
 export async function findUser(username) {

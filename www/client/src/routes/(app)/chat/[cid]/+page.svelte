@@ -14,7 +14,7 @@
 
 	onMount(() => {
 		if (!getCookie('uid') || !getCookie('token')) {
-			console.log(getCookie('uid'), getCookie('token'))
+			console.log(getCookie('uid'), getCookie('token'));
 			goto('/login');
 			return;
 		}
@@ -31,7 +31,11 @@
 </script>
 
 <svelte:head>
-	<title>Chats</title>
+	<title>
+		{chat?.users.find((user) => {
+			return user._id !== getCookie('uid');
+		})?.username || 'Chat'}
+	</title>
 </svelte:head>
 
 <div id="wrapper">

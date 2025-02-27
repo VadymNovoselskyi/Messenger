@@ -129,19 +129,6 @@ export async function sendMessage(event: Event): Promise<void> {
 	sortChats();
 }
 
-export async function openChat(cid: string): Promise<void> {
-	const ws = await getWS();
-	ws.send(
-		JSON.stringify({
-			api: 'open_chat',
-			token: getCookie('token'),
-			payload: {
-				cid
-			}
-		})
-	);
-}
-
 export async function addChat(event: SubmitEvent): Promise<void> {
 	event.preventDefault();
 	const usernameInput = (event.currentTarget as HTMLFormElement).username;
@@ -228,7 +215,10 @@ export function handleServerMessage(event: MessageEvent): void {
 					return;
 				}
 				chat.messages[index] = { ...message };
-			} else chat.messages.push(message);
+			} else {
+				chat.messages.push(message);
+				chat.unreadMessagesCount++;
+			}
 
 			const currentTime = new Date().toISOString();
 			chat.lastModified = currentTime;
@@ -263,7 +253,7 @@ export function handleServerMessage(event: MessageEvent): void {
 			chat.messages = [...extraMessages, ...chat.messages];
 			break;
 
-		case "extra_new_messages": {
+		case 'extra_new_messages': {
 			const { cid, extraNewMessages }: { cid: string; extraNewMessages: Message[] } = data.payload;
 			const chat = memory.chats.find((chat) => chat._id === cid);
 			if (!chat) {
