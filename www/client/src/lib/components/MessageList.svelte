@@ -9,11 +9,8 @@
 	import { memory } from '$lib/stores/memory.svelte';
 
 	let { chat, submitFn }: { chat: Chat; submitFn: (event: SubmitEvent) => void } = $props();
-	let { messages } = $derived(chat);
-	let showingUnreadMessages = $state(chat.sentUnreadMessagesCount);
-	const receivedUnreadMessagesCount = chat.sentUnreadMessagesCount;
-	let unreadMessagesCount = $state(0);
-	unreadMessagesCount = chat.unreadMessagesCount;
+	let { messages, showingUnreadMessagesCount, unreadMessagesCount } = $derived(chat);
+	let receivedUnreadMessagesCount = $state(0);
 
 	let topObserver: IntersectionObserver;
 	let bottomObserver: IntersectionObserver;
@@ -73,10 +70,8 @@
 	}
 
 	async function handleMessageRead() {
-		showingUnreadMessages--;
-		memory.chats.find((c) => c._id === chat._id)!.unreadMessagesCount--;
-		unreadMessagesCount--;
-		console.log('showingUnreadMessages', showingUnreadMessages);
+		chat.unreadMessagesCount--
+		chat.showingUnreadMessagesCount--;
 	}
 
 	async function setAnchors() {
@@ -111,16 +106,19 @@
 			if (scrollBar) topObserver.observe(top_anchor);
 			if (unreadMessagesCount) {
 				lastMessages
-					.slice(-showingUnreadMessages)
+					.slice(-showingUnreadMessagesCount)
 					.forEach((message) => readObserver.observe(message));
 			}
 		});
 	}
 
 	$effect(() => {
-		chat;
+		page.params.cid;
 		setAnchors();
+		receivedUnreadMessagesCount = chat.showingUnreadMessagesCount;
+		console.log(receivedUnreadMessagesCount);	
 	});
+
 	$effect(() => {
 		messages.length;
 		if (!showScrollbar && messages.length) {
@@ -206,7 +204,7 @@
 					<p class="text">{message.text}</p>
 					<p class="sendTime">{formatISODate(message.sendTime)}</p>
 				</div>
-				{#if unreadMessagesCount && i === lastMessages.length - showingUnreadMessages - 1}
+				{#if unreadMessagesCount && i === lastMessages.length - receivedUnreadMessagesCount - 1}
 					<div bind:this={unread_anchor} id="unread-anchor" class="anchor">Unread Messages</div>
 				{/if}
 			{/each}

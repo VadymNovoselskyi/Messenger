@@ -37,7 +37,7 @@ export async function getChats(uid) {
 
         chat.messages = chatMessages.reverse();
         chat.unreadMessagesCount = unreadMessagesCount;
-        chat.sentUnreadMessagesCount = Math.min(
+        chat.showingUnreadMessagesCount = Math.min(
           unreadMessagesCount,
           INIT_MESSAGES
         );
