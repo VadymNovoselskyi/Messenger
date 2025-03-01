@@ -1,12 +1,8 @@
-export interface Link {
-	path: string;
-	title: string;
-	pathsToCheck?: string[];
-}
-
-export interface User {
-	_id: string;
-	username: string;
+export interface APICall {
+	api: string;
+	id: string;
+	token?: string | null;
+	payload: Object;
 }
 
 export interface Message {
@@ -24,4 +20,15 @@ export interface Chat {
 	unreadMessagesCount: number;
 	showingUnreadMessagesCount: number;
 	lastModified: string; //ISO-Date
+}
+
+export interface User {
+	_id: string;
+	username: string;
+}
+
+export interface Link {
+	path: string;
+	title: string;
+	pathsToCheck?: string[];
 }

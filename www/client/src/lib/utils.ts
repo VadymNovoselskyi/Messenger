@@ -20,10 +20,8 @@ export function formatISODate(isoDate: string): string {
 	return `${hours}:${minutes}`;
 }
 
-export function generateTempId(): string {
-	const timestampPart = Date.now().toString(36);
-	const randomPart = Math.random().toString(36).substring(2, 8);
-	return timestampPart + randomPart;
+export function generateId(): string {
+	return Math.random().toString(16).substring(2, 15);
 }
 
 export function setCookie(name: string, value: string, days: number): void {
@@ -48,4 +46,35 @@ export function sortChats(): void {
 		const bTime: number = new Date(b.lastModified).getTime();
 		return bTime - aTime;
 	});
+}
+
+// Overload signatures
+export function createObserver(callback: () => Promise<void>, threshold: number): IntersectionObserver;
+export function createObserver(
+	callback: (entry: IntersectionObserverEntry) => void,
+	threshold: number
+): IntersectionObserver;
+
+// Implementation
+export function createObserver(
+	callback: (() => Promise<void>) | ((entry: IntersectionObserverEntry) => void),
+	threshold: number
+): IntersectionObserver {
+	return new IntersectionObserver(
+		(entries) => {
+			entries.forEach((entry) => {
+				if (entry.isIntersecting) {
+					// Check the callback type and invoke accordingly
+					if (callback.length === 0) {
+						// Callback expects no arguments
+						(callback as () => Promise<void>)();
+					} else {
+						// Callback expects an entry argument
+						(callback as (entry: IntersectionObserverEntry) => void)(entry);
+					}
+				}
+			});
+		},
+		{ threshold }
+	);
 }

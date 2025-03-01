@@ -27,6 +27,9 @@
 		const { cid } = page.params;
 		chat = memory.chats.find((chat) => chat._id === cid);
 		if (chat) index = memory.chats.indexOf(chat);
+		else if (memory.chats.length) {
+			goto('/') 
+		}
 	});
 </script>
 
@@ -44,7 +47,10 @@
 	</section>
 
 	{#if chat}
-		<MessageList {chat} submitFn={sendMessage} />
+		{#key chat}
+			<!-- re-renders the component when chats change -->
+			<MessageList {chat} submitFn={sendMessage} />
+		{/key}
 	{/if}
 </div>
 

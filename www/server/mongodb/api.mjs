@@ -209,6 +209,7 @@ export async function createChat(creatingUID, receivingUsername) {
     if (!createdChat) {
       throw new Error("Failed to retrieve the newly created chat.");
     }
+    createdChat.messages = [];
 
     return { createdChat, receivingUID: receivingUser._id };
   } catch (error) {

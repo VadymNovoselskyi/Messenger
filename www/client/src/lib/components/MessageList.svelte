@@ -1,20 +1,17 @@
 <script lang="ts">
-	import { onMount, tick } from 'svelte';
-	import { page } from '$app/state';
+	import { onDestroy, onMount, tick } from 'svelte';
 	import MessageField from '$lib/components/MessageField.svelte';
 	import Scrollbar from '$lib/components/Scrollbar.svelte';
 	import { getExtraMessages, getExtraNewMessages } from '$lib/api.svelte';
-	import { formatISODate, getCookie } from '$lib/utils';
+	import { formatISODate, getCookie, createObserver } from '$lib/utils';
 	import type { Chat, Message } from '$lib/types';
-	import { memory } from '$lib/stores/memory.svelte';
 
 	let { chat, submitFn }: { chat: Chat; submitFn: (event: SubmitEvent) => void } = $props();
-	let { messages, showingUnreadMessagesCount, unreadMessagesCount } = $derived(chat);
-	let receivedUnreadMessagesCount = $state(0);
+	let { messages, unreadMessagesCount, showingUnreadMessagesCount } = $derived(chat);
+	let receivedUnreadMessagesCount = chat.showingUnreadMessagesCount;
 
-	let topObserver: IntersectionObserver;
-	let bottomObserver: IntersectionObserver;
-	let readObserver: IntersectionObserver;
+	let extraMessagesPromise: Promise<void> = $state(Promise.resolve());
+	let unreadMessagesPromise: Promise<void> = $state(Promise.resolve());
 
 	let scrollableContent = $state() as HTMLElement;
 	let top_anchor = $state() as HTMLElement;
@@ -24,18 +21,29 @@
 	let scrollBar = $state() as Scrollbar;
 	let showScrollbar = $state<boolean>();
 
+	let topObserver = createObserver(handleTopIntersection, 0.5);
+	let bottomObserver = createObserver(handleBottomIntersection, 0.5);
+	let readObserver = createObserver((entry: IntersectionObserverEntry) => {
+		readObserver.unobserve(entry.target);
+		handleMessageRead();
+	}, 0.5);
+
 	async function handleTopIntersection(): Promise<void> {
 		//saves the current height of the scrollable content, to keep the scroll position later
 		const prevHeight = scrollableContent.scrollHeight - scrollableContent.scrollTop;
 
 		//check if anchor was reached by drag
-		const isDragging = scrollBar.isDraggingOn();
+		let isDragging = false;
+		if (scrollBar) isDragging = scrollBar.isDraggingOn();
 		if (isDragging) scrollBar.onMouseUp();
 
 		//load more messages
 		stacksLoaded++;
 		console.log(indexesToShow, messages?.length);
-		if (indexesToShow >= (messages?.length ?? 0)) getExtraMessages(chat._id, messages.length);
+		if (indexesToShow >= (messages?.length ?? 0)) {
+			extraMessagesPromise = getExtraMessages(chat._id, messages.length);
+			await extraMessagesPromise;
+		}
 
 		await tick();
 		requestAnimationFrame(async () => {
@@ -61,7 +69,10 @@
 		if (scrollBar) isDragging = scrollBar.isDraggingOn();
 		if (isDragging) scrollBar.onMouseUp();
 
-		if (unreadMessagesCount) getExtraNewMessages(chat._id, unreadMessagesCount);
+		if (unreadMessagesCount > 0) {
+			unreadMessagesPromise = getExtraNewMessages(chat._id, unreadMessagesCount);
+			await unreadMessagesPromise;
+		}
 
 		if (isDragging) {
 			await tick();
@@ -70,7 +81,7 @@
 	}
 
 	async function handleMessageRead() {
-		chat.unreadMessagesCount--
+		chat.unreadMessagesCount--;
 		chat.showingUnreadMessagesCount--;
 	}
 
@@ -113,54 +124,10 @@
 	}
 
 	$effect(() => {
-		page.params.cid;
-		setAnchors();
-		receivedUnreadMessagesCount = chat.showingUnreadMessagesCount;
-		console.log(receivedUnreadMessagesCount);	
-	});
-
-	$effect(() => {
 		messages.length;
 		if (!showScrollbar && messages.length) {
 			showScrollbar = scrollableContent.scrollHeight !== scrollableContent.clientHeight;
 		}
-	});
-
-	onMount(async () => {
-		stacksLoaded++;
-
-		topObserver = new IntersectionObserver(
-			(entries) => {
-				entries.forEach((entry) => {
-					if (entry.isIntersecting) {
-						handleTopIntersection();
-					}
-				});
-			},
-			{ threshold: 0.5 }
-		);
-		bottomObserver = new IntersectionObserver(
-			(entries) => {
-				entries.forEach((entry) => {
-					if (entry.isIntersecting) {
-						handleBottomIntersection();
-					}
-				});
-			},
-			{ threshold: 0.5 }
-		);
-
-		readObserver = new IntersectionObserver(
-			(entries) => {
-				entries.forEach((entry) => {
-					if (entry.isIntersecting) {
-						readObserver.unobserve(entry.target);
-						handleMessageRead();
-					}
-				});
-			},
-			{ threshold: 0.9 }
-		);
 	});
 
 	const TOP_ANCHOR_INDEX = 0;
@@ -169,11 +136,18 @@
 	const INDEXES_PER_STACK = 20;
 
 	//dynamic loading of messages
-	let stacksLoaded = $state(0);
+	let stacksLoaded = $state(1);
 	let indexesToShow: number = $derived(
 		Math.min(messages.length, stacksLoaded * INDEXES_PER_STACK) + receivedUnreadMessagesCount
 	);
 	let lastMessages = $derived(messages.slice(-indexesToShow));
+
+	onMount(setAnchors);
+	onDestroy(() => {
+		topObserver.disconnect();
+		bottomObserver.disconnect();
+		readObserver.disconnect();
+	});
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -190,6 +164,12 @@
 		onscroll={showScrollbar ? scrollBar.updateThumbPosition : null}
 		aria-label="Messages"
 	>
+		{#await extraMessagesPromise}
+			<div class="loader"></div>
+		{:catch error}
+			<p class="error-message">{error.message}</p>
+		{/await}
+
 		{#if lastMessages}
 			{#each lastMessages as message, i}
 				{#if i === TOP_ANCHOR_INDEX}
@@ -204,11 +184,17 @@
 					<p class="text">{message.text}</p>
 					<p class="sendTime">{formatISODate(message.sendTime)}</p>
 				</div>
-				{#if unreadMessagesCount && i === lastMessages.length - receivedUnreadMessagesCount - 1}
+				{#if i === lastMessages.length - receivedUnreadMessagesCount - 1 && i !== lastMessages.length - 1}
 					<div bind:this={unread_anchor} id="unread-anchor" class="anchor">Unread Messages</div>
 				{/if}
 			{/each}
 			<div bind:this={bottom_anchor} id="bottom-anchor" class="anchor"></div>
+			
+			{#await unreadMessagesPromise}
+				<div class="loader"></div>
+			{:catch error}
+				<p class="error-message">{error.message}</p>
+			{/await}
 		{:else}
 			<div class="error-container">
 				<div id="error_message">
@@ -228,8 +214,48 @@
 		display: grid;
 		grid-template-rows: 1fr auto;
 
+		background-color: #3a506b;
 		position: relative;
 		height: 94vh;
+	}
+
+	.loader {
+		grid-column: span 10;
+		justify-self: center;
+
+		width: 4rem;
+		padding: 0.5rem;
+		background: var(--primary-text-color);
+
+		aspect-ratio: 1;
+		border-radius: 50%;
+		mask:
+			conic-gradient(#0000, #000) subtract,
+			conic-gradient(#000 0 0) content-box;
+		animation: load 1s linear infinite;
+
+		@keyframes load {
+			to {
+				rotate: 1turn;
+			}
+		}
+	}
+
+	.error-message {
+		grid-column: span 10;
+		justify-self: center;
+
+		background-color: rgba(255, 0, 0, 0.1);
+		color: #ff0000;
+		border: 1px solid #ff0000;
+		border-radius: 8px;
+
+		margin-top: 0.4rem;
+		padding: 1rem 2rem;
+		box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+
+		font-size: 1.4rem;
+		font-weight: 800;
 	}
 
 	#messages {
@@ -238,7 +264,6 @@
 		grid-auto-rows: max-content;
 
 		padding: 0 0.8rem;
-		background-color: #3a506b;
 
 		overflow-y: scroll;
 

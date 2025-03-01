@@ -21,10 +21,6 @@
 	let { submitFn = defaultFN }: { submitFn: (event: SubmitEvent) => void } = $props();
 </script>
 
-<svelte:head>
-	<script src="https://kit.fontawesome.com/00ab35ae35.js" crossorigin="anonymous"></script>
-</svelte:head>
-
 <form action="" onsubmit={submitFn}>
 	<input
 		bind:this={textInput}
@@ -36,7 +32,7 @@
 		maxlength="1000"
 	/>
 	<button id="send-icon" aria-label="Send message">
-		<i class="fa-solid fa-paper-plane"></i>
+		<img src="/paper-plane.svg" alt="Send" />
 	</button>
 </form>
 
@@ -61,11 +57,16 @@
 		}
 
 		#send-icon {
-			padding: 0.5rem 0.8rem;
+			padding: 0.4rem 0.8rem;
 			background-color: white;
 			border: none;
 			cursor: pointer;
 			border-radius: 4px;
+
+			img {
+				width: 1rem;
+				height: 1rem;
+			}
 		}
 	}
 </style>

@@ -26,7 +26,7 @@ wss.on("connection", ws => {
   ws.on("message", async message => {
     console.log(`The message is: ${message}`);
     try {
-      const { api, payload } = JSON.parse(message);
+      const { api, id, payload } = JSON.parse(message);
 
       if (api === "signup") {
         const { username, password } = payload;
@@ -35,6 +35,7 @@ wss.on("connection", ws => {
         ws.send(
           JSON.stringify({
             api,
+            id,
             status: "success",
             payload: {
               uid,
@@ -55,6 +56,7 @@ wss.on("connection", ws => {
           return ws.send(
             JSON.stringify({
               api,
+              id,
               status: "error",
               payload: {
                 message: "Invalid password",
@@ -67,6 +69,7 @@ wss.on("connection", ws => {
         ws.send(
           JSON.stringify({
             api,
+            id,
             status: "success",
             payload: {
               uid: user._id,
@@ -78,7 +81,7 @@ wss.on("connection", ws => {
         ws.uid = user._id.toString();
         onlineUsers[ws.uid] = ws;
       } else if (ws.isAuthenticated) {
-        await handleAuthenticatedCall(api, payload, ws.uid);
+        await handleAuthenticatedCall(api, id, payload, ws.uid);
       } else {
         const { token } = JSON.parse(message);
 
@@ -89,12 +92,13 @@ wss.on("connection", ws => {
           ws.uid = uid;
           onlineUsers[ws.uid] = ws;
 
-          await handleAuthenticatedCall(api, payload, uid);
+          await handleAuthenticatedCall(api, id, payload, uid);
         } catch (err) {
           console.log(err);
           ws.send(
             JSON.stringify({
               api,
+              id,
               status: "error",
               payload: {
                 message: "Invalid Token. Login again",
@@ -107,6 +111,7 @@ wss.on("connection", ws => {
       ws.send(
         JSON.stringify({
           status: "error",
+          id: JSON.parse(message).id,
           payload: {
             message: `${error.message}, Received message: ${message}`,
           },
@@ -115,7 +120,7 @@ wss.on("connection", ws => {
     }
   });
 
-  async function handleAuthenticatedCall(api, payload, uid) {
+  async function handleAuthenticatedCall(api, id, payload, uid) {
     try {
       switch (api) {
         case "get_chats":
@@ -123,6 +128,7 @@ wss.on("connection", ws => {
           ws.send(
             JSON.stringify({
               api: "get_chats",
+              id,
               status: "success",
               payload: {
                 chats,
@@ -153,6 +159,7 @@ wss.on("connection", ws => {
           ws.send(
             JSON.stringify({
               api: "receive_message",
+              id,
               status: "success",
               payload: {
                 cid: payload.cid,
@@ -167,17 +174,20 @@ wss.on("connection", ws => {
         case "extra_messages":
           const { cid, currentIndex } = payload;
           const extraMessages = await getExtraMessages(cid, currentIndex);
+          await setTimeout(() => {
+            ws.send(
+              JSON.stringify({
+                api: "extra_messages",
+                id,
+                status: "success",
+                payload: {
+                  cid,
+                  extraMessages,
+                },
+              })
+            );
+          }, 2000); //timeout for testing
 
-          ws.send(
-            JSON.stringify({
-              api: "extra_messages",
-              status: "success",
-              payload: {
-                cid,
-                extraMessages,
-              },
-            })
-          );
           break;
 
         case "extra_new_messages": {
@@ -186,17 +196,19 @@ wss.on("connection", ws => {
             cid,
             unreadMessagesCount
           );
-
-          ws.send(
-            JSON.stringify({
-              api: "extra_new_messages",
-              status: "success",
-              payload: {
-                cid,
-                extraNewMessages,
-              },
-            })
-          );
+          await setTimeout(() => {
+            ws.send(
+              JSON.stringify({
+                api: "extra_new_messages",
+                id,
+                status: "success",
+                payload: {
+                  cid,
+                  extraNewMessages,
+                },
+              })
+            );
+          }, 2000); //timeout for testing
           break;
         }
 
@@ -208,6 +220,7 @@ wss.on("connection", ws => {
           ws.send(
             JSON.stringify({
               api: "create_chat",
+              id,
               status: "success",
               payload: {
                 createdChat,
@@ -219,6 +232,7 @@ wss.on("connection", ws => {
             onlineUsers[receivingUID.toString()].send(
               JSON.stringify({
                 api: "create_chat",
+                id,
                 status: "success",
                 payload: {
                   createdChat,
@@ -233,6 +247,7 @@ wss.on("connection", ws => {
           ws.send(
             JSON.stringify({
               api,
+              id,
               status: "error",
               payload: {
                 message: "Invalid api call",
