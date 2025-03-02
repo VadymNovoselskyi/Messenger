@@ -19,6 +19,7 @@ export interface Chat {
 	messages: Message[];
 	unreadMessagesCount: number;
 	showingUnreadMessagesCount: number;
+	extraMessagesCount: number;
 	lastModified: string; //ISO-Date
 }
 

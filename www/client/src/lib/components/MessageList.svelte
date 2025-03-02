@@ -1,14 +1,16 @@
 <script lang="ts">
 	import { onDestroy, onMount, tick } from 'svelte';
 	import MessageField from '$lib/components/MessageField.svelte';
+	import Loader from '$lib/components/Loader.svelte';
 	import Scrollbar from '$lib/components/Scrollbar.svelte';
 	import { getExtraMessages, getExtraNewMessages } from '$lib/api.svelte';
 	import { formatISODate, getCookie, createObserver } from '$lib/utils';
 	import type { Chat, Message } from '$lib/types';
 
 	let { chat, submitFn }: { chat: Chat; submitFn: (event: SubmitEvent) => void } = $props();
-	let { messages, unreadMessagesCount, showingUnreadMessagesCount } = $derived(chat);
-	let receivedUnreadMessagesCount = chat.showingUnreadMessagesCount;
+	let { messages, unreadMessagesCount, showingUnreadMessagesCount, extraMessagesCount } = $derived(chat);
+	const startingUnreadMessagesCount = chat.unreadMessagesCount;
+	const receivedUnreadMessagesCount = chat.showingUnreadMessagesCount;
 
 	let extraMessagesPromise: Promise<void> = $state(Promise.resolve());
 	let unreadMessagesPromise: Promise<void> = $state(Promise.resolve());
@@ -29,49 +31,80 @@
 	}, 0.5);
 
 	async function handleTopIntersection(): Promise<void> {
-		//saves the current height of the scrollable content, to keep the scroll position later
-		const prevHeight = scrollableContent.scrollHeight - scrollableContent.scrollTop;
+		setTimeout(async () => {
 
-		//check if anchor was reached by drag
-		let isDragging = false;
-		if (scrollBar) isDragging = scrollBar.isDraggingOn();
-		if (isDragging) scrollBar.onMouseUp();
-
-		//load more messages
-		stacksLoaded++;
-		console.log(indexesToShow, messages?.length);
-		if (indexesToShow >= (messages?.length ?? 0)) {
-			extraMessagesPromise = getExtraMessages(chat._id, messages.length);
-			await extraMessagesPromise;
-		}
-
-		await tick();
-		requestAnimationFrame(async () => {
+			//saves the current height of the scrollable content, to keep the scroll position later
+			let anchorId = lastMessages[0]._id;
+		
+			//check if anchor was reached by drag
+			let isDragging = false;
+			if (scrollBar) isDragging = scrollBar.isDraggingOn();
+			if (isDragging) scrollBar.onMouseUp();
+		
+			//load more messages
+			console.log(readIndexesToShow, unreadIndexesToShow, messages.length, 'top');
+			if (readIndexesToShow >= messages.length - receivedUnreadMessagesCount) {
+				extraMessagesPromise = getExtraMessages(
+					chat._id,
+					messages.length - receivedUnreadMessagesCount + startingUnreadMessagesCount
+				);
+				await extraMessagesPromise;
+			}
+		
+			if (readStacksLoaded + unreadStacksLoaded === MAX_STACKS) {
+				if (unreadStacksLoaded > 0) {
+					unreadStacksLoaded--;
+					readStacksLoaded++;
+				} else indexOffset += INDEXES_PER_STACK;
+			} else readStacksLoaded++;
+		
 			await tick();
-			topObserver.disconnect();
-			topObserver.observe(top_anchor);
-		});
-
-		scrollableContent.scrollTo({
-			top: scrollableContent.scrollHeight - prevHeight,
-			behavior: 'instant'
-		});
-
-		if (isDragging) {
-			await tick();
-			scrollBar.onMouseDown();
-		}
+			requestAnimationFrame(async () => {
+				await tick();
+				topObserver.disconnect();
+				topObserver.observe(top_anchor);
+			});
+		
+			const anchorElelemnt = document.getElementById(anchorId);
+			if (anchorElelemnt) {
+				anchorElelemnt.scrollIntoView({ behavior: 'instant', block: 'start' });
+				scrollableContent.scrollTop -= 15; //adjust for margin between messages
+			}
+		
+			if (isDragging) {
+				await tick();
+				scrollBar.onMouseDown();
+			}
+		}, 2000);
 	}
-
+	
 	async function handleBottomIntersection(): Promise<void> {
 		//check if anchor was reached by drag
 		let isDragging = false;
 		if (scrollBar) isDragging = scrollBar.isDraggingOn();
 		if (isDragging) scrollBar.onMouseUp();
 
-		if (unreadMessagesCount > 0) {
+		if (unreadMessagesCount > 0 && unreadIndexesToShow >= receivedUnreadMessagesCount) {
+			//saves the current height of the scrollable content, to keep the scroll position later
+			let anchorId = lastMessages[lastMessages.length - 1]._id;
+
 			unreadMessagesPromise = getExtraNewMessages(chat._id, unreadMessagesCount);
 			await unreadMessagesPromise;
+
+			if (readStacksLoaded + unreadStacksLoaded === MAX_STACKS) {
+				if (readStacksLoaded > 0) {
+					readStacksLoaded--;
+					unreadStacksLoaded++;
+				} else indexOffset -= INDEXES_PER_STACK;
+			} else unreadStacksLoaded++;
+
+			await tick();
+
+			const anchorElelemnt = document.getElementById(anchorId);
+			if (anchorElelemnt) {
+				anchorElelemnt.scrollIntoView({ behavior: 'instant', block: 'start' });
+				scrollableContent.scrollTop += 15; //adjust for margin between messages
+			}
 		}
 
 		if (isDragging) {
@@ -96,6 +129,7 @@
 		showScrollbar = scrollableContent.scrollHeight !== scrollableContent.clientHeight;
 
 		await tick();
+
 		//scroll to the bottom of the messages
 		requestAnimationFrame(async () => {
 			const scrollTop = unread_anchor
@@ -117,7 +151,7 @@
 			if (scrollBar) topObserver.observe(top_anchor);
 			if (unreadMessagesCount) {
 				lastMessages
-					.slice(-showingUnreadMessagesCount)
+					.slice(-unreadIndexesToShow)
 					.forEach((message) => readObserver.observe(message));
 			}
 		});
@@ -131,18 +165,62 @@
 	});
 
 	const TOP_ANCHOR_INDEX = 0;
-	//THIS SHOULD BE A MULTIPLE OF THE INIT_MESSAGES ON THE SERVER IN api.mjs
+	//THIS SHOULD BE A MULTIPLE OF INIT_MESSAGES ON THE SERVER IN api.mjs
 	//OTHERWISE THE MESSAGES WILL JUMP TO THE LOWEST MULTIPLE
 	const INDEXES_PER_STACK = 20;
+	const MAX_STACKS = 5;
 
 	//dynamic loading of messages
-	let stacksLoaded = $state(1);
-	let indexesToShow: number = $derived(
-		Math.min(messages.length, stacksLoaded * INDEXES_PER_STACK) + receivedUnreadMessagesCount
-	);
-	let lastMessages = $derived(messages.slice(-indexesToShow));
+	let readStacksLoaded = $state(1);
+	let unreadStacksLoaded = $state(0);
+	let indexOffset = $state(0);
 
-	onMount(setAnchors);
+	let readIndexesToShow = $state(0);
+	let unreadIndexesToShow = $state(0);
+	let lastMessages = $state([] as Message[]);
+	$effect(() => {
+		readIndexesToShow = Math.min(
+			messages.length - receivedUnreadMessagesCount,
+			readStacksLoaded * INDEXES_PER_STACK
+		);
+		unreadIndexesToShow = Math.min(
+			receivedUnreadMessagesCount,
+			unreadStacksLoaded * INDEXES_PER_STACK
+		);
+
+		lastMessages = [
+			...messages.slice(
+				messages.length - receivedUnreadMessagesCount + indexOffset - readIndexesToShow,
+				messages.length - receivedUnreadMessagesCount + indexOffset
+			),
+			...messages.slice(
+				messages.length - receivedUnreadMessagesCount - indexOffset,
+				messages.length - receivedUnreadMessagesCount - indexOffset + unreadIndexesToShow
+			)
+		];
+
+		console.log(
+			'readIndexesToShow, unreadIndexesToShow, messages.length',
+			readIndexesToShow,
+			unreadIndexesToShow,
+			messages.length
+		);
+		console.log(
+			'starting read, finishing read',
+			messages.length - receivedUnreadMessagesCount + indexOffset - readIndexesToShow,
+			messages.length - receivedUnreadMessagesCount + indexOffset
+		);
+		console.log(
+			'starting unread, finishing unread',
+			messages.length - receivedUnreadMessagesCount - indexOffset,
+			messages.length - receivedUnreadMessagesCount - indexOffset + unreadIndexesToShow
+		);
+	});
+
+	onMount(() => {
+		setAnchors();
+		if (unreadMessagesCount) unreadStacksLoaded++;
+	});
 	onDestroy(() => {
 		topObserver.disconnect();
 		bottomObserver.disconnect();
@@ -164,14 +242,10 @@
 		onscroll={showScrollbar ? scrollBar.updateThumbPosition : null}
 		aria-label="Messages"
 	>
-		{#await extraMessagesPromise}
-			<div class="loader"></div>
-		{:catch error}
-			<p class="error-message">{error.message}</p>
-		{/await}
+		<Loader promise={extraMessagesPromise} />
 
 		{#if lastMessages}
-			{#each lastMessages as message, i}
+			{#each lastMessages as message, i (message._id)}
 				{#if i === TOP_ANCHOR_INDEX}
 					<div bind:this={top_anchor} class="anchor"></div>
 				{/if}
@@ -180,21 +254,18 @@
 					class:sent={message.from === getCookie('uid')}
 					class:received={message.from !== getCookie('uid')}
 					class:sending={message.isReceived === false}
+					id={message._id}
 				>
 					<p class="text">{message.text}</p>
 					<p class="sendTime">{formatISODate(message.sendTime)}</p>
 				</div>
-				{#if i === lastMessages.length - receivedUnreadMessagesCount - 1 && i !== lastMessages.length - 1}
+				{#if i === readIndexesToShow - 1 && i !== lastMessages.length - 1}
 					<div bind:this={unread_anchor} id="unread-anchor" class="anchor">Unread Messages</div>
 				{/if}
 			{/each}
 			<div bind:this={bottom_anchor} id="bottom-anchor" class="anchor"></div>
-			
-			{#await unreadMessagesPromise}
-				<div class="loader"></div>
-			{:catch error}
-				<p class="error-message">{error.message}</p>
-			{/await}
+
+			<Loader promise={unreadMessagesPromise} />
 		{:else}
 			<div class="error-container">
 				<div id="error_message">
@@ -217,45 +288,6 @@
 		background-color: #3a506b;
 		position: relative;
 		height: 94vh;
-	}
-
-	.loader {
-		grid-column: span 10;
-		justify-self: center;
-
-		width: 4rem;
-		padding: 0.5rem;
-		background: var(--primary-text-color);
-
-		aspect-ratio: 1;
-		border-radius: 50%;
-		mask:
-			conic-gradient(#0000, #000) subtract,
-			conic-gradient(#000 0 0) content-box;
-		animation: load 1s linear infinite;
-
-		@keyframes load {
-			to {
-				rotate: 1turn;
-			}
-		}
-	}
-
-	.error-message {
-		grid-column: span 10;
-		justify-self: center;
-
-		background-color: rgba(255, 0, 0, 0.1);
-		color: #ff0000;
-		border: 1px solid #ff0000;
-		border-radius: 8px;
-
-		margin-top: 0.4rem;
-		padding: 1rem 2rem;
-		box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-
-		font-size: 1.4rem;
-		font-weight: 800;
 	}
 
 	#messages {

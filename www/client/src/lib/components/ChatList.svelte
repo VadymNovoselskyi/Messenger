@@ -101,7 +101,7 @@
 		bind:this={scrollableContent}
 		onscroll={showScrollbar ? scrollBar.updateThumbPosition : null}
 	>
-		{#each lastChats as chat, i}
+		{#each lastChats as chat, i (chat._id)}
 			<a
 				href="{page.url.origin}/chat/{chat._id}"
 				class="chat"

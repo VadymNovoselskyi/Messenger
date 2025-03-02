@@ -74,6 +74,7 @@ export async function getExtraMessages(cid: string, currentIndex: number): Promi
 			return;
 		}
 		chat.messages = [...extraMessages, ...chat.messages];
+		chat.extraMessagesCount += extraMessages.length;
 	} catch (error) {
 		console.error('Error in getExtraMessages:', error);
 		return Promise.reject(error);
@@ -257,7 +258,7 @@ export async function signup(event: SubmitEvent): Promise<void> {
 	}
 }
 
-async function sendRequest(message: APICall, timeout: number = 500): Promise<any> {
+async function sendRequest(message: APICall, timeout: number = 10000): Promise<any> {
 	const ws = await getWS();
 	return new Promise((resolve, reject) => {
 		pendingRequests.set(message.id, { resolve, reject });
