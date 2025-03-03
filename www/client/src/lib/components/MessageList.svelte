@@ -54,11 +54,6 @@
 
 		await recalculateIndexes(1);
 
-		topObserver.disconnect();
-		bottomObserver.disconnect();
-		topObserver.observe(top_anchor);
-		bottomObserver.observe(bottom_anchor);
-
 		const prevTopElement = document.getElementById(prevTopId);
 		if (prevTopElement) {
 			prevTopElement.scrollIntoView({ behavior: 'instant', block: 'start' });
@@ -67,8 +62,12 @@
 
 		if (isDragging) scrollBar.onMouseDown();
 	}
-
+	
 	async function handleBottomIntersection(): Promise<void> {
+		readObserver.disconnect(); //disconnect all previous messages
+		//accounts for unreliability of intersectionObserver on fast scroll/drag
+		chat.unreadCount = startingUnreadCount - bottomIndex + receivedReadCount;
+		
 		//check if anchor was reached by drag
 		let isDragging = false;
 		if (scrollBar) isDragging = scrollBar.isDraggingOn();
@@ -92,20 +91,16 @@
 		}
 
 		//number of unread messages that have not been read (that are in the message array)
-		const unrenderedCount = receivedUnreadCount - (bottomIndex - receivedReadCount);
+		const unreadUnrenderedCount = receivedUnreadCount - (bottomIndex - receivedReadCount);
 		const leftUnreadCount = receivedUnreadCount - (startingUnreadCount - unreadCount);
-		console.log('unrenderedCount, leftUnreadCount', unrenderedCount, leftUnreadCount);
-		if (unrenderedCount <= leftUnreadCount) {
+		// console.log('unreadUnrenderedCount, leftUnreadCount', unreadUnrenderedCount, leftUnreadCount);
+		if (unreadUnrenderedCount <= leftUnreadCount) {
 			//checks if some unread messages are rendered
-			readObserver.disconnect(); //disconnect all previous messages
 			const lastMessagesEl = Array.from(scrollableContent.querySelectorAll('.message'));
 			lastMessagesEl
-				.slice(-Math.min(leftUnreadCount - unrenderedCount, INDEXES_PER_STACK))
+				.slice(-Math.min(leftUnreadCount - unreadUnrenderedCount, INDEXES_PER_STACK))
 				.forEach((message) => readObserver.observe(message));
 		}
-
-		topObserver.disconnect();
-		topObserver.observe(top_anchor);
 
 		if (isDragging) scrollBar.onMouseDown();
 	}
@@ -160,6 +155,17 @@
 		}
 	});
 
+	$effect(() => {
+		if(!top_anchor) return;
+		topObserver.disconnect();
+		topObserver.observe(top_anchor);
+	})
+	$effect(() => {
+		if (!bottom_anchor) return;
+		bottomObserver.disconnect();
+		bottomObserver.observe(bottom_anchor);
+	})
+
 	const TOP_ANCHOR_INDEX = 0;
 	//theoreticaly (!!!) this line should work for every number, but plz keep it as
 	//multiple of 'INIT_MESSAGES' and 'EXTRA_MESSAGES' in 'api.mjs' on the server🙏
@@ -176,7 +182,6 @@
 
 	let topIndex = $state(0);
 	let bottomIndex = $state(0);
-
 	let lastMessages = $state([]) as Message[];
 
 	async function recalculateIndexes(direction: number): Promise<void> {
