@@ -37,7 +37,7 @@ export async function getChats(uid) {
 
         chat.messages = chatMessages.reverse();
         chat.unreadMessagesCount = unreadMessagesCount;
-        chat.showingUnreadMessagesCount = Math.min(
+        chat.receivedUnreadMessagesCount = Math.min(
           unreadMessagesCount,
           INIT_MESSAGES
         );
@@ -72,15 +72,15 @@ export async function getExtraMessages(cid, currentIndex) {
 export async function getExtraNewMessages(cid, unreadMessagesCount) {
   try {
     const unreadMessagesSkip =
-      unreadMessagesCount > INIT_MESSAGES
-        ? unreadMessagesCount - INIT_MESSAGES
+      unreadMessagesCount > EXTRA_MESSAGES
+        ? unreadMessagesCount - EXTRA_MESSAGES
         : 0;
 
     const extraNewMessages = await messages
       .find({ cid: new ObjectId(cid) })
       .sort({ sendTime: -1 })
       .skip(unreadMessagesSkip)
-      .limit(Math.min(unreadMessagesCount, INIT_MESSAGES))
+      .limit(Math.min(unreadMessagesCount, EXTRA_MESSAGES))
       .toArray();
     return extraNewMessages.reverse();
   } catch (error) {

@@ -18,8 +18,7 @@ export interface Chat {
 	users: User[];
 	messages: Message[];
 	unreadMessagesCount: number;
-	showingUnreadMessagesCount: number;
-	extraMessagesCount: number;
+	receivedUnreadMessagesCount: number;
 	lastModified: string; //ISO-Date
 }
 
