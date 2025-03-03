@@ -115,9 +115,9 @@
 				<p class="chat-name">
 					{chat.users.find((user: User) => user._id !== getCookie('uid'))!.username}
 				</p>
-				{#if chat.unreadMessagesCount}
+				{#if chat.unreadCount}
 					<p class="unread-count">
-						{chat.unreadMessagesCount}
+						{chat.unreadCount}
 					</p>
 				{/if}
 				<p class="chat-message" class:system-message={!chat.messages.length}>
@@ -200,7 +200,7 @@
 		.chat {
 			display: grid;
 			grid-template-columns: auto 1fr auto;
-			grid-template-rows: auto 4rem auto;
+			grid-template-rows: 1.6rem 4rem auto;
 			grid-gap: 0 1rem;
 			align-items: center;
 			padding: 0.4rem;

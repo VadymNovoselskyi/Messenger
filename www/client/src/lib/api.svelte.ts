@@ -80,7 +80,7 @@ export async function getExtraMessages(cid: string, currentIndex: number): Promi
 	}
 }
 
-export async function getExtraNewMessages(cid: string, unreadMessagesCount: number): Promise<void> {
+export async function getExtraNewMessages(cid: string, unreadCount: number): Promise<void> {
 	const requestId = generateId();
 	const message: APICall = {
 		api: 'extra_new_messages',
@@ -88,7 +88,7 @@ export async function getExtraNewMessages(cid: string, unreadMessagesCount: numb
 		token: getCookie('token'),
 		payload: {
 			cid,
-			unreadMessagesCount
+			unreadCount
 		}
 	};
 
@@ -102,7 +102,7 @@ export async function getExtraNewMessages(cid: string, unreadMessagesCount: numb
 			return;
 		}
 		chat.messages = [...chat.messages, ...extraNewMessages];
-		chat.receivedUnreadMessagesCount += extraNewMessages.length;
+		chat.receivedUnreadCount += extraNewMessages.length;
 	} catch (error) {
 		console.error('Error in getExtraNewMessages:', error);
 		return Promise.reject(error);
@@ -294,7 +294,7 @@ export function handleServerMessage(event: MessageEvent): void {
 		if (!chat) throw new Error(`Chat with id ${cid} not found`);
 
 		chat.messages.push(message);
-		chat.unreadMessagesCount++;
+		chat.unreadCount++;
 	} else {
 		console.warn('Received response for unknown request ID:', id);
 	}

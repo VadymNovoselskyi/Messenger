@@ -191,10 +191,10 @@ wss.on("connection", ws => {
           break;
 
         case "extra_new_messages": {
-          const { cid, unreadMessagesCount } = payload;
+          const { cid, unreadCount } = payload;
           const extraNewMessages = await getExtraNewMessages(
             cid,
-            unreadMessagesCount
+            unreadCount
           );
           await setTimeout(() => {
             ws.send(

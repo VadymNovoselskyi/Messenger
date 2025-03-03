@@ -49,16 +49,16 @@ export function sortChats(): void {
 }
 
 // Overload signatures
-export function createObserver(callback: () => Promise<void>, threshold: number): IntersectionObserver;
+export function createObserver(callback: () => Promise<void>, threshold?: number): IntersectionObserver;
 export function createObserver(
 	callback: (entry: IntersectionObserverEntry) => void,
-	threshold: number
+	threshold?: number
 ): IntersectionObserver;
 
 // Implementation
 export function createObserver(
 	callback: (() => Promise<void>) | ((entry: IntersectionObserverEntry) => void),
-	threshold: number
+	threshold: number = 0.5
 ): IntersectionObserver {
 	return new IntersectionObserver(
 		(entries) => {

@@ -8,8 +8,12 @@
 	import type { Chat, Message } from '$lib/types';
 
 	let { chat, submitFn }: { chat: Chat; submitFn: (event: SubmitEvent) => void } = $props();
-	let { messages, unreadMessagesCount, receivedUnreadMessagesCount } = $derived(chat);
-	const startingUnreadMessagesCount = chat.unreadMessagesCount;
+	let { messages, unreadCount, receivedUnreadCount } = $derived(chat);
+	let receivedReadCount = $derived(messages.length - receivedUnreadCount);
+
+	const startingUnreadCount = chat.unreadCount;
+	// svelte-ignore state_referenced_locally
+	const firstUnreadId = messages[receivedReadCount - 1]._id;
 
 	let extraMessagesPromise: Promise<void> = $state(Promise.resolve());
 	let unreadMessagesPromise: Promise<void> = $state(Promise.resolve());
@@ -22,50 +26,38 @@
 	let scrollBar = $state() as Scrollbar;
 	let showScrollbar = $state<boolean>();
 
-	let topObserver = createObserver(handleTopIntersection, 0.5);
+	let topObserver = createObserver(handleTopIntersection);
 	let bottomObserver = createObserver(() => {
-		if (unreadMessagesCount > 0) handleBottomIntersection();
-	}, 0.5);
+		if (unreadCount > 0) handleBottomIntersection();
+	});
 	let readObserver = createObserver((entry: IntersectionObserverEntry) => {
 		readObserver.unobserve(entry.target);
 		handleMessageRead();
-	}, 0.5);
+	});
 
 	async function handleTopIntersection(): Promise<void> {
 		//saves the current top element, to keep the scroll position later
 		let prevTopId = lastMessages[0]._id;
-		const isFullRange =
-			messages.length >=
-			receivedUnreadMessagesCount + indexOffset + readStacksLoaded * INDEXES_PER_STACK;
 
 		//check if anchor was reached by drag
 		let isDragging = false;
 		if (scrollBar) isDragging = scrollBar.isDraggingOn();
 		if (isDragging) scrollBar.onMouseUp();
 
-		if (readMessagesTop <= 0) {
+		if (topIndex <= 0) {
 			extraMessagesPromise = getExtraMessages(
 				chat._id,
-				messages.length - receivedUnreadMessagesCount + startingUnreadMessagesCount
+				messages.length - receivedUnreadCount + startingUnreadCount
 			);
 			await extraMessagesPromise;
 		}
 
-		//load more messages
-		if (!isFullRange) null;
-		else if (readStacksLoaded + unreadStacksLoaded === MAX_STACKS) {
-			if (unreadStacksLoaded > 0) {
-				unreadStacksLoaded--;
-				readStacksLoaded++;
-			} else indexOffset += INDEXES_PER_STACK;
-		} else readStacksLoaded++;
+		await recalculateIndexes(1);
 
-		await tick();
-		requestAnimationFrame(async () => {
-			await tick();
-			topObserver.disconnect();
-			topObserver.observe(top_anchor);
-		});
+		topObserver.disconnect();
+		bottomObserver.disconnect();
+		topObserver.observe(top_anchor);
+		bottomObserver.observe(bottom_anchor);
 
 		const prevTopElement = document.getElementById(prevTopId);
 		if (prevTopElement) {
@@ -77,7 +69,6 @@
 	}
 
 	async function handleBottomIntersection(): Promise<void> {
-		readObserver.disconnect();
 		//check if anchor was reached by drag
 		let isDragging = false;
 		if (scrollBar) isDragging = scrollBar.isDraggingOn();
@@ -85,27 +76,14 @@
 
 		//saves the current bottom element, to keep the scroll position later
 		const prevBottomId = lastMessages[lastMessages.length - 1]._id;
-		const isFullRange =
-			receivedUnreadMessagesCount >= unreadStacksLoaded * INDEXES_PER_STACK + Math.abs(indexOffset);
-		// console.log(isFullRange, unreadStacksLoaded * INDEXES_PER_STACK + Math.abs(indexOffset), receivedUnreadMessagesCount);
 
-		const prevLastIndex = unreadMessagesBottom;
-
-		if (unreadIndexesToShow - indexOffset >= receivedUnreadMessagesCount) {
-			console.log('bottom', unreadMessagesCount);
-			unreadMessagesPromise = getExtraNewMessages(chat._id, unreadMessagesCount);
+		if (unreadIndexesToShow - indexOffset >= receivedUnreadCount) {
+			// console.log('bottom', unreadCount);
+			unreadMessagesPromise = getExtraNewMessages(chat._id, unreadCount);
 			await unreadMessagesPromise;
 		}
 
-		if (!isFullRange) null;
-		else if (readStacksLoaded + unreadStacksLoaded === MAX_STACKS) {
-			if (readStacksLoaded > 0) {
-				readStacksLoaded--;
-				unreadStacksLoaded++;
-			} else indexOffset -= INDEXES_PER_STACK;
-		} else unreadStacksLoaded++;
-
-		await tick();
+		await recalculateIndexes(-1);
 
 		const prevBottomElement = document.getElementById(prevBottomId);
 		if (prevBottomElement) {
@@ -113,17 +91,27 @@
 			scrollableContent.scrollTop += 15; //adjust for margin between messages
 		}
 
-		if (isDragging) scrollBar.onMouseDown();
+		//number of unread messages that have not been read (that are in the message array)
+		const unrenderedCount = receivedUnreadCount - (bottomIndex - receivedReadCount);
+		const leftUnreadCount = receivedUnreadCount - (startingUnreadCount - unreadCount);
+		console.log('unrenderedCount, leftUnreadCount', unrenderedCount, leftUnreadCount);
+		if (unrenderedCount <= leftUnreadCount) {
+			//checks if some unread messages are rendered
+			readObserver.disconnect(); //disconnect all previous messages
+			const lastMessagesEl = Array.from(scrollableContent.querySelectorAll('.message'));
+			lastMessagesEl
+				.slice(-Math.min(leftUnreadCount - unrenderedCount, INDEXES_PER_STACK))
+				.forEach((message) => readObserver.observe(message));
+		}
 
-		console.log(prevLastIndex, unreadMessagesBottom, messages.length, unreadMessagesBottom <= messages.length ? prevLastIndex - unreadMessagesBottom : prevLastIndex - messages.length);
-		const lastMessagesEl = Array.from(scrollableContent.querySelectorAll('.message'));
-		lastMessagesEl
-			.slice(unreadMessagesBottom <= messages.length ? prevLastIndex - unreadMessagesBottom : prevLastIndex - messages.length)
-			.forEach((message) => readObserver.observe(message));
+		topObserver.disconnect();
+		topObserver.observe(top_anchor);
+
+		if (isDragging) scrollBar.onMouseDown();
 	}
 
 	async function handleMessageRead() {
-		chat.unreadMessagesCount--;
+		chat.unreadCount--;
 	}
 
 	async function setAnchors() {
@@ -157,7 +145,7 @@
 
 			bottomObserver.observe(bottom_anchor);
 			if (scrollBar) topObserver.observe(top_anchor);
-			if (unreadMessagesCount) {
+			if (unreadCount) {
 				lastMessages
 					.slice(-unreadIndexesToShow)
 					.forEach((message) => readObserver.observe(message));
@@ -173,7 +161,9 @@
 	});
 
 	const TOP_ANCHOR_INDEX = 0;
-	const INDEXES_PER_STACK = 19;
+	//theoreticaly (!!!) this line should work for every number, but plz keep it as
+	//multiple of 'INIT_MESSAGES' and 'EXTRA_MESSAGES' in 'api.mjs' on the server🙏
+	const INDEXES_PER_STACK = 20;
 	const MAX_STACKS = 5;
 
 	//dynamic loading of messages
@@ -181,37 +171,62 @@
 	let unreadStacksLoaded = $state(0);
 	let indexOffset = $state(0);
 
-	let readIndexesToShow = $derived(
-		Math.min(messages.length - receivedUnreadMessagesCount, readStacksLoaded * INDEXES_PER_STACK)
-	);
-	let unreadIndexesToShow = $derived(
-		Math.min(receivedUnreadMessagesCount, unreadStacksLoaded * INDEXES_PER_STACK)
-	);
-	let readMessagesTop = $derived(
-		messages.length - receivedUnreadMessagesCount - indexOffset - readIndexesToShow
-	);
-	let readMessagesBottom = $derived(messages.length - receivedUnreadMessagesCount - indexOffset);
-	let unreadMessagesTop = $derived(messages.length - receivedUnreadMessagesCount - indexOffset);
-	let unreadMessagesBottom = $derived(
-		messages.length - receivedUnreadMessagesCount - indexOffset + unreadIndexesToShow
-	);
+	let readIndexesToShow = $state(0);
+	let unreadIndexesToShow = $state(0);
 
-	let lastMessages = $derived([
-		...messages.slice(
-			readMessagesTop > 0 ? readMessagesTop : 0,
-			readMessagesTop > 0 ? readMessagesBottom : readIndexesToShow
-		),
-		...messages.slice(
-			unreadMessagesBottom <= messages.length
-				? unreadMessagesTop
-				: messages.length - unreadIndexesToShow - 1,
-			unreadMessagesBottom <= messages.length ? unreadMessagesBottom : messages.length
-		)
-	]);
+	let topIndex = $state(0);
+	let bottomIndex = $state(0);
+
+	let lastMessages = $state([]) as Message[];
+
+	async function recalculateIndexes(direction: number): Promise<void> {
+		let isFullRange: boolean = false;
+		if (direction === 1) {
+			isFullRange = receivedReadCount >= readStacksLoaded * INDEXES_PER_STACK + indexOffset;
+		} else if (direction === -1) {
+			isFullRange =
+				bottomIndex - receivedReadCount >= unreadStacksLoaded * INDEXES_PER_STACK - indexOffset;
+		}
+
+		if (!isFullRange) null;
+		else if (readStacksLoaded + unreadStacksLoaded === MAX_STACKS) {
+			if (
+				(direction === 1 &&
+					unreadStacksLoaded > 0 &&
+					receivedReadCount > readStacksLoaded * INDEXES_PER_STACK) ||
+				(direction === -1 &&
+					readStacksLoaded > 0 &&
+					receivedUnreadCount > unreadStacksLoaded * INDEXES_PER_STACK)
+			) {
+				readStacksLoaded += direction;
+				unreadStacksLoaded -= direction;
+			} else indexOffset += direction * INDEXES_PER_STACK;
+		} else if (direction === 1) readStacksLoaded++;
+		else if (direction === -1) unreadStacksLoaded++;
+
+		// console.log(
+		// 	'readStacksLoaded, unreadStacksLoaded, indexOffset',
+		// 	readStacksLoaded,
+		// 	unreadStacksLoaded,
+		// 	indexOffset
+		// );
+
+		readIndexesToShow = Math.min(receivedReadCount, readStacksLoaded * INDEXES_PER_STACK);
+		unreadIndexesToShow = Math.min(receivedUnreadCount, unreadStacksLoaded * INDEXES_PER_STACK);
+
+		topIndex = Math.max(receivedReadCount - indexOffset - readIndexesToShow, 0);
+		bottomIndex = Math.min(receivedReadCount - indexOffset + unreadIndexesToShow, messages.length);
+		// console.log('topIndex, bottomIndex, messages.length', topIndex, bottomIndex, messages.length);
+
+		lastMessages = [...messages.slice(topIndex, bottomIndex)];
+		await tick();
+		requestAnimationFrame(() => null);
+	}
 
 	onMount(() => {
 		setAnchors();
-		if (unreadMessagesCount) unreadStacksLoaded++;
+		if (unreadCount) unreadStacksLoaded++;
+		recalculateIndexes(0);
 	});
 	onDestroy(() => {
 		topObserver.disconnect();
@@ -251,7 +266,7 @@
 					<p class="text">{message.text}</p>
 					<p class="sendTime">{formatISODate(message.sendTime)}</p>
 				</div>
-				{#if i === readIndexesToShow - 1 && i !== lastMessages.length - 1}
+				{#if message._id === firstUnreadId && i !== lastMessages.length - 1}
 					<div bind:this={unread_anchor} id="unread-anchor" class="anchor">Unread Messages</div>
 				{/if}
 			{/each}

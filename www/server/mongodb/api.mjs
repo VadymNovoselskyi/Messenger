@@ -19,26 +19,26 @@ export async function getChats(uid) {
         const lastOpened = chat.users.find(
           user => user._id.toString() === uid
         ).lastOpened;
-        const unreadMessagesCount = await messages.countDocuments({
+        const unreadCount = await messages.countDocuments({
           cid: chat._id,
           sendTime: { $gt: lastOpened },
         });
 
-        const unreadMessagesSkip =
-          unreadMessagesCount > INIT_MESSAGES
-            ? unreadMessagesCount - INIT_MESSAGES
+        const unreadSkip =
+          unreadCount > INIT_MESSAGES
+            ? unreadCount - INIT_MESSAGES
             : 0;
         const chatMessages = await messages
           .find({ cid: chat._id })
           .sort({ sendTime: -1 })
-          .skip(unreadMessagesSkip)
-          .limit(INIT_MESSAGES + Math.min(unreadMessagesCount, INIT_MESSAGES))
+          .skip(unreadSkip)
+          .limit(INIT_MESSAGES + Math.min(unreadCount, INIT_MESSAGES))
           .toArray();
 
         chat.messages = chatMessages.reverse();
-        chat.unreadMessagesCount = unreadMessagesCount;
-        chat.receivedUnreadMessagesCount = Math.min(
-          unreadMessagesCount,
+        chat.unreadCount = unreadCount;
+        chat.receivedUnreadCount = Math.min(
+          unreadCount,
           INIT_MESSAGES
         );
         return chat;
@@ -69,18 +69,18 @@ export async function getExtraMessages(cid, currentIndex) {
   }
 }
 
-export async function getExtraNewMessages(cid, unreadMessagesCount) {
+export async function getExtraNewMessages(cid, unreadCount) {
   try {
-    const unreadMessagesSkip =
-      unreadMessagesCount > EXTRA_MESSAGES
-        ? unreadMessagesCount - EXTRA_MESSAGES
+    const unreadSkip =
+      unreadCount > EXTRA_MESSAGES
+        ? unreadCount - EXTRA_MESSAGES
         : 0;
 
     const extraNewMessages = await messages
       .find({ cid: new ObjectId(cid) })
       .sort({ sendTime: -1 })
-      .skip(unreadMessagesSkip)
-      .limit(Math.min(unreadMessagesCount, EXTRA_MESSAGES))
+      .skip(unreadSkip)
+      .limit(Math.min(unreadCount, EXTRA_MESSAGES))
       .toArray();
     return extraNewMessages.reverse();
   } catch (error) {
