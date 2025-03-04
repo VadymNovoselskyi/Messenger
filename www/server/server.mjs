@@ -5,6 +5,7 @@ import {
   getChats,
   getExtraMessages,
   getExtraNewMessages,
+  readUpdate,
   sendMessage,
   findUser,
   createUser,
@@ -127,7 +128,7 @@ wss.on("connection", ws => {
           const chats = await getChats(uid);
           ws.send(
             JSON.stringify({
-              api: "get_chats",
+              api,
               id,
               status: "success",
               payload: {
@@ -174,20 +175,17 @@ wss.on("connection", ws => {
         case "extra_messages":
           const { cid, currentIndex } = payload;
           const extraMessages = await getExtraMessages(cid, currentIndex);
-          await setTimeout(() => {
-            ws.send(
-              JSON.stringify({
-                api: "extra_messages",
-                id,
-                status: "success",
-                payload: {
-                  cid,
-                  extraMessages,
-                },
-              })
-            );
-          }, 2000); //timeout for testing
-
+          ws.send(
+            JSON.stringify({
+              api,
+              id,
+              status: "success",
+              payload: {
+                cid,
+                extraMessages,
+              },
+            })
+          );
           break;
 
         case "extra_new_messages": {
@@ -196,20 +194,35 @@ wss.on("connection", ws => {
             cid,
             unreadCount
           );
-          await setTimeout(() => {
-            ws.send(
-              JSON.stringify({
-                api: "extra_new_messages",
-                id,
-                status: "success",
-                payload: {
-                  cid,
-                  extraNewMessages,
-                },
-              })
-            );
-          }, 2000); //timeout for testing
+          ws.send(
+            JSON.stringify({
+              api,
+              id,
+              status: "success",
+              payload: {
+                cid,
+                extraNewMessages,
+              },
+            })
+          );
           break;
+        }
+
+        case "read_update": {
+          const { cid, mid } = payload;
+          lastSeen = await readUpdate(uid, cid, mid);
+          console.log(cid, mid, lastSeen);
+          ws.send(
+            JSON.stringify({
+              api,
+              id,
+              status: "success",
+              payload: {
+                cid,
+                lastSeen,
+              },
+            })
+          );
         }
 
         case "create_chat":
@@ -219,7 +232,7 @@ wss.on("connection", ws => {
           );
           ws.send(
             JSON.stringify({
-              api: "create_chat",
+              api,
               id,
               status: "success",
               payload: {

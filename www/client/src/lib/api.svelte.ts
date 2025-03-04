@@ -109,6 +109,27 @@ export async function getExtraNewMessages(cid: string, unreadCount: number): Pro
 	}
 }
 
+export async function sendReadUpdate(cid: string, mid: string): Promise<void> {
+	const requestId = generateId();
+	const message: APICall = {
+		api: 'read_update',
+		id: requestId,
+		token: getCookie('token'),
+		payload: {
+			cid,
+			mid
+		}
+	};
+
+	try {
+		const { cid, lastSeen }: { cid: string; lastSeen: string } = await sendRequest(message);
+		console.log(cid, lastSeen)
+	} catch (error) {
+		console.error('Error in getExtraNewMessages:', error);
+		return Promise.reject(error);
+	}
+}
+
 export async function sendMessage(event: Event): Promise<void> {
 	event.preventDefault();
 	const messageInput: HTMLInputElement = (event.currentTarget as HTMLFormElement).message;

@@ -16,12 +16,12 @@ export async function getChats(uid) {
 
     userChats = await Promise.all(
       userChats.map(async chat => {
-        const lastOpened = chat.users.find(
+        const lastSeen = chat.users.find(
           user => user._id.toString() === uid
-        ).lastOpened;
+        ).lastSeen;
         const unreadCount = await messages.countDocuments({
           cid: chat._id,
-          sendTime: { $gt: lastOpened },
+          sendTime: { $gt: lastSeen },
         });
 
         const unreadSkip =
@@ -87,6 +87,26 @@ export async function getExtraNewMessages(cid, unreadCount) {
     throw new Error(
       `Error getting new messages in chat ID ${cid}: ${error.message}`
     );
+  }
+}
+
+export async function readUpdate(uid, cid, mid) {
+  try {
+    const lastSeen = await messages.find({ _id: new ObjectId(mid) }).sendTime;
+    console.log(lastSeen); 
+    const { modifiedCount } = await chats.updateOne(
+      { _id: new ObjectId(cid) },
+      { $set: { "users.$[user].lastSeen": lastSeen } },
+      { arrayFilters: [{ "user._id": new ObjectId(uid) }] }
+    );
+
+    if (modifiedCount !== 1) {
+      throw new Error(
+        `Failed to update readTime in chat ID ${cid}`);
+    }
+    return lastSeen;
+  } catch (error) {
+    throw new Error(`Error update readTime in chat ID ${cid}: ${error.message}`)
   }
 }
 

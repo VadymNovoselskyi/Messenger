@@ -3,7 +3,7 @@
 	import MessageField from '$lib/components/MessageField.svelte';
 	import Loader from '$lib/components/Loader.svelte';
 	import Scrollbar from '$lib/components/Scrollbar.svelte';
-	import { getExtraMessages, getExtraNewMessages } from '$lib/api.svelte';
+	import { getExtraMessages, getExtraNewMessages, sendReadUpdate } from '$lib/api.svelte';
 	import { formatISODate, getCookie, createObserver } from '$lib/utils';
 	import type { Chat, Message } from '$lib/types';
 
@@ -35,6 +35,12 @@
 		handleMessageRead();
 	});
 
+	let stashedReadCount = $state(0);
+	let firstRead = $state(0);
+	let readTimeoutId = $state(0);
+	const MAX_STASHED_COUNT = 5;
+	const MAX_READ_TIMEOUT = 2000; //in ms
+
 	async function handleTopIntersection(): Promise<void> {
 		//saves the current top element, to keep the scroll position later
 		let prevTopId = lastMessages[0]._id;
@@ -62,12 +68,12 @@
 
 		if (isDragging) scrollBar.onMouseDown();
 	}
-	
+
 	async function handleBottomIntersection(): Promise<void> {
 		readObserver.disconnect(); //disconnect all previous messages
 		//accounts for unreliability of intersectionObserver on fast scroll/drag
 		chat.unreadCount = startingUnreadCount - bottomIndex + receivedReadCount;
-		
+
 		//check if anchor was reached by drag
 		let isDragging = false;
 		if (scrollBar) isDragging = scrollBar.isDraggingOn();
@@ -107,6 +113,25 @@
 
 	async function handleMessageRead() {
 		chat.unreadCount--;
+
+		if (!stashedReadCount) {
+			readTimeoutId = setTimeout(() => {
+				const lastReadIndex = messages.length - receivedUnreadCount + (startingUnreadCount - unreadCount) - 1;
+				sendReadUpdate(chat._id, messages[lastReadIndex]._id);
+
+				stashedReadCount = 0;
+			}, MAX_READ_TIMEOUT);
+			firstRead = Date.now();
+		}
+		stashedReadCount++;
+
+		if (stashedReadCount >= MAX_STASHED_COUNT || Date.now() - firstRead > MAX_READ_TIMEOUT) {
+			const lastReadIndex = messages.length - receivedUnreadCount + (startingUnreadCount - unreadCount) - 1;
+			sendReadUpdate(chat._id, messages[lastReadIndex]._id);
+
+			clearTimeout(readTimeoutId);
+			stashedReadCount = 0;
+		}
 	}
 
 	async function setAnchors() {
@@ -156,15 +181,15 @@
 	});
 
 	$effect(() => {
-		if(!top_anchor) return;
+		if (!top_anchor) return;
 		topObserver.disconnect();
 		topObserver.observe(top_anchor);
-	})
+	});
 	$effect(() => {
 		if (!bottom_anchor) return;
 		bottomObserver.disconnect();
 		bottomObserver.observe(bottom_anchor);
-	})
+	});
 
 	const TOP_ANCHOR_INDEX = 0;
 	//theoreticaly (!!!) this line should work for every number, but plz keep it as
@@ -213,7 +238,7 @@
 		// 	'readStacksLoaded, unreadStacksLoaded, indexOffset',
 		// 	readStacksLoaded,
 		// 	unreadStacksLoaded,
-		// 	indexOffset
+		// 	indexOffsetconsole.log('Sending read update, timeout', stashedReadCount, Date.now() - firstRead)
 		// );
 
 		readIndexesToShow = Math.min(receivedReadCount, readStacksLoaded * INDEXES_PER_STACK);
