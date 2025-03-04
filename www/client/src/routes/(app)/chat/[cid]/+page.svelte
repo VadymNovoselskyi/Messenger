@@ -12,6 +12,14 @@
 	import ChatList from '$lib/components/ChatList.svelte';
 	import MessageList from '$lib/components/MessageList.svelte';
 
+	let chat: Chat | undefined = $state();
+	let index: number | undefined = $state();
+	let messageList = $state() as MessageList
+
+	function onChatChange() {
+		if(messageList) messageList.destroy()
+	}
+
 	onMount(() => {
 		if (!getCookie('uid') || !getCookie('token')) {
 			console.log(getCookie('uid'), getCookie('token'));
@@ -21,14 +29,12 @@
 		if (browser && !memory.chats.length) requestChats();
 	});
 
-	let chat: Chat | undefined = $state();
-	let index: number | undefined = $state();
 	$effect(() => {
 		const { cid } = page.params;
 		chat = memory.chats.find((chat) => chat._id === cid);
 		if (chat) index = memory.chats.indexOf(chat);
 		else if (memory.chats.length) {
-			goto('/') 
+			goto('/');
 		}
 	});
 </script>
@@ -43,13 +49,13 @@
 
 <div id="wrapper">
 	<section id="chats-list">
-		<ChatList bind:chats={memory.chats} openedIndex={index} />
+		<ChatList bind:chats={memory.chats} openedIndex={index} {onChatChange} />
 	</section>
 
 	{#if chat}
 		{#key chat}
 			<!-- re-renders the component when chats change -->
-			<MessageList {chat} submitFn={sendMessage} />
+			<MessageList bind:this={messageList} {chat} submitFn={sendMessage} />
 		{/key}
 	{/if}
 </div>

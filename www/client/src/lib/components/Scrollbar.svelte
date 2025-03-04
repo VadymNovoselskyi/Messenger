@@ -22,6 +22,7 @@
 		if (animationFrameId !== null) {
 			cancelAnimationFrame(animationFrameId);
 		}
+		if(!scrollableContent) requestAnimationFrame(updateThumbPosition);
 
 		animationFrameId = requestAnimationFrame(() => {
 			const contentHeight = scrollableContent.scrollHeight;

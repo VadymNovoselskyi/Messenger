@@ -43,7 +43,7 @@ export async function requestChats(): Promise<void> {
 	};
 
 	try {
-		const payload = await sendRequest(message);
+		const payload = await sendRequest(message, 10000);
 		memory.chats = payload.chats;
 		sortChats();
 	} catch (error) {
@@ -65,8 +65,10 @@ export async function getExtraMessages(cid: string, currentIndex: number): Promi
 	};
 
 	try {
-		const { cid, extraMessages }: { cid: string; extraMessages: Message[] } =
-			await sendRequest(message);
+		const { cid, extraMessages }: { cid: string; extraMessages: Message[] } = await sendRequest(
+			message,
+			10000
+		);
 		const chat = memory.chats.find((chat) => chat._id === cid);
 
 		if (!chat) {
@@ -94,7 +96,7 @@ export async function getExtraNewMessages(cid: string, unreadCount: number): Pro
 
 	try {
 		const { cid, extraNewMessages }: { cid: string; extraNewMessages: Message[] } =
-			await sendRequest(message);
+			await sendRequest(message, 10000);
 		const chat = memory.chats.find((chat) => chat._id === cid);
 
 		if (!chat) {
@@ -123,9 +125,8 @@ export async function sendReadUpdate(cid: string, mid: string): Promise<void> {
 
 	try {
 		const { cid, lastSeen }: { cid: string; lastSeen: string } = await sendRequest(message);
-		console.log(cid, lastSeen)
 	} catch (error) {
-		console.error('Error in getExtraNewMessages:', error);
+		console.error('Error in sendReadUpdate:', error);
 		return Promise.reject(error);
 	}
 }
@@ -169,7 +170,7 @@ export async function sendMessage(event: Event): Promise<void> {
 	};
 	try {
 		const { cid, message, tempMID }: { cid: string; message: Message; tempMID: string } =
-			await sendRequest(apiCall);
+			await sendRequest(apiCall, 10000);
 
 		const chat = memory.chats.find((chat) => chat._id === cid);
 		if (!chat) throw new Error(`Chat with id ${cid} not found`);
@@ -181,8 +182,7 @@ export async function sendMessage(event: Event): Promise<void> {
 		}
 		chat.messages[index] = { ...message };
 
-		const currentTime = new Date().toISOString();
-		chat.lastModified = currentTime;
+		chat.lastModified = message.sendTime;
 		sortChats();
 	} catch (error) {
 		console.error('Error in sendMessage:', error);
@@ -208,7 +208,7 @@ export async function addChat(event: SubmitEvent): Promise<void> {
 	};
 
 	try {
-		const { createdChat } = await sendRequest(message);
+		const { createdChat } = await sendRequest(message, 10000);
 		memory.chats = [createdChat, ...memory.chats];
 		console.log(memory.chats);
 	} catch (error) {
@@ -237,7 +237,7 @@ export async function login(event: SubmitEvent): Promise<void> {
 	};
 
 	try {
-		const { uid, token } = await sendRequest(message);
+		const { uid, token } = await sendRequest(message, 10000);
 		setCookie('uid', uid, 28);
 		setCookie('token', token, 28);
 		console.log(getCookie('token'));
@@ -268,7 +268,7 @@ export async function signup(event: SubmitEvent): Promise<void> {
 	};
 
 	try {
-		const { uid, token } = await sendRequest(message);
+		const { uid, token } = await sendRequest(message, 10000);
 		setCookie('uid', uid, 28);
 		setCookie('token', token, 28);
 		console.log(getCookie('token'));
@@ -279,18 +279,20 @@ export async function signup(event: SubmitEvent): Promise<void> {
 	}
 }
 
-async function sendRequest(message: APICall, timeout: number = 10000): Promise<any> {
+async function sendRequest(message: APICall, timeout?: number): Promise<any> {
 	const ws = await getWS();
 	return new Promise((resolve, reject) => {
 		pendingRequests.set(message.id, { resolve, reject });
 		ws.send(JSON.stringify(message));
 
-		setTimeout(() => {
-			if (pendingRequests.has(message.id)) {
-				pendingRequests.delete(message.id);
-				reject(new Error('Request timed out'));
-			}
-		}, timeout);
+		if (timeout) {
+			setTimeout(() => {
+				if (pendingRequests.has(message.id)) {
+					pendingRequests.delete(message.id);
+					reject(new Error('Request timed out'));
+				}
+			}, timeout);
+		}
 	});
 }
 
@@ -316,6 +318,11 @@ export function handleServerMessage(event: MessageEvent): void {
 
 		chat.messages.push(message);
 		chat.unreadCount++;
+		chat.receivedNewCount++;
+		chat.lastModified = message.sendTime;
+		sortChats();
+	} else if (api === 'read_update') {
+		console.log(payload.cid, payload.lastSeen)
 	} else {
 		console.warn('Received response for unknown request ID:', id);
 	}

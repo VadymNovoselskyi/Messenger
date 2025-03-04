@@ -8,7 +8,11 @@
 	import { formatISODate, getCookie } from '$lib/utils';
 	import type { Chat, User } from '$lib/types';
 
-	let { chats = $bindable(), openedIndex }: { chats: Chat[]; openedIndex?: number } = $props();
+	let {
+		chats = $bindable(),
+		openedIndex,
+		onChatChange
+	}: { chats: Chat[]; openedIndex?: number; onChatChange?: () => void } = $props();
 
 	let observer: IntersectionObserver;
 	let showAddChat = $state(false);
@@ -106,6 +110,9 @@
 				href="{page.url.origin}/chat/{chat._id}"
 				class="chat"
 				class:current={page.url.pathname === `/chat/${chat._id}`}
+				onclick={() => {
+					if (page.params.cid !== chat._id && onChatChange) onChatChange();
+				}}
 			>
 				<img
 					src={''}
