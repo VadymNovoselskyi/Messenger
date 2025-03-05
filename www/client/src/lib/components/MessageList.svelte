@@ -12,7 +12,10 @@
 		$derived(chat);
 	let receivedReadCount = $derived(messages.length - receivedUnreadCount);
 
-	const startingUnreadCount = chat.unreadCount;
+	// svelte-ignore state_referenced_locally
+	const oldUnreadCount = chat.unreadCount - receivedNewCount;
+	const totalUnreadCount = $derived(oldUnreadCount + receivedNewCount);
+
 	// svelte-ignore state_referenced_locally
 	const firstUnreadId = messages[receivedReadCount - 1]._id;
 
@@ -53,7 +56,7 @@
 		if (topIndex <= 0) {
 			extraMessagesPromise = getExtraMessages(
 				chat._id,
-				messages.length - receivedUnreadCount + startingUnreadCount
+				messages.length - receivedUnreadCount + totalUnreadCount
 			);
 			await extraMessagesPromise;
 		}
@@ -73,13 +76,10 @@
 		readObserver.disconnect(); //disconnect all previous messages
 
 		//accounts for unreliability of intersectionObserver on fast scroll/drag
-		if (
-			receivedUnreadCount - (bottomIndex - receivedReadCount) === 0 &&
-			receivedUnreadCount - (bottomIndex - receivedReadCount) !== chat.unreadCount
-		) {
-			chat.unreadCount = startingUnreadCount - bottomIndex + receivedReadCount;
+		if (receivedUnreadCount - (bottomIndex - receivedReadCount) === 0) {
+			chat.unreadCount = totalUnreadCount - bottomIndex + receivedReadCount;
 			const lastReadIndex =
-				messages.length - receivedUnreadCount + (startingUnreadCount - unreadCount) - 1;
+				messages.length - receivedUnreadCount + (totalUnreadCount - unreadCount) - 1;
 			if (lastReadIndex < messages.length) sendReadUpdate(chat._id, messages[lastReadIndex]._id);
 		}
 
@@ -106,7 +106,7 @@
 
 		//number of unread messages that have not been read (that are in the message array)
 		const unreadUnrenderedCount = receivedUnreadCount - (bottomIndex - receivedReadCount);
-		const leftUnreadCount = receivedUnreadCount - (startingUnreadCount - unreadCount);
+		const leftUnreadCount = receivedUnreadCount - (totalUnreadCount - unreadCount);
 
 		//checks if some unread messages are rendered
 		if (unreadIndexesToShow && unreadUnrenderedCount <= leftUnreadCount) {
@@ -125,7 +125,7 @@
 		if (!stashedReadCount) {
 			readTimeoutId = setTimeout(() => {
 				const lastReadIndex =
-					messages.length - receivedUnreadCount + (startingUnreadCount - unreadCount) - 1;
+					messages.length - receivedUnreadCount + (totalUnreadCount - unreadCount) - 1;
 				sendReadUpdate(chat._id, messages[lastReadIndex]._id);
 
 				stashedReadCount = 0;
@@ -135,7 +135,7 @@
 
 		if (stashedReadCount >= MAX_STASHED_COUNT) {
 			const lastReadIndex =
-				messages.length - receivedUnreadCount + (startingUnreadCount - unreadCount) - 1;
+				messages.length - receivedUnreadCount + (totalUnreadCount - unreadCount) - 1;
 
 			if (lastReadIndex <= messages.length) sendReadUpdate(chat._id, messages[lastReadIndex]._id);
 
@@ -229,10 +229,20 @@
 		receivedNewCount;
 		untrack(() => {
 			readObserver.disconnect(); //disconnect all previous messages
+			if (totalUnreadCount < INDEXES_PER_STACK * MAX_STACKS) {
+				totalUnreadCount <= unreadStacksLoaded * INDEXES_PER_STACK
+					? recalculateIndexes(0)
+					: recalculateIndexes(-1);
+				console.log(
+					'totalUnreadCount, unreadStacksLoaded * INDEXES_PER_STACK',
+					totalUnreadCount,
+					unreadStacksLoaded * INDEXES_PER_STACK
+				);
+			}
 
 			//number of unread messages that have not been read (that are in the message array)
 			const unreadUnrenderedCount = receivedUnreadCount - (bottomIndex - receivedReadCount);
-			const leftUnreadCount = receivedUnreadCount - (startingUnreadCount - unreadCount);
+			const leftUnreadCount = receivedUnreadCount - (totalUnreadCount - unreadCount);
 
 			//checks if some unread messages are rendered
 			if (unreadIndexesToShow && unreadUnrenderedCount <= leftUnreadCount) {
@@ -269,13 +279,6 @@
 		} else if (direction === 1) readStacksLoaded++;
 		else if (direction === -1) unreadStacksLoaded++;
 
-		// console.log(
-		// 	'readStacksLoaded, unreadStacksLoaded, indexOffset',
-		// 	readStacksLoaded,
-		// 	unreadStacksLoaded,
-		// 	indexOffset
-		// );
-
 		readIndexesToShow = Math.min(receivedReadCount, readStacksLoaded * INDEXES_PER_STACK);
 		unreadIndexesToShow = Math.min(receivedUnreadCount, unreadStacksLoaded * INDEXES_PER_STACK);
 
@@ -287,20 +290,20 @@
 		requestAnimationFrame(() => null);
 	}
 
-	onMount(() => {
-		setAnchors();
+	onMount(async () => {
 		if (unreadCount) unreadStacksLoaded++;
-		recalculateIndexes(0);
+		await recalculateIndexes(0);
+		setAnchors();
 	});
 
 	export function destroy() {
 		if (stashedReadCount) {
 			clearInterval(readTimeoutId);
 			const lastReadIndex =
-				messages.length - receivedUnreadCount + (startingUnreadCount - unreadCount) - 1;
+				messages.length - receivedUnreadCount + (totalUnreadCount - unreadCount) - 1;
 			if (lastReadIndex < messages.length) sendReadUpdate(chat._id, messages[lastReadIndex]._id);
 		}
-		chat.receivedUnreadCount -= startingUnreadCount - unreadCount;
+		chat.receivedUnreadCount -= totalUnreadCount - unreadCount;
 
 		topObserver.disconnect();
 		bottomObserver.disconnect();
@@ -338,7 +341,7 @@
 				<p class="text">{message.text}</p>
 				<p class="sendTime">{formatISODate(message.sendTime)}</p>
 			</div>
-			{#if message._id === firstUnreadId && startingUnreadCount}
+			{#if message._id === firstUnreadId && totalUnreadCount && i !== lastMessages.length - 1}
 				<div bind:this={unread_anchor} id="unread-anchor" class="anchor">Unread Messages</div>
 			{/if}
 		{/each}

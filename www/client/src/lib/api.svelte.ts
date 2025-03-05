@@ -318,6 +318,7 @@ export function handleServerMessage(event: MessageEvent): void {
 
 		chat.messages.push(message);
 		chat.unreadCount++;
+		chat.receivedUnreadCount++;
 		chat.receivedNewCount++;
 		chat.lastModified = message.sendTime;
 		sortChats();
