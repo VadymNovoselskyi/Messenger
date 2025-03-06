@@ -175,33 +175,37 @@ wss.on("connection", ws => {
         case "extra_messages":
           const { cid, currentIndex } = payload;
           const extraMessages = await getExtraMessages(cid, currentIndex);
-          ws.send(
-            JSON.stringify({
-              api,
-              id,
-              status: "success",
-              payload: {
-                cid,
-                extraMessages,
-              },
-            })
-          );
+          setTimeout(() => {
+            ws.send(
+              JSON.stringify({
+                api,
+                id,
+                status: "success",
+                payload: {
+                  cid,
+                  extraMessages,
+                },
+              })
+            );
+          }, 2000);
           break;
 
         case "extra_new_messages": {
           const { cid, unreadCount } = payload;
           const extraNewMessages = await getExtraNewMessages(cid, unreadCount);
-          ws.send(
-            JSON.stringify({
-              api,
-              id,
-              status: "success",
-              payload: {
-                cid,
-                extraNewMessages,
-              },
-            })
-          );
+          setTimeout(() => {
+            ws.send(
+              JSON.stringify({
+                api,
+                id,
+                status: "success",
+                payload: {
+                  cid,
+                  extraNewMessages,
+                },
+              })
+            );
+          }, 2000);
           break;
         }
 

@@ -25,7 +25,8 @@ export async function getChats(uid) {
           sendTime: { $gt: lastSeen },
         });
 
-        const unreadSkip = Math.max(unreadCount - EXTRA_MESSAGES, 0);
+        const unreadSkip = Math.max(unreadCount - INIT_MESSAGES, 0);
+
         const chatMessages = await messages
           .find({ cid: chat._id })
           .sort({ sendTime: -1 })
