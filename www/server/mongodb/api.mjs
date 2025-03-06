@@ -25,8 +25,7 @@ export async function getChats(uid) {
           sendTime: { $gt: lastSeen },
         });
 
-        const unreadSkip =
-          unreadCount > INIT_MESSAGES ? unreadCount - INIT_MESSAGES : 0;
+        const unreadSkip = Math.max(unreadCount - EXTRA_MESSAGES, 0);
         const chatMessages = await messages
           .find({ cid: chat._id })
           .sort({ sendTime: -1 })
@@ -38,6 +37,7 @@ export async function getChats(uid) {
         chat.unreadCount = unreadCount;
         chat.receivedUnreadCount = Math.min(unreadCount, INIT_MESSAGES);
         chat.receivedNewCount = 0;
+        chat.latestMessages = [];
         return chat;
       })
     );
@@ -68,9 +68,7 @@ export async function getExtraMessages(cid, currentIndex) {
 
 export async function getExtraNewMessages(cid, unreadCount) {
   try {
-    const unreadSkip =
-      unreadCount > EXTRA_MESSAGES ? unreadCount - EXTRA_MESSAGES : 0;
-
+    const unreadSkip = Math.max(unreadCount - EXTRA_MESSAGES, 0);
     const extraNewMessages = await messages
       .find({ cid: new ObjectId(cid) })
       .sort({ sendTime: -1 })

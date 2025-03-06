@@ -10,13 +10,14 @@ export interface Message {
 	from: string; //User
 	text: string;
 	sendTime: string; //ISO-date
-	isReceived?: boolean;
+	sending?: boolean;
 }
 
 export interface Chat {
 	_id: string; //ID type?
 	users: User[];
 	messages: Message[];
+	latestMessages: Message[]
 	unreadCount: number;
 	receivedUnreadCount: number;
 	receivedNewCount: number;

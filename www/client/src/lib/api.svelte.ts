@@ -151,7 +151,7 @@ export async function sendMessage(event: Event): Promise<void> {
 		from: getCookie('uid') ?? '',
 		text: input,
 		sendTime: currentTime,
-		isReceived: false
+		sending: true
 	});
 
 	chat.lastModified = currentTime;
@@ -180,8 +180,7 @@ export async function sendMessage(event: Event): Promise<void> {
 			alert(`Couldn't find message with tempMID: ${tempMID}`);
 			return;
 		}
-		chat.messages[index] = { ...message };
-
+		chat.messages[index] = message;
 		chat.lastModified = message.sendTime;
 		sortChats();
 	} catch (error) {
@@ -210,7 +209,6 @@ export async function addChat(event: SubmitEvent): Promise<void> {
 	try {
 		const { createdChat } = await sendRequest(message, 10000);
 		memory.chats = [createdChat, ...memory.chats];
-		console.log(memory.chats);
 	} catch (error) {
 		console.error('Error in addChat:', error);
 		return Promise.reject(error);
@@ -316,7 +314,7 @@ export function handleServerMessage(event: MessageEvent): void {
 		const chat = memory.chats.find((chat) => chat._id === cid);
 		if (!chat) throw new Error(`Chat with id ${cid} not found`);
 
-		chat.messages.push(message);
+		chat.latestMessages = [...chat.latestMessages, message];
 		chat.unreadCount++;
 		chat.receivedUnreadCount++;
 		chat.receivedNewCount++;
