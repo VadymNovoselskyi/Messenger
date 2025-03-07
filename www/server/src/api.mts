@@ -1,15 +1,15 @@
 import { ObjectId } from "mongodb";
-import { chats, users, messages } from "./connect.mjs";
+import { chats, users, messages } from "./mongodb/connect.mjs";
 import bcrypt from "bcrypt";
 
 const INIT_CHATS = 10;
 const INIT_MESSAGES = 40;
 const EXTRA_MESSAGES = 60;
 
-export async function getChats(uid) {
+export async function getChats(userId: string) {
   try {
     let userChats = await chats
-      .find({ "users._id": new ObjectId(uid) })
+      .find({ "users._id": new ObjectId(userId) })
       .sort({ lastModified: -1 })
       .limit(INIT_CHATS)
       .toArray();
@@ -17,18 +17,18 @@ export async function getChats(uid) {
     userChats = await Promise.all(
       userChats.map(async chat => {
         const lastSeen = chat.users.find(
-          user => user._id.toString() === uid
+          (user: any) => user._id.toString() === userId
         ).lastSeen;
         const unreadCount = await messages.countDocuments({
-          cid: chat._id,
-          from: { $ne: new ObjectId(uid) },
+          chatId: chat._id,
+          from: { $ne: new ObjectId(userId) },
           sendTime: { $gt: lastSeen },
         });
 
         const unreadSkip = Math.max(unreadCount - INIT_MESSAGES, 0);
 
         const chatMessages = await messages
-          .find({ cid: chat._id })
+          .find({ chatId: new ObjectId(chat._id) })
           .sort({ sendTime: -1 })
           .skip(unreadSkip)
           .limit(INIT_MESSAGES + Math.min(unreadCount, INIT_MESSAGES))
@@ -45,76 +45,83 @@ export async function getChats(uid) {
 
     return userChats;
   } catch (error) {
+    const message = error instanceof Error ? error.message : "An unknown error occurred";
     throw new Error(
-      `Error fetching chats for user ID ${uid}: ${error.message}`
+      `Error fetching chats for user ID ${userId}: ${message}`
     );
   }
 }
 
-export async function getExtraMessages(cid, currentIndex) {
+export async function getExtraMessages(chatId: string, currentIndex: number) {
   try {
     const extraMessages = await messages
-      .find({ cid: new ObjectId(cid) })
+      .find({ chatId: new ObjectId(chatId) })
       .sort({ sendTime: -1 })
       .skip(currentIndex)
       .limit(EXTRA_MESSAGES)
       .toArray();
     return extraMessages.reverse();
   } catch (error) {
+    const message = error instanceof Error ? error.message : "An unknown error occurred";
     throw new Error(
-      `Error getting extra messages in chat ID ${cid}: ${error.message}`
+      `Error getting extra messages in chat ID ${chatId}: ${message}`
     );
   }
 }
 
-export async function getExtraNewMessages(cid, unreadCount) {
+export async function getExtraNewMessages(chatId: string, unreadCount: number) {
   try {
     const unreadSkip = Math.max(unreadCount - EXTRA_MESSAGES, 0);
     const extraNewMessages = await messages
-      .find({ cid: new ObjectId(cid) })
+      .find({ chatId: new ObjectId(chatId) })
       .sort({ sendTime: -1 })
       .skip(unreadSkip)
       .limit(Math.min(unreadCount, EXTRA_MESSAGES))
       .toArray();
     return extraNewMessages.reverse();
   } catch (error) {
+    const message = error instanceof Error ? error.message : "An unknown error occurred";
     throw new Error(
-      `Error getting new messages in chat ID ${cid}: ${error.message}`
+      `Error getting new messages in chat ID ${chatId}: ${message}`
     );
   }
 }
 
-export async function readUpdate(uid, cid, mid) {
+export async function readUpdate(userId: string, chatId: string, messageId: string) {
   try {
-    const { sendTime } = await messages.findOne({ _id: new ObjectId(mid) });
+    const message = await messages.findOne({ _id: new ObjectId(messageId) });
+    if (!message) throw new Error(`Didnt find message ${messageId}`);
+    const { sendTime } = message;
     await chats.updateOne(
-      { _id: new ObjectId(cid) },
+      { _id: new ObjectId(chatId) },
       { $set: { "users.$[user].lastSeen": sendTime } },
-      { arrayFilters: [{ "user._id": new ObjectId(uid) }] }
+      { arrayFilters: [{ "user._id": new ObjectId(userId) }] }
     );
 
-    const chat = await chats.findOne({ _id: new ObjectId(cid) });
+    const chat = await chats.findOne({ _id: new ObjectId(chatId) });
+    if (!chat) throw new Error(`Couldnt find chat for chatId ${chatId}`);
     const receivingUID = chat.users
-      .find(user => user._id.toString() !== uid)
+      .find((user: any) => user._id.toString() !== userId)
       ._id.toString();
     return { sendTime, receivingUID };
   } catch (error) {
+    const message = error instanceof Error ? error.message : "An unknown error occurred";
     throw new Error(
-      `Error update readTime in chat ID ${cid}: ${error.message}`
+      `Error update readTime in chat ID ${chatId}: ${message}`
     );
   }
 }
 
-export async function sendMessage(uid, cid, message) {
+export async function sendMessage(userId: string, chatId: string, message: string) {
   try {
     const { acknowledged, insertedId } = await messages.insertOne({
-      cid: new ObjectId(cid),
-      from: new ObjectId(uid),
+      chatId: new ObjectId(chatId),
+      from: new ObjectId(userId),
       text: message,
       sendTime: new Date(),
     });
     const { modifiedCount } = await chats.updateOne(
-      { _id: new ObjectId(cid) },
+      { _id: new ObjectId(chatId) },
       {
         $set: { lastModified: new Date() },
       }
@@ -122,16 +129,17 @@ export async function sendMessage(uid, cid, message) {
 
     if (!acknowledged || !insertedId || modifiedCount !== 1) {
       throw new Error(
-        `Failed to send message in chat ID ${cid}. 
+        `Failed to send message in chat ID ${chatId}. 
               acknowledged: ${acknowledged}, 
               insertedId: ${insertedId}, 
-              modifiedCount: ${result.modifiedCount}`
+              modifiedCount: ${modifiedCount}`
       );
     }
 
-    const chat = await chats.findOne({ _id: new ObjectId(cid) });
+    const chat = await chats.findOne({ _id: new ObjectId(chatId) });
+    if (!chat) throw new Error(`Couldnt find chat with chatId ${chatId}`);
     const receivingUID = chat.users.find(
-      user => user._id.toString() !== uid
+      (user: any) => user._id.toString() !== userId
     )._id;
     const sentMessage = await messages.findOne({ _id: insertedId });
     return {
@@ -139,13 +147,14 @@ export async function sendMessage(uid, cid, message) {
       receivingUID,
     };
   } catch (error) {
+    const message = error instanceof Error ? error.message : "An unknown error occurred";
     throw new Error(
-      `Error sending message in chat ID ${cid}: ${error.message}`
+      `Error sending message in chat ID ${chatId}: ${message}`
     );
   }
 }
 
-export async function findUser(username) {
+export async function findUser(username: string) {
   try {
     const user = await users.findOne({ username });
     if (!user) {
@@ -153,13 +162,14 @@ export async function findUser(username) {
     }
     return user;
   } catch (error) {
+    const message = error instanceof Error ? error.message : "An unknown error occurred";
     throw new Error(
-      `Error finding user with username "${username}": ${error.message}`
+      `Error finding user with username "${username}": ${message}`
     );
   }
 }
 
-export async function createUser(username, password) {
+export async function createUser(username: string, password: string) {
   try {
     const existingUser = await users.findOne({ username });
     if (existingUser) {
@@ -174,11 +184,12 @@ export async function createUser(username, password) {
 
     return insertedId;
   } catch (error) {
-    throw new Error(`Error creating user "${username}": ${error.message}`);
+    const message = error instanceof Error ? error.message : "An unknown error occurred";
+    throw new Error(`Error creating user "${username}": ${message}`);
   }
 }
 
-export async function createChat(creatingUID, receivingUsername) {
+export async function createChat(creatingUID: string, receivingUsername: string) {
   try {
     const creatingUser = await users.findOne({
       _id: new ObjectId(creatingUID),
@@ -236,6 +247,7 @@ export async function createChat(creatingUID, receivingUsername) {
 
     return { createdChat, receivingUID: receivingUser._id };
   } catch (error) {
-    throw new Error(`Error creating chat: ${error.message}`);
+    const message = error instanceof Error ? error.message : "An unknown error occurred";''
+    throw new Error(`Error creating chat: ${message}`);
   }
 }
