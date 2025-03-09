@@ -81,10 +81,11 @@
 		readObserver.disconnect(); //disconnect all previous messages
 
 		//accounts for unreliability of intersectionObserver on fast scroll/drag
-		if (totalUnreadCount - (bottomIndex - receivedReadCount) !== chat.unreadCount && unreadCount) {
+		if (totalUnreadCount - (bottomIndex - receivedReadCount) < unreadCount && unreadCount) {
+			console.log(totalUnreadCount - (bottomIndex - receivedReadCount), unreadCount);
 			chat.unreadCount = totalUnreadCount - bottomIndex + receivedReadCount;
 			const lastReadIndex =
-				messages.length - receivedUnreadCount + (totalUnreadCount - unreadCount) - 1;
+			messages.length - receivedUnreadCount + totalUnreadCount - unreadCount + (totalUnreadCount - oldUnreadCount) +  - 1;
 
 			if (lastReadIndex <= messages.length) sendReadUpdate(chat._id, messages[lastReadIndex]._id);
 			else sendReadUpdate(chat._id, messages[messages.length - 1]._id);
@@ -96,7 +97,7 @@
 		if (isDragging) scrollBar.onMouseUp();
 
 		//saves the current bottom element, to keep the scroll position later
-		const prevBottomId = lastMessages[lastMessages.length - 1]._id;
+		const prevBottomId = (lastMessages[lastMessages.length - 1] ?? [])._id;
 
 		if (
 			unreadCount &&
@@ -136,7 +137,7 @@
 		if (!stashedReadCount) {
 			readTimeoutId = setTimeout(() => {
 				const lastReadIndex =
-					messages.length - receivedUnreadCount + (totalUnreadCount - unreadCount) - 1;
+					messages.length - receivedUnreadCount + totalUnreadCount - unreadCount + (totalUnreadCount - oldUnreadCount) +  - 1;
 
 				if (lastReadIndex <= messages.length) sendReadUpdate(chat._id, messages[lastReadIndex]._id);
 				else sendReadUpdate(chat._id, messages[messages.length - 1]._id);
@@ -148,7 +149,7 @@
 
 		if (stashedReadCount >= MAX_STASHED_COUNT) {
 			const lastReadIndex =
-				messages.length - receivedUnreadCount + (totalUnreadCount - unreadCount) - 1;
+			messages.length - receivedUnreadCount + totalUnreadCount - unreadCount + (totalUnreadCount - oldUnreadCount) +  - 1;
 
 			if (lastReadIndex <= messages.length) sendReadUpdate(chat._id, messages[lastReadIndex]._id);
 			else sendReadUpdate(chat._id, messages[messages.length - 1]._id);
@@ -278,16 +279,15 @@
 		if (!isFullRange) null;
 		else if (readStacksLoaded + unreadStacksLoaded === MAX_STACKS) {
 			if (
-				(direction === 1 &&
-					unreadStacksLoaded > 0 &&
-					receivedReadCount > readStacksLoaded * INDEXES_PER_STACK) ||
-				(direction === -1 &&
-					readStacksLoaded > 0 &&
-					receivedUnreadCount > unreadStacksLoaded * INDEXES_PER_STACK)
+				indexOffset ||
+				(direction === 1 && unreadStacksLoaded === 0) ||
+				(direction === -1 && readStacksLoaded === 0)
 			) {
+				indexOffset += direction * INDEXES_PER_STACK;
+			} else {
 				readStacksLoaded += direction;
 				unreadStacksLoaded -= direction;
-			} else indexOffset += direction * INDEXES_PER_STACK;
+			}
 		} else if (direction === 1) readStacksLoaded++;
 		else if (direction === -1) unreadStacksLoaded++;
 
@@ -310,7 +310,7 @@
 	onMount(async () => {
 		recalculateIndexes(0);
 		if (unreadCount) await recalculateIndexes(-1);
-		firstUnreadId = messages[receivedReadCount - 1]._id;
+		firstUnreadId = (messages[receivedReadCount - 1] ?? [])._id;
 		setAnchors();
 	});
 
