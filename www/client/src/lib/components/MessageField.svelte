@@ -8,7 +8,7 @@
 	let textInput: HTMLInputElement;
 
 	$effect(() => {
-		const { cid } = page.params;
+		const { chatId } = page.params;
 
 		requestAnimationFrame(() => {
 			if (textInput) {

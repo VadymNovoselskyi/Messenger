@@ -351,8 +351,8 @@
 			{/if}
 			<div
 				class="message"
-				class:sent={from === getCookie('uid')}
-				class:received={from !== getCookie('uid')}
+				class:sent={from === getCookie('userId')}
+				class:received={from !== getCookie('userId')}
 				class:sending
 				id={_id}
 			>

@@ -3,18 +3,18 @@
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
 
-	import { requestChats } from '$lib/api.svelte';
+	import { getChats } from '$lib/api.svelte';
 	import { getCookie } from '$lib/utils';
 
 	import { memory } from '$lib/stores/memory.svelte';
 	import ChatList from '$lib/components/ChatList.svelte';
 
 	onMount(() => {
-		if (!getCookie('uid') || !getCookie('token')) {
+		if (!getCookie('userId') || !getCookie('token')) {
 			goto('/login');
 			return;
 		}
-		if (browser && !memory.chats.length) requestChats();
+		if (browser && !memory.chats.length) getChats();
 	});
 </script>
 

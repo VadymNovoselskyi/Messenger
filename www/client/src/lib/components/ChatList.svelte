@@ -2,7 +2,7 @@
 	import { onMount, tick } from 'svelte';
 	import { page } from '$app/state';
 	import { memory } from '$lib/stores/memory.svelte';
-	import { addChat } from '$lib/api.svelte';
+	import { createChat } from '$lib/api.svelte';
 	import Scrollbar from '$lib/components/Scrollbar.svelte';
 
 	import { formatISODate, getCookie } from '$lib/utils';
@@ -76,7 +76,7 @@
 			{ threshold: 0.1 }
 		);
 
-		const { cid } = page.params;
+		const { chatId } = page.params;
 	});
 
 	const INDEXES_PER_STACK = 14;
@@ -111,16 +111,16 @@
 				class="chat"
 				class:current={page.url.pathname === `/chat/${chat._id}`}
 				onclick={() => {
-					if (page.params.cid !== chat._id && onChatChange) onChatChange();
+					if (page.params.chatId !== chat._id && onChatChange) onChatChange();
 				}}
 			>
 				<img
 					src={''}
-					alt={chat.users.find((user: User) => user._id !== getCookie('uid'))!.username}
+					alt={chat.users.find((user: User) => user._id !== getCookie('userId'))!.username}
 					class="profile-picture"
 				/>
 				<p class="chat-name">
-					{chat.users.find((user: User) => user._id !== getCookie('uid'))!.username}
+					{chat.users.find((user: User) => user._id !== getCookie('userId'))!.username}
 				</p>
 				{#if chat.unreadCount}
 					<p class="unread-count">
@@ -166,7 +166,7 @@
 		<button class="close-popup" onclick={() => (showAddChat = false)}>x</button>
 		<form
 			onsubmit={(event: SubmitEvent) => {
-				addChat(event);
+				createChat(event);
 				showAddChat = false;
 			}}
 		>

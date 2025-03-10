@@ -1,17 +1,19 @@
 import WebSocket, { WebSocketServer } from "ws";
-import jwt, { JwtPayload } from 'jsonwebtoken';
+import jwt, { JwtPayload } from "jsonwebtoken";
 import bcrypt from "bcrypt";
 import {
   getChats,
-  getExtraMessages,
-  getExtraNewMessages,
   readUpdate,
   sendMessage,
-  findUser,
-  createUser,
+  getExtraMessages,
+  getExtraNewMessages,
+  readAll,
   createChat,
+  createUser,
+  findUser,
 } from "./api.mjs";
-import { API } from "./types/types.mjs";
+import * as _ from "./types/types.mjs";
+import { ObjectId } from "mongodb";
 
 const secretKey = "y8q6GA@0md8ySuNk";
 
@@ -21,9 +23,15 @@ function generateToken(userId: string): string {
 }
 
 // Helper to send standardized responses.
-function sendResponse(ws: WebSocket, api?: string, id?: string, status?: string, payload?: any): void {
+function sendResponse(
+  ws: WebSocket,
+  api?: string,
+  id?: string,
+  status?: string,
+  payload?: _.response
+): void {
   return ws.send(JSON.stringify({ api, id, status, payload }));
-};
+}
 
 const onlineUsers: Record<string, WebSocket> = {}; // Tracks active connections by user ID.
 
@@ -34,35 +42,18 @@ wss.on("connection", ws => {
 
   ws.on("message", async message => {
     console.log(`Received message: ${message}`);
-    let parsedMessage;
+    let parsedMessage: _.APICall;
     try {
       parsedMessage = JSON.parse(message.toString());
     } catch {
       sendResponse(ws, undefined, undefined, "error", { message: "Invalid JSON format" });
-      return
-    }
-    const { api, id, payload }: { api: API, id: string, payload: any } = parsedMessage;
-
-    // Signup: Create a new user.
-    if (api === API.SIGNUP) {
-      const { username, password } = payload;
-      try {
-        const uid = await createUser(username, password);
-        const token = generateToken(uid.toString());
-        sendResponse(ws, api, id, "success", { uid, token });
-        ws.isAuthenticated = true;
-        ws.userId = uid.toString();
-        onlineUsers[ws.userId] = ws;
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "An unknown error occurred";
-        sendResponse(ws, api, id, "error", { message });
-      }
       return;
     }
+    const { api, id, payload }: { api: _.API; id: string; payload: _.payload } = parsedMessage;
 
     // Login: Authenticate an existing user.
-    if (api === API.LOGIN) {
-      const { username, password } = payload;
+    if (api === _.API.LOGIN) {
+      const { username, password } = payload as _.loginPayload;
       try {
         const user = await findUser(username);
         const isPasswordValid = await bcrypt.compare(password, user.password);
@@ -70,7 +61,7 @@ wss.on("connection", ws => {
           return sendResponse(ws, api, id, "error", { message: "Invalid password" });
         }
         const token = generateToken(user._id.toString());
-        sendResponse(ws, api, id, "success", { uid: user._id, token });
+        sendResponse(ws, api, id, "success", { userId: user._id, token });
         ws.isAuthenticated = true;
         ws.userId = user._id.toString();
         onlineUsers[ws.userId] = ws;
@@ -81,24 +72,43 @@ wss.on("connection", ws => {
       return;
     }
 
+    // Signup: Create a new user.
+    else if (api === _.API.SIGNUP) {
+      const { username, password } = payload as _.signupPayload;
+      try {
+        const userId = await createUser(username, password);
+        const token = generateToken(userId.toString());
+        sendResponse(ws, api, id, "success", { userId, token });
+        ws.isAuthenticated = true;
+        ws.userId = userId.toString();
+        onlineUsers[ws.userId] = ws;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "An unknown error occurred";
+        sendResponse(ws, api, id, "error", { message });
+      }
+      return;
+    }
+
     // If already authenticated, process API calls.
     if (ws.isAuthenticated) {
-      return await handleAuthenticatedCall(api, id, payload, ws.userId ?? '');
+      return await handleAuthenticatedCall(api, id, payload, ws.userId ?? "");
     }
 
     //if not authenticated, check the jwt
     else {
-      const { token } = parsedMessage;
       try {
+        const { token } = parsedMessage;
+        if (!token) throw new Error("No token provided");
+
         const decoded = jwt.verify(token, secretKey);
-        if (typeof decoded === 'string') {
+        if (typeof decoded === "string") {
           throw new Error("Decoded token is a string, expected an object.");
         }
-        
+
         ws.isAuthenticated = true;
         const { userId } = decoded;
         ws.userId = userId;
-        onlineUsers[ws.userId ?? ''] = ws;
+        onlineUsers[ws.userId ?? ""] = ws;
         await handleAuthenticatedCall(api, id, payload, userId);
       } catch (error) {
         const message = error instanceof Error ? error.message : "An unknown error occurred";
@@ -115,69 +125,94 @@ wss.on("connection", ws => {
   });
 
   // Handles authenticated API calls.
-  async function handleAuthenticatedCall(api: API, id: string, payload: any, userId: string): Promise<void> {
+  async function handleAuthenticatedCall(
+    api: _.API,
+    id: string,
+    payload: _.payload,
+    userId: string
+  ): Promise<void> {
     try {
       switch (api) {
-        case "get_chats": {
-          const chats = await getChats(userId);
+        case _.API.GET_CHATS: {
+          const chats = await getChats(new ObjectId(userId));
           sendResponse(ws, api, id, "success", { chats });
           break;
         }
-        case "send_message": {
-          const { tempMID } = payload;
-          const { message, receivingUID } = await sendMessage(userId, payload.cid, payload.message);
+        case _.API.SEND_MESSAGE: {
+          const { chatId, text, tempMessageId } = payload as _.sendMessagePayload;
+          const { message, receivingUserId } = await sendMessage(
+            new ObjectId(userId),
+            new ObjectId(chatId),
+            text
+          );
           // If the recipient is online, forward the message.
-          if (onlineUsers[receivingUID.toString()]) {
-            onlineUsers[receivingUID.toString()].send(
-              JSON.stringify({
-                api: "receive_message",
-                status: "success",
-                payload: { cid: payload.cid, message },
-              })
+          if (onlineUsers[receivingUserId.toString()]) {
+            sendResponse(
+              onlineUsers[receivingUserId.toString()],
+              "receive_message",
+              undefined,
+              "success",
+              {
+                chatId,
+                message,
+                tempMessageId, //delete
+              }
             );
           }
           // Send confirmation to the sender.
-          sendResponse(ws, "receive_message", id, "success", { cid: payload.cid, message, tempMID });
+          sendResponse(ws, "receive_message", id, "success", {
+            chatId,
+            message,
+            tempMessageId,
+          });
           break;
         }
-        case "extra_messages": {
-          const { cid, currentIndex } = payload;
-          const extraMessages = await getExtraMessages(cid, currentIndex);
-          sendResponse(ws, api, id, "success", { cid, extraMessages });
-          break;
-        }
-        case "extra_new_messages": {
-          const { cid, unreadCount } = payload;
-          const extraNewMessages = await getExtraNewMessages(cid, unreadCount);
-          sendResponse(ws, api, id, "success", { cid, extraNewMessages });
-          break;
-        }
-        case "read_update": {
-          const { cid, mid } = payload;
-          const { sendTime, receivingUID } = await readUpdate(userId, cid, mid);
-          if (onlineUsers[receivingUID]) {
-            onlineUsers[receivingUID].send(
-              JSON.stringify({
-                api,
-                status: "success",
-                payload: { cid, lastSeen: sendTime },
-              })
-            );
+
+        case _.API.READ_UPDATE: {
+          const { chatId, messageId } = payload as _.readUpdatePayload;
+          const { sendTime, receivingUserId } = await readUpdate(
+            new ObjectId(userId),
+            new ObjectId(chatId),
+            new ObjectId(messageId)
+          );
+          if (onlineUsers[receivingUserId.toString()]) {
+            sendResponse(onlineUsers[receivingUserId.toString()], api, undefined, "success", {
+              chatId,
+              lastSeen: sendTime,
+            });
           }
           break;
         }
-        case "create_chat": {
-          const { createdChat, receivingUID } = await createChat(userId, payload.username);
+
+        case _.API.EXTRA_MESSAGES: {
+          const { chatId, currentIndex } = payload as _.getExtraMessagesPayload;
+          const extraMessages = await getExtraMessages(new ObjectId(chatId), currentIndex);
+          sendResponse(ws, api, id, "success", { chatId, extraMessages });
+          break;
+        }
+
+        case _.API.EXTRA_NEW_MESSAGES: {
+          const { chatId, unreadCount } = payload as _.getExtraNewMessagesPayload;
+          const extraNewMessages = await getExtraNewMessages(new ObjectId(chatId), unreadCount);
+          sendResponse(ws, api, id, "success", { chatId, extraNewMessages });
+          break;
+        }
+
+        case _.API.READ_ALL: {
+          const { chatId } = payload as _.readAllPayload;
+          await readAll(new ObjectId(chatId), new ObjectId(ws.userId));
+          sendResponse(ws, api, id, "success", {});
+          break;
+        }
+
+        case _.API.CREATE_CHAT: {
+          const { username } = payload as _.createChatPayload;
+          const { createdChat, receivingUserId } = await createChat(new ObjectId(userId), username);
           sendResponse(ws, api, id, "success", { createdChat });
-          if (onlineUsers[receivingUID.toString()]) {
-            onlineUsers[receivingUID.toString()].send(
-              JSON.stringify({
-                api: "create_chat",
-                id,
-                status: "success",
-                payload: { createdChat },
-              })
-            );
+          if (onlineUsers[receivingUserId.toString()]) {
+            sendResponse(onlineUsers[receivingUserId.toString()], api, undefined, "success", {
+              createdChat,
+            });
           }
           break;
         }

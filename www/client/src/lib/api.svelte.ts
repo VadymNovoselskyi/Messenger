@@ -2,7 +2,21 @@ import { page } from '$app/state';
 import { goto } from '$app/navigation';
 import { memory } from '$lib/stores/memory.svelte';
 import { generateId, setCookie, getCookie, sortChats } from '$lib/utils';
-import type { APICall, Message } from '$lib/types';
+import type {
+	APICall,
+	createChatResponse,
+	getChatsResponse,
+	getExtraMessagesResponse,
+	getExtraNewMessagesResponse,
+	loginResponse,
+	Message,
+	response,
+	sendMessagePayload,
+	sendMessageResponse,
+	signupPayload,
+	signupResponse
+} from '$lib/types';
+import { API } from '$lib/types';
 
 const pendingRequests = new Map();
 
@@ -33,100 +47,22 @@ export function getWS(): Promise<WebSocket> {
 	});
 }
 
-export async function requestChats(): Promise<void> {
+export async function getChats(): Promise<void> {
 	const requestId = generateId();
 	const message: APICall = {
-		api: 'get_chats',
+		api: API.GET_CHATS,
 		id: requestId,
 		token: getCookie('token'),
 		payload: {}
 	};
 
 	try {
-		const payload = await sendRequest(message, 10000);
-		memory.chats = payload.chats;
+		const response = await sendRequest(message);
+		const { chats } = response as getChatsResponse;
+		memory.chats = chats;
 		sortChats();
 	} catch (error) {
-		console.error('Error in requestChats:', error);
-		return Promise.reject(error);
-	}
-}
-
-export async function getExtraMessages(cid: string, currentIndex: number): Promise<void> {
-	const requestId = generateId();
-	const message: APICall = {
-		api: 'extra_messages',
-		id: requestId,
-		token: getCookie('token'),
-		payload: {
-			cid,
-			currentIndex
-		}
-	};
-
-	try {
-		const { cid, extraMessages }: { cid: string; extraMessages: Message[] } = await sendRequest(
-			message,
-			10000
-		);
-		const chat = memory.chats.find((chat) => chat._id === cid);
-
-		if (!chat) {
-			alert(`No chat to add extra messages ${cid}`);
-			return;
-		}
-		chat.messages = [...extraMessages, ...chat.messages];
-	} catch (error) {
-		console.error('Error in getExtraMessages:', error);
-		return Promise.reject(error);
-	}
-}
-
-export async function getExtraNewMessages(cid: string, unreadCount: number): Promise<void> {
-	const requestId = generateId();
-	const message: APICall = {
-		api: 'extra_new_messages',
-		id: requestId,
-		token: getCookie('token'),
-		payload: {
-			cid,
-			unreadCount
-		}
-	};
-
-	try {
-		const { cid, extraNewMessages }: { cid: string; extraNewMessages: Message[] } =
-			await sendRequest(message, 10000);
-		const chat = memory.chats.find((chat) => chat._id === cid);
-
-		if (!chat) {
-			alert(`No chat to add extra messages ${cid}`);
-			return;
-		}
-		chat.messages = [...chat.messages, ...extraNewMessages];
-		chat.receivedUnreadCount += extraNewMessages.length;
-	} catch (error) {
-		console.error('Error in getExtraNewMessages:', error);
-		return Promise.reject(error);
-	}
-}
-
-export async function sendReadUpdate(cid: string, mid: string): Promise<void> {
-	const requestId = generateId();
-	const message: APICall = {
-		api: 'read_update',
-		id: requestId,
-		token: getCookie('token'),
-		payload: {
-			cid,
-			mid
-		}
-	};
-
-	try {
-		const { cid, lastSeen }: { cid: string; lastSeen: string } = await sendRequest(message);
-	} catch (error) {
-		console.error('Error in sendReadUpdate:', error);
+		console.error('Error in getChats:', error);
 		return Promise.reject(error);
 	}
 }
@@ -138,17 +74,22 @@ export async function sendMessage(event: Event): Promise<void> {
 	if (!input) return;
 	messageInput.value = '';
 
-	const cid = page.params.cid;
-	const tempMID = generateId();
-	const chat = memory.chats.find((chat) => chat._id === cid);
+	const chatId = page.params.chatId;
+	const chat = memory.chats.find((chat) => chat._id === chatId);
 	if (!chat) {
-		throw new Error(`Chat with id ${cid} not found`);
+		throw new Error(`Chat with id ${chatId} not found`);
 	}
 
+	if (chat.unreadCount) {
+		await readAllUpdate(chatId);
+		await getExtraMessages(chatId, 0);
+	}
+
+	const tempMID = generateId();
 	const currentTime = new Date().toISOString();
 	chat.messages.push({
 		_id: tempMID,
-		from: getCookie('uid') ?? '',
+		from: getCookie('userId') ?? '',
 		text: input,
 		sendTime: currentTime,
 		sending: true
@@ -159,25 +100,30 @@ export async function sendMessage(event: Event): Promise<void> {
 
 	const requestId = generateId();
 	const apiCall: APICall = {
-		api: 'send_message',
+		api: API.SEND_MESSAGE,
 		id: requestId,
 		token: getCookie('token'),
 		payload: {
-			cid,
-			message: input,
-			tempMID
+			chatId,
+			text: input,
+			tempMessageId: tempMID
 		}
 	};
 	try {
-		const { cid, message, tempMID }: { cid: string; message: Message; tempMID: string } =
-			await sendRequest(apiCall, 10000);
+		const response = await sendRequest(apiCall);
+		const {
+			chatId,
+			message,
+			tempMessageId
+		}: { chatId: string; message: Message; tempMessageId: string } =
+			response as sendMessageResponse;
 
-		const chat = memory.chats.find((chat) => chat._id === cid);
-		if (!chat) throw new Error(`Chat with id ${cid} not found`);
+		const chat = memory.chats.find((chat) => chat._id === chatId);
+		if (!chat) throw new Error(`Chat with id ${chatId} not found`);
 
-		const index = chat.messages.findIndex((msg) => msg._id === tempMID);
+		const index = chat.messages.findIndex((msg) => msg._id === tempMessageId);
 		if (index === -1) {
-			alert(`Couldn't find message with tempMID: ${tempMID}`);
+			alert(`Couldn't find message with tempMessageId: ${tempMessageId}`);
 			return;
 		}
 		chat.messages[index] = message;
@@ -189,7 +135,114 @@ export async function sendMessage(event: Event): Promise<void> {
 	}
 }
 
-export async function addChat(event: SubmitEvent): Promise<void> {
+export async function sendReadUpdate(chatId: string, messageId: string): Promise<void> {
+	const requestId = generateId();
+	const message: APICall = {
+		api: API.READ_UPDATE,
+		id: requestId,
+		token: getCookie('token'),
+		payload: {
+			chatId,
+			messageId
+		}
+	};
+
+	try {
+		sendRequest(message);
+	} catch (error) {
+		console.error('Error in sendReadUpdate:', error);
+		return Promise.reject(error);
+	}
+}
+
+export async function getExtraMessages(chatId: string, currentIndex: number): Promise<void> {
+	const requestId = generateId();
+	const message: APICall = {
+		api: API.EXTRA_MESSAGES,
+		id: requestId,
+		token: getCookie('token'),
+		payload: {
+			chatId,
+			currentIndex
+		}
+	};
+
+	try {
+		const response = await sendRequest(message);
+		const { chatId, extraMessages }: { chatId: string; extraMessages: Message[] } =
+			response as getExtraMessagesResponse;
+		const chat = memory.chats.find((chat) => chat._id === chatId);
+
+		if (!chat) {
+			alert(`No chat to add extra messages ${chatId}`);
+			return;
+		}
+		chat.messages = [...extraMessages, ...chat.messages];
+	} catch (error) {
+		console.error('Error in getExtraMessages:', error);
+		return Promise.reject(error);
+	}
+}
+
+export async function getExtraNewMessages(chatId: string, unreadCount: number): Promise<void> {
+	const requestId = generateId();
+	const message: APICall = {
+		api: API.EXTRA_NEW_MESSAGES,
+		id: requestId,
+		token: getCookie('token'),
+		payload: {
+			chatId,
+			unreadCount
+		}
+	};
+
+	try {
+		const response = await sendRequest(message);
+		const { chatId, extraNewMessages }: { chatId: string; extraNewMessages: Message[] } =
+			response as getExtraNewMessagesResponse;
+		const chat = memory.chats.find((chat) => chat._id === chatId);
+
+		if (!chat) {
+			alert(`No chat to add extra messages ${chatId}`);
+			return;
+		}
+		chat.messages = [...chat.messages, ...extraNewMessages];
+		chat.receivedUnreadCount += extraNewMessages.length;
+	} catch (error) {
+		console.error('Error in getExtraNewMessages:', error);
+		return Promise.reject(error);
+	}
+}
+
+export async function readAllUpdate(chatId: string): Promise<void> {
+	const requestId = generateId();
+	const message: APICall = {
+		api: API.READ_ALL,
+		id: requestId,
+		token: getCookie('token'),
+		payload: { chatId }
+	};
+
+	try {
+		await sendRequest(message);
+		const chat = memory.chats.find((chat) => chat._id === chatId);
+
+		if (!chat) {
+			alert(`No chat to read all ${chatId}`);
+			return;
+		}
+		chat.messages = [];
+		chat.latestMessages = [];
+		chat.unreadCount = 0;
+		chat.receivedUnreadCount = 0;
+		chat.receivedNewCount = 0;
+	} catch (error) {
+		console.error('Error in readAllUpdate:', error);
+		return Promise.reject(error);
+	}
+}
+
+export async function createChat(event: SubmitEvent): Promise<void> {
 	event.preventDefault();
 	const usernameInput = (event.currentTarget as HTMLFormElement).username;
 	const username = usernameInput.value;
@@ -198,7 +251,7 @@ export async function addChat(event: SubmitEvent): Promise<void> {
 
 	const requestId = generateId();
 	const message: APICall = {
-		api: 'create_chat',
+		api: API.CREATE_CHAT,
 		id: requestId,
 		token: getCookie('token'),
 		payload: {
@@ -207,10 +260,11 @@ export async function addChat(event: SubmitEvent): Promise<void> {
 	};
 
 	try {
-		const { createdChat } = await sendRequest(message, 10000);
+		const response = await sendRequest(message);
+		const { createdChat } = response as createChatResponse;
 		memory.chats = [createdChat, ...memory.chats];
 	} catch (error) {
-		console.error('Error in addChat:', error);
+		console.error('Error in createChat:', error);
 		return Promise.reject(error);
 	}
 }
@@ -225,7 +279,7 @@ export async function login(event: SubmitEvent): Promise<void> {
 
 	const requestId = generateId();
 	const message: APICall = {
-		api: 'login',
+		api: API.LOGIN,
 		id: requestId,
 		token: getCookie('token'),
 		payload: {
@@ -235,8 +289,9 @@ export async function login(event: SubmitEvent): Promise<void> {
 	};
 
 	try {
-		const { uid, token } = await sendRequest(message, 10000);
-		setCookie('uid', uid, 28);
+		const response = await sendRequest(message);
+		const { userId, token } = response as loginResponse;
+		setCookie('userId', userId, 28);
 		setCookie('token', token, 28);
 		console.log(getCookie('token'));
 		goto('/');
@@ -256,7 +311,7 @@ export async function signup(event: SubmitEvent): Promise<void> {
 
 	const requestId = generateId();
 	const message: APICall = {
-		api: 'signup',
+		api: API.SIGNUP,
 		id: requestId,
 		token: getCookie('token'),
 		payload: {
@@ -266,18 +321,19 @@ export async function signup(event: SubmitEvent): Promise<void> {
 	};
 
 	try {
-		const { uid, token } = await sendRequest(message, 10000);
-		setCookie('uid', uid, 28);
+		const response = await sendRequest(message);
+		const { userId, token } = response as signupResponse;
+		setCookie('userId', userId, 28);
 		setCookie('token', token, 28);
 		console.log(getCookie('token'));
 		goto('/');
 	} catch (error) {
-		console.error('Error in login:', error);
+		console.error('Error in signup:', error);
 		return Promise.reject(error);
 	}
 }
 
-async function sendRequest(message: APICall, timeout?: number): Promise<any> {
+async function sendRequest(message: APICall, timeout?: number): Promise<response> {
 	const ws = await getWS();
 	return new Promise((resolve, reject) => {
 		pendingRequests.set(message.id, { resolve, reject });
@@ -310,9 +366,9 @@ export function handleServerMessage(event: MessageEvent): void {
 
 		pendingRequests.delete(id);
 	} else if (api === 'receive_message') {
-		const { cid, message }: { cid: string; message: Message } = payload;
-		const chat = memory.chats.find((chat) => chat._id === cid);
-		if (!chat) throw new Error(`Chat with id ${cid} not found`);
+		const { chatId, message }: { chatId: string; message: Message } = payload;
+		const chat = memory.chats.find((chat) => chat._id === chatId);
+		if (!chat) throw new Error(`Chat with id ${chatId} not found`);
 
 		chat.latestMessages = [...chat.latestMessages, message];
 		chat.unreadCount++;
@@ -321,7 +377,7 @@ export function handleServerMessage(event: MessageEvent): void {
 		chat.lastModified = message.sendTime;
 		sortChats();
 	} else if (api === 'read_update') {
-		console.log(payload.cid, payload.lastSeen)
+		console.log(payload.chatId, payload.lastSeen);
 	} else {
 		console.warn('Received response for unknown request ID:', id);
 	}

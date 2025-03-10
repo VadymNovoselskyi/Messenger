@@ -5,7 +5,7 @@
 	import { browser } from '$app/environment';
 	import { memory } from '$lib/stores/memory.svelte';
 
-	import { requestChats, sendMessage } from '$lib/api.svelte';
+	import { getChats, sendMessage } from '$lib/api.svelte';
 	import { getCookie } from '$lib/utils';
 	import type { Chat, Message } from '$lib/types';
 
@@ -21,17 +21,17 @@
 	}
 
 	onMount(() => {
-		if (!getCookie('uid') || !getCookie('token')) {
-			console.log(getCookie('uid'), getCookie('token'));
+		if (!getCookie('userId') || !getCookie('token')) {
+			console.log(getCookie('userId'), getCookie('token'));
 			goto('/login');
 			return;
 		}
-		if (browser && !memory.chats.length) requestChats();
+		if (browser && !memory.chats.length) getChats();
 	});
 
 	$effect(() => {
-		const { cid } = page.params;
-		chat = memory.chats.find((chat) => chat._id === cid);
+		const { chatId } = page.params;
+		chat = memory.chats.find((chat) => chat._id === chatId);
 		if (chat) index = memory.chats.indexOf(chat);
 		else if (memory.chats.length) {
 			goto('/');
@@ -42,7 +42,7 @@
 <svelte:head>
 	<title>
 		{chat?.users.find((user) => {
-			return user._id !== getCookie('uid');
+			return user._id !== getCookie('userId');
 		})?.username || 'Chat'}
 	</title>
 </svelte:head>
