@@ -82,7 +82,9 @@ export async function sendMessage(event: Event): Promise<void> {
 
 	if (chat.unreadCount) {
 		await readAllUpdate(chatId);
+		await new Promise(resolve => setTimeout(resolve, 2000))
 		await getExtraMessages(chatId, 0);
+		await new Promise(resolve => setTimeout(resolve, 2000))
 	}
 
 	const tempMID = generateId();

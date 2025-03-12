@@ -14,10 +14,10 @@
 
 	let chat: Chat | undefined = $state();
 	let index: number | undefined = $state();
-	let messageList = $state() as MessageList
+	let messageList = $state() as MessageList;
 
 	function onChatChange() {
-		if(messageList) messageList.destroy()
+		if (messageList) messageList.destroy();
 	}
 
 	onMount(() => {
@@ -31,9 +31,11 @@
 
 	$effect(() => {
 		const { chatId } = page.params;
-		chat = memory.chats.find((chat) => chat._id === chatId);
-		if (chat) index = memory.chats.indexOf(chat);
-		else if (memory.chats.length) {
+		const foundChat = memory.chats.find((c) => c._id === chatId);
+		if (foundChat) {
+			index = memory.chats.indexOf(foundChat);
+			chat = { ...foundChat };
+		} else if (memory.chats.length) {
 			goto('/');
 		}
 	});
@@ -53,7 +55,7 @@
 	</section>
 
 	{#if chat}
-		{#key chat}
+		{#key chat._id}
 			<!-- re-renders the component when chats change -->
 			<MessageList bind:this={messageList} {chat} submitFn={sendMessage} />
 		{/key}

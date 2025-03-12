@@ -237,8 +237,8 @@
 	$effect(() => {
 		lastModified;
 		untrack(() => {
-			console.log();
-			if (bottomIndex === messages.length - 1 || bottomIndex === messages.length)
+			console.log(bottomIndex, messages.length);
+			if (bottomIndex >= messages.length - 1 || bottomIndex === 0 && messages.length !== 0)
 				recalculateIndexes(0);
 		});
 	});
@@ -268,7 +268,7 @@
 	});
 
 	export async function recalculateIndexes(direction: number): Promise<void> {
-		let isFullRange: boolean = false;
+		let isFullRange = false;
 		if (direction === 1) {
 			isFullRange = receivedReadCount >= readStacksLoaded * INDEXES_PER_STACK + indexOffset;
 		} else if (direction === -1) {
@@ -303,6 +303,7 @@
 		bottomIndex = Math.min(receivedReadCount - indexOffset + unreadIndexesToShow, messages.length);
 
 		lastMessages = [...messages.slice(topIndex, bottomIndex)];
+		console.log(lastMessages.length);
 		await tick();
 		requestAnimationFrame(() => null);
 	}
