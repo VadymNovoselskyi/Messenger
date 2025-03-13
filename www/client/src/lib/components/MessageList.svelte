@@ -237,7 +237,6 @@
 	$effect(() => {
 		lastModified;
 		untrack(() => {
-			console.log(bottomIndex, messages.length);
 			if (bottomIndex >= messages.length - 1 || bottomIndex === 0 && messages.length !== 0)
 				recalculateIndexes(0);
 		});
@@ -303,7 +302,6 @@
 		bottomIndex = Math.min(receivedReadCount - indexOffset + unreadIndexesToShow, messages.length);
 
 		lastMessages = [...messages.slice(topIndex, bottomIndex)];
-		console.log(lastMessages.length);
 		await tick();
 		requestAnimationFrame(() => null);
 	}

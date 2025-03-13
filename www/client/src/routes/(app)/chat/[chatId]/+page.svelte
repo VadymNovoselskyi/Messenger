@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount, tick } from 'svelte';
+	import { onMount, tick, untrack } from 'svelte';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
@@ -13,6 +13,7 @@
 	import MessageList from '$lib/components/MessageList.svelte';
 
 	let chat: Chat | undefined = $state();
+	let chantChange: number = $state(0); //Workaraound to trigger reinit (done for readAll)
 	let index: number | undefined = $state();
 	let messageList = $state() as MessageList;
 
@@ -31,13 +32,12 @@
 
 	$effect(() => {
 		const { chatId } = page.params;
-		const foundChat = memory.chats.find((c) => c._id === chatId);
-		if (foundChat) {
-			index = memory.chats.indexOf(foundChat);
-			chat = { ...foundChat };
-		} else if (memory.chats.length) {
-			goto('/');
-		}
+		chat = memory.chats.find((c) => c._id === chatId);
+		if (chat) index = memory.chats.indexOf(chat);
+		else if (memory.chats.length) goto('/');
+		untrack(() => {
+			chantChange++;
+		})
 	});
 </script>
 
@@ -55,7 +55,7 @@
 	</section>
 
 	{#if chat}
-		{#key chat._id}
+		{#key chantChange}
 			<!-- re-renders the component when chats change -->
 			<MessageList bind:this={messageList} {chat} submitFn={sendMessage} />
 		{/key}
