@@ -1,38 +1,44 @@
 import type { ObjectId } from "mongodb";
 
+/** API endpoints enumeration */
 export enum API {
   GET_CHATS = "getChats",
   SEND_MESSAGE = "sendMessage",
+  RECEIVE_MESSAGE = "receiveMessage",
   READ_UPDATE = "readUpdate",
   EXTRA_MESSAGES = "extraMessages",
   EXTRA_NEW_MESSAGES = "extraNewMessages",
-  READ_ALL = 'readAll',
+  READ_ALL = "readAll",
   CREATE_CHAT = "createChat",
   LOGIN = "login",
   SIGNUP = "signup",
 }
 
-export interface APICall {
+/** Structure for API call messages */
+export interface APIMessage {
   api: API;
   id: string;
   token?: string | null;
-  payload: payload;
+  payload: messagePayload;
 }
 
-export type payload =
-	| getChatsPayload
-	| sendMessagePayload
-	| readUpdatePayload
-	| getExtraMessagesPayload
-	| getExtraNewMessagesPayload
-	| readAllPayload
-	| createChatPayload
-	| loginPayload
-	| signupPayload;
+/** Union type for request payloads */
+export type messagePayload =
+  | getChatsPayload
+  | sendMessagePayload
+  | readUpdatePayload
+  | getExtraMessagesPayload
+  | getExtraNewMessagesPayload
+  | readAllPayload
+  | createChatPayload
+  | loginPayload
+  | signupPayload;
 
-export type response =
+/** Union type for response payloads */
+export type responsePayload =
   | getChatsResponse
   | sendMessageResponse
+  | receiveMessageResponse
   | readUpdateResponse
   | getExtraMessagesResponse
   | getExtraNewMessagesResponse
@@ -42,23 +48,26 @@ export type response =
   | signupResponse
   | errorResponse;
 
+/** Chat representation */
 export type Chat = {
   _id: ObjectId;
   users: User[];
   messages: Message[];
-  latestMessages: Message[]
+  latestMessages: Message[];
   unreadCount: number;
   receivedUnreadCount: number;
   receivedNewCount: number;
   lastModified: Date;
 };
 
+/** User representation */
 export type User = {
   _id: ObjectId;
   username: string;
   lastSeen: Date;
 };
 
+/** Message representation */
 export type Message = {
   _id: ObjectId;
   from: ObjectId;
@@ -66,26 +75,28 @@ export type Message = {
   sendTime: Date;
 };
 
+/** MongoDB document for a chat */
 export type ChatDocument = {
   _id: ObjectId;
   users: User[];
   lastModified: Date;
 };
 
+/** MongoDB document for a user */
 export type UserDocument = {
   _id: ObjectId;
   username: string;
   password: string;
 };
 
+/** MongoDB document for a message */
 export type MessageDocument = {
   _id: ObjectId;
-  cid: ObjectId; //change to chatId
+  cid: ObjectId; // Chat identifier
   from: ObjectId;
   text: string;
   sendTime: Date;
 };
-
 export type getChatsPayload = Record<string, never>;
 
 export type sendMessagePayload = {
@@ -136,6 +147,11 @@ export type sendMessageResponse = {
   chatId: string;
   message: Message;
   tempMessageId: string;
+};
+
+export type receiveMessageResponse = {
+  chatId: string;
+  message: Message;
 };
 
 export type readUpdateResponse = {
