@@ -22,6 +22,35 @@
 	let showScrollbar = $state<boolean>();
 	let bottom_anchor = $state() as HTMLElement;
 
+	const INDEXES_PER_STACK = 14;
+	//dynamic loading of messages
+	let stacksLoaded = $state(1);
+	let indexesToShow = $derived(
+		(chats?.length || 0) >= stacksLoaded * INDEXES_PER_STACK + (openedIndex ?? 0)
+			? stacksLoaded * INDEXES_PER_STACK + (openedIndex ?? 0)
+			: chats?.length || 0
+	);
+	let lastChats = $derived(chats?.slice(0, indexesToShow));
+
+	onMount(async () => {
+		bottomObserver = createObserver(handleBottomIntersection);
+		await checkContentHeight();
+	});
+
+
+	// Effect: re-check content height when derived chat list changes
+	$effect(() => {
+		lastChats; // dependency for reactivity
+		
+		requestAnimationFrame(async () => {
+			await tick();
+			await checkContentHeight();
+		});
+		
+		// Start observing bottom anchor for lazy loading after tick
+		if (scrollBar) bottomObserver!.observe(bottom_anchor);
+	});
+
 	/**
 	 * Checks if the scrollable content requires a scrollbar and restores its previous scroll position.
 	 */
@@ -52,7 +81,7 @@
 		const isDragging = scrollBar.isDraggingOn();
 		if (isDragging) scrollBar.onMouseUp();
 
-		//load more messages
+		//load more chats
 		stacksLoaded++;
 
 		if (isDragging) {
@@ -60,33 +89,6 @@
 			scrollBar.onMouseDown();
 		}
 	}
-
-	// Effect: re-check content height when derived chat list changes
-	$effect(() => {
-		lastChats; // dependency for reactivity
-		checkContentHeight();
-
-		// Start observing bottom anchor for lazy loading after tick
-		requestAnimationFrame(async () => {
-			await tick();
-			if (scrollBar) bottomObserver!.observe(bottom_anchor);
-		});
-	});
-
-	onMount(async () => {
-		bottomObserver = createObserver(handleBottomIntersection);
-		await checkContentHeight();
-	});
-
-	const INDEXES_PER_STACK = 14;
-	//dynamic loading of messages
-	let stacksLoaded = $state(1);
-	let indexesToShow = $derived(
-		(chats?.length || 0) >= stacksLoaded * INDEXES_PER_STACK + (openedIndex ?? 0)
-			? stacksLoaded * INDEXES_PER_STACK + (openedIndex ?? 0)
-			: chats?.length || 0
-	);
-	let lastChats = $derived(chats?.slice(0, indexesToShow));
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
