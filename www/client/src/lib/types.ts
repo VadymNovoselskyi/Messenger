@@ -1,6 +1,8 @@
+/** API endpoints enumeration */
 export enum API {
 	GET_CHATS = 'getChats',
 	SEND_MESSAGE = 'sendMessage',
+	RECEIVE_MESSAGE = 'receiveMessage',
 	READ_UPDATE = 'readUpdate',
 	EXTRA_MESSAGES = 'extraMessages',
 	EXTRA_NEW_MESSAGES = 'extraNewMessages',
@@ -10,14 +12,24 @@ export enum API {
 	SIGNUP = 'signup'
 }
 
-export interface APICall {
+/** Structure for API call messages */
+export interface APIMessage {
 	api: API;
 	id: string;
 	token?: string | null;
-	payload: payload;
+	payload: messagePayload;
 }
 
-export type payload =
+export interface APIResponse {
+	api: API;
+	id: string;
+	status: 'SUCCESS' | 'ERROR';
+	token?: string | null;
+	payload: responsePayload;
+}
+
+/** Union type for request payloads */
+export type messagePayload =
 	| getChatsPayload
 	| sendMessagePayload
 	| readUpdatePayload
@@ -28,9 +40,11 @@ export type payload =
 	| loginPayload
 	| signupPayload;
 
-export type response =
+/** Union type for response payloads */
+export type responsePayload =
 	| getChatsResponse
 	| sendMessageResponse
+	| receiveMessageResponse
 	| readUpdateResponse
 	| getExtraMessagesResponse
 	| getExtraNewMessagesResponse
@@ -40,14 +54,8 @@ export type response =
 	| signupResponse
 	| errorResponse;
 
-export interface Message {
-	_id: string;
-	from: string; //User
-	text: string;
-	sendTime: string; //ISO-date
-	sending?: boolean;
-}
 
+/** Chat representation */
 export interface Chat {
 	_id: string; //ID type?
 	users: User[];
@@ -59,10 +67,21 @@ export interface Chat {
 	lastModified: string; //ISO-Date
 }
 
+/** User representation */
 export interface User {
 	_id: string;
 	username: string;
 }
+
+/** Message representation */
+export interface Message {
+	_id: string;
+	from: string; //User
+	text: string;
+	sendTime: string; //ISO-date
+	sending?: boolean;
+}
+
 
 export interface Link {
 	path: string;
@@ -120,6 +139,11 @@ export type sendMessageResponse = {
 	chatId: string;
 	message: Message;
 	tempMessageId: string;
+};
+
+export type receiveMessageResponse = {
+	chatId: string;
+	message: Message;
 };
 
 export type readUpdateResponse = {

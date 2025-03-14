@@ -13,7 +13,7 @@
 	import MessageList from '$lib/components/MessageList.svelte';
 
 	let chat: Chat | undefined = $state();
-	let chantChange: number = $state(0); //Workaraound to trigger reinit (done for readAll)
+	let chantChange: number = $state(0); //Workaraound to trigger reinit (made for readAll)
 	let index: number | undefined = $state();
 	let messageList = $state() as MessageList;
 

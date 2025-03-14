@@ -2,10 +2,10 @@
 	import { onMount, tick } from 'svelte';
 	import { page } from '$app/state';
 	import { memory } from '$lib/stores/memory.svelte';
-	import { createChat } from '$lib/api.svelte';
 	import Scrollbar from '$lib/components/Scrollbar.svelte';
+	import AddChatButton from '$lib/components/AddChatButton.svelte';
 
-	import { formatISODate, getCookie } from '$lib/utils';
+	import { formatISODate, getCookie, createObserver } from '$lib/utils';
 	import type { Chat, User } from '$lib/types';
 
 	let {
@@ -14,25 +14,28 @@
 		onChatChange
 	}: { chats: Chat[]; openedIndex?: number; onChatChange?: () => void } = $props();
 
-	let observer: IntersectionObserver;
 	let showAddChat = $state(false);
-	let usernameInput = $state() as HTMLInputElement;
+	let bottomObserver = $state<IntersectionObserver>();
 
 	let scrollableContent = $state() as HTMLElement;
 	let scrollBar = $state() as Scrollbar;
 	let showScrollbar = $state<boolean>();
 	let bottom_anchor = $state() as HTMLElement;
 
+	/**
+	 * Checks if the scrollable content requires a scrollbar and restores its previous scroll position.
+	 */
 	async function checkContentHeight() {
 		await tick();
 		if (!scrollableContent) {
 			requestAnimationFrame(checkContentHeight);
 			return;
 		}
-		//check if scrollbar is needed
+
+		// Set flag if content overflows container height
 		showScrollbar = scrollableContent.scrollHeight !== scrollableContent.clientHeight;
 
-		//scroll to the last position
+		// Reset scroll position to stored value
 		scrollableContent.scrollTop = 0;
 		requestAnimationFrame(() => {
 			scrollableContent.scrollTo({
@@ -42,41 +45,37 @@
 		});
 	}
 
+	/**
+	 * Load more chats on bottom intersection.
+	 */
+	async function handleBottomIntersection(): Promise<void> {
+		const isDragging = scrollBar.isDraggingOn();
+		if (isDragging) scrollBar.onMouseUp();
+
+		//load more messages
+		stacksLoaded++;
+
+		if (isDragging) {
+			await tick();
+			scrollBar.onMouseDown();
+		}
+	}
+
+	// Effect: re-check content height when derived chat list changes
 	$effect(() => {
-		lastChats;
+		lastChats; // dependency for reactivity
 		checkContentHeight();
 
+		// Start observing bottom anchor for lazy loading after tick
 		requestAnimationFrame(async () => {
 			await tick();
-			if (scrollBar) observer.observe(bottom_anchor);
+			if (scrollBar) bottomObserver!.observe(bottom_anchor);
 		});
 	});
 
 	onMount(async () => {
+		bottomObserver = createObserver(handleBottomIntersection);
 		await checkContentHeight();
-
-		//bottom_anchor observer for lazy loading
-		observer = new IntersectionObserver(
-			(entries) => {
-				entries.forEach(async (entry) => {
-					if (entry.isIntersecting) {
-						const isDragging = scrollBar.isDraggingOn();
-						if (isDragging) scrollBar.onMouseUp();
-
-						//load more messages
-						stacksLoaded++;
-
-						if (isDragging) {
-							await tick();
-							scrollBar.onMouseDown();
-						}
-					}
-				});
-			},
-			{ threshold: 0.1 }
-		);
-
-		const { chatId } = page.params;
 	});
 
 	const INDEXES_PER_STACK = 14;
@@ -146,41 +145,13 @@
 		/>
 	{/if}
 
-	<button
-		id="add-chat"
-		onclick={async () => {
-			showAddChat = !showAddChat;
-			await tick();
-			usernameInput.focus();
-		}}
-	>
+	<button id="add-chat" onclick={() => (showAddChat = !showAddChat)}>
 		<i>+</i>
 	</button>
 </div>
 
 {#if showAddChat}
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<!-- svelte-ignore a11y_click_events_have_key_events -->
-	<div class="popup-overlay" onclick={() => (showAddChat = false)}></div>
-	<div class="popup-menu" class:active={showAddChat}>
-		<button class="close-popup" onclick={() => (showAddChat = false)}>x</button>
-		<form
-			onsubmit={(event: SubmitEvent) => {
-				createChat(event);
-				showAddChat = false;
-			}}
-		>
-			<label for="name">Username:</label>
-			<input
-				bind:this={usernameInput}
-				type="text"
-				id="username"
-				name="username"
-				placeholder="Username you want to add"
-			/>
-			<button type="submit">Add</button>
-		</form>
-	</div>
+	<AddChatButton bind:showAddChat />
 {/if}
 
 <style lang="scss">
@@ -319,80 +290,6 @@
 			color: var(--primary-bg-color);
 			font-weight: 900;
 			font-size: 2.4rem;
-		}
-	}
-
-	.popup-overlay {
-		position: fixed;
-		top: 0;
-		left: 0;
-		width: 100vw;
-		height: 100vh;
-		background-color: rgba(0, 0, 0, 0.5);
-		z-index: 9;
-	}
-
-	.popup-menu {
-		position: fixed;
-		top: 50%;
-		left: 50%;
-		transform: translate(-50%, -50%);
-		background-color: var(--primary-bg-color);
-		border: 1px solid #dddddd;
-		border-radius: 4px;
-		z-index: 10;
-		padding: 1rem;
-		min-width: 24rem;
-		width: 30vw;
-
-		form {
-			display: grid;
-			font-size: 1.2rem;
-
-			label {
-				display: block;
-				margin-bottom: 0.4rem;
-				font-weight: bold;
-			}
-
-			input {
-				font-size: 1rem;
-				padding: 0.6rem 0.4rem;
-				border-radius: 0.8rem;
-				border: 1px solid transparent;
-			}
-
-			button[type='submit'] {
-				font-size: 1.2rem;
-				background-color: #007bff;
-				color: var(--secondary-text-color);
-				margin-top: 1.4rem;
-				padding: 0.6rem 1rem;
-				border-radius: 4px;
-				border: none;
-				cursor: pointer;
-
-				&:hover {
-					background-color: #0860bf;
-				}
-			}
-		}
-
-		.close-popup {
-			position: absolute;
-			top: 0.5rem;
-			right: 0.5rem;
-			background: none;
-			border: none;
-			color: #888;
-			font-size: 1.2rem;
-			font-weight: bold;
-			transition: color 0.4s ease;
-			cursor: pointer;
-		}
-
-		.close-popup:hover {
-			color: #ff0000;
 		}
 	}
 </style>

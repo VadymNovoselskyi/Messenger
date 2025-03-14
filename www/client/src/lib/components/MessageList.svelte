@@ -36,9 +36,7 @@
 	let showScrollbar = $state<boolean>();
 
 	let topObserver = createObserver(handleTopIntersection);
-	let bottomObserver = createObserver(async () => {
-		handleBottomIntersection();
-	});
+	let bottomObserver = createObserver(handleBottomIntersection);
 	let readObserver = createObserver((entry: IntersectionObserverEntry) => {
 		readObserver.unobserve(entry.target);
 		handleMessageRead();
@@ -85,7 +83,12 @@
 			console.log(totalUnreadCount - (bottomIndex - receivedReadCount), unreadCount);
 			chat.unreadCount = totalUnreadCount - bottomIndex + receivedReadCount;
 			const lastReadIndex =
-			messages.length - receivedUnreadCount + totalUnreadCount - unreadCount + (totalUnreadCount - oldUnreadCount) +  - 1;
+				messages.length -
+				receivedUnreadCount +
+				totalUnreadCount -
+				unreadCount +
+				(totalUnreadCount - oldUnreadCount) +
+				-1;
 
 			if (lastReadIndex <= messages.length) sendReadUpdate(chat._id, messages[lastReadIndex]._id);
 			else sendReadUpdate(chat._id, messages[messages.length - 1]._id);
@@ -137,7 +140,12 @@
 		if (!stashedReadCount) {
 			readTimeoutId = setTimeout(() => {
 				const lastReadIndex =
-					messages.length - receivedUnreadCount + totalUnreadCount - unreadCount + (totalUnreadCount - oldUnreadCount) +  - 1;
+					messages.length -
+					receivedUnreadCount +
+					totalUnreadCount -
+					unreadCount +
+					(totalUnreadCount - oldUnreadCount) +
+					-1;
 
 				if (lastReadIndex <= messages.length) sendReadUpdate(chat._id, messages[lastReadIndex]._id);
 				else sendReadUpdate(chat._id, messages[messages.length - 1]._id);
@@ -149,7 +157,12 @@
 
 		if (stashedReadCount >= MAX_STASHED_COUNT) {
 			const lastReadIndex =
-			messages.length - receivedUnreadCount + totalUnreadCount - unreadCount + (totalUnreadCount - oldUnreadCount) +  - 1;
+				messages.length -
+				receivedUnreadCount +
+				totalUnreadCount -
+				unreadCount +
+				(totalUnreadCount - oldUnreadCount) +
+				-1;
 
 			if (lastReadIndex <= messages.length) sendReadUpdate(chat._id, messages[lastReadIndex]._id);
 			else sendReadUpdate(chat._id, messages[messages.length - 1]._id);
@@ -186,11 +199,12 @@
 		//add anchors lazy loading and new messages
 		requestAnimationFrame(async () => {
 			await tick();
-			const lastMessages = Array.from(scrollableContent.querySelectorAll('.message'));
+			readObserver.disconnect();
 
 			bottomObserver.observe(bottom_anchor);
 			if (scrollBar) topObserver.observe(top_anchor);
 			if (unreadCount) {
+				const lastMessages = Array.from(scrollableContent.querySelectorAll('.message'));
 				lastMessages
 					.slice(-unreadIndexesToShow)
 					.forEach((message) => readObserver.observe(message));
@@ -237,14 +251,14 @@
 	$effect(() => {
 		lastModified;
 		untrack(() => {
-			if (bottomIndex >= messages.length - 1 || bottomIndex === 0 && messages.length !== 0)
+			if (bottomIndex >= messages.length - 1 || (bottomIndex === 0 && messages.length !== 0))
 				recalculateIndexes(0);
 		});
 	});
 	$effect(() => {
 		receivedNewCount;
 		untrack(async () => {
-			if (totalUnreadCount >= INDEXES_PER_STACK * MAX_STACKS) return;
+			if (totalUnreadCount >= INDEXES_PER_STACK * MAX_STACKS || !receivedNewCount) return;
 
 			readObserver.disconnect(); //disconnect all previous messages
 			totalUnreadCount <= unreadStacksLoaded * INDEXES_PER_STACK
@@ -258,7 +272,7 @@
 
 			//checks if some unread messages are rendered
 			if (unreadIndexesToShow && unreadUnrenderedCount <= leftUnreadCount) {
-				const lastMessagesEl = Array.from(scrollableContent.querySelectorAll('.message'));
+				const lastMessagesEl = Array.from(document.querySelectorAll('.message'));
 				lastMessagesEl
 					.slice(-Math.min(leftUnreadCount - unreadUnrenderedCount, INDEXES_PER_STACK))
 					.forEach((message) => readObserver.observe(message));
