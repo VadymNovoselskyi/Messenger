@@ -1,4 +1,5 @@
-import type { ObjectId } from "mongodb";
+import type { Binary, ObjectId } from "mongodb";
+import { BinaryPreKey, BinarySignedPreKey, StringifiedPreKey, StringifiedPreKeyBundle } from "./signalTypes.mjs";
 
 /** API endpoints enumeration */
 export enum API {
@@ -12,6 +13,7 @@ export enum API {
   CREATE_CHAT = "createChat",
   LOGIN = "login",
   SIGNUP = "signup",
+  SEND_KEYS = "sendKeys",
 }
 
 /** Structure for API call messages */
@@ -32,7 +34,7 @@ export type messagePayload =
   | readAllPayload
   | createChatPayload
   | loginPayload
-  | signupPayload;
+  | sendKeysPayload;
 
 /** Union type for response payloads */
 export type responsePayload =
@@ -46,7 +48,8 @@ export type responsePayload =
   | createChatResponse
   | loginResponse
   | signupResponse
-  | errorResponse;
+  | errorResponse
+  | sendKeysResponse;
 
 /** Chat representation */
 export type Chat = {
@@ -86,6 +89,10 @@ export type ChatDocument = {
 export type UserDocument = {
   _id: ObjectId;
   username: string;
+  registrationId?: number; // B's registration id
+  identityKey?: Binary; // B's identity public key
+  signedPreKey?: BinarySignedPreKey; // B's signed pre-key
+  preKeys?: BinaryPreKey[]; // A one-time pre-key from B
   password: string;
 };
 
@@ -121,7 +128,7 @@ export type getExtraNewMessagesPayload = {
 };
 
 export type readAllPayload = {
-	chatId: string;
+  chatId: string;
 };
 
 export type createChatPayload = {
@@ -136,6 +143,10 @@ export type loginPayload = {
 export type signupPayload = {
   username: string;
   password: string;
+};
+
+export type sendKeysPayload = {
+  preKeyBundle: StringifiedPreKeyBundle;
 };
 
 //Responses
@@ -173,6 +184,7 @@ export type readAllResponse = Record<string, never>;
 
 export type createChatResponse = {
   createdChat: Chat;
+  preKeyBundle?: StringifiedPreKeyBundle
 };
 
 export type loginResponse = {
@@ -184,6 +196,8 @@ export type signupResponse = {
   userId: ObjectId;
   token: string; //JWT
 };
+
+export type sendKeysResponse = Record<string, never>;
 
 export type errorResponse = {
   message: string;

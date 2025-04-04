@@ -357,7 +357,7 @@
 
 		// Start timeout if no updates are stashed
 		if (!stashedReadCount) {
-			readTimeoutId = setTimeout(() => {
+			readTimeoutId = window.setTimeout(() => {
 				const lastReadIndex = computeLastReadIndex();
 				if (lastReadIndex <= messages.length) {
 					sendReadUpdate(chat._id, messages[lastReadIndex]._id);

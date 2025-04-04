@@ -9,6 +9,8 @@ import {
   User,
   UserDocument,
 } from "./types/types.mjs";
+import { BinaryPreKeyBundle, StringifiedPreKeyBundle } from "./types/signalTypes.mjs";
+import { binaryToBase64 } from "./utils.mjs";
 
 // Constants to manage pagination limits.
 const INIT_CHATS = 10;
@@ -212,7 +214,11 @@ export async function readAll(chatId: ObjectId, userId: ObjectId): Promise<void>
 export async function createChat(
   creatingUID: ObjectId,
   receivingUsername: string
-): Promise<{ createdChat: Chat; receivingUserId: ObjectId }> {
+): Promise<{
+  createdChat: Chat;
+  receivingUserId: ObjectId;
+  preKeyBundle: StringifiedPreKeyBundle;
+}> {
   try {
     const creatingUser = await usersCollection.findOne({ _id: creatingUID });
     const receivingUser = await usersCollection.findOne({ username: receivingUsername });
@@ -265,7 +271,33 @@ export async function createChat(
       receivedNewCount: 0,
       lastModified: createdChatDocument.lastModified,
     };
-    return { createdChat, receivingUserId: receivingUser._id };
+
+    //Get the preKeyBundle
+    const { registrationId, identityKey, signedPreKey, preKeys } = creatingUser;
+    const randomIndex = Math.floor(Math.random() * preKeys!.length);
+    const preKeyBundle: StringifiedPreKeyBundle = {
+      registrationId: registrationId!,
+      identityKey: binaryToBase64(identityKey!),
+      signedPreKey: {
+        keyId: signedPreKey!.keyId,
+        publicKey: binaryToBase64(signedPreKey!.publicKey),
+        signature: binaryToBase64(signedPreKey!.signature),
+      },
+      preKeys: [
+        {
+          keyId: preKeys![randomIndex].keyId,
+          publicKey: binaryToBase64(preKeys![randomIndex].publicKey),
+        },
+      ],
+    };
+
+    await usersCollection.updateOne(
+      { _id: creatingUID },
+      { $unset: { [`preKeys.${randomIndex}`]: 1 } }
+    );
+    await usersCollection.updateOne({ _id: creatingUID }, { $pull: { preKeys: null as any } });
+
+    return { createdChat, receivingUserId: receivingUser._id, preKeyBundle };
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : "An unknown error occurred";
     throw new Error(`Error creating chat: ${errMsg}`);
@@ -288,6 +320,23 @@ export async function createUser(username: string, password: string): Promise<Ob
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : "An unknown error occurred";
     throw new Error(`Error creating user "${username}": ${errMsg}`);
+  }
+}
+
+/**
+ * Saves user's preKeyBundle to be used in X3DH.
+ */
+export async function savePreKeys(userId: ObjectId, preKeyBundle: BinaryPreKeyBundle) {
+  try {
+    const { modifiedCount } = await usersCollection.updateOne(
+      { _id: userId },
+      { $set: preKeyBundle }
+    );
+
+    if (!modifiedCount) throw new Error(`Couldn't add keys for userId: ${userId}`);
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : "An unknown error occurred";
+    throw new Error(`Error adding preKeyBundle: ${errMsg}`);
   }
 }
 

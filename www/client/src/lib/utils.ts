@@ -1,4 +1,7 @@
+import * as libsignal from '@privacyresearch/libsignal-protocol-typescript';
 import { memory } from './stores/memory.svelte';
+import { SignalProtocolStore } from './stores/SignalProtocolStore';
+import type { unorgonizedKeys } from './signalTypes';
 
 export function formatISODate(isoDate: string): string {
 	const date = new Date(isoDate);
@@ -81,4 +84,56 @@ export function createObserver(
 		{ threshold }
 	);
 	return intersectionObserver;
+}
+
+export async function generateKeys(): Promise<unorgonizedKeys> {
+	const store = new SignalProtocolStore();
+	// Generate a registration ID (used as an identifier for this user)
+	const registrationId = await libsignal.KeyHelper.generateRegistrationId();
+	await store.put('registrationId', registrationId);
+
+	// Generate a long-term identity key pair
+	const identityKeyPair = await libsignal.KeyHelper.generateIdentityKeyPair();
+	await store.put('identityKeyPair', identityKeyPair);
+
+	// Generate a signed pre-key; the second argument is a key ID
+	const signedPreKey = await libsignal.KeyHelper.generateSignedPreKey(identityKeyPair, 1);
+	await store.put('signedPreKey', signedPreKey);
+
+	// Generate a batch of one-time pre-keys; here, we generate 100
+	let oneTimePreKeys: libsignal.PreKeyPairType[] = [];
+	for (let i = 0; i < 100; i++) {
+		const prekey = await libsignal.KeyHelper.generatePreKey(i + 2);
+		oneTimePreKeys.push(prekey);
+	}
+	await store.put('oneTimePreKeys', oneTimePreKeys);
+
+	return { registrationId, identityKeyPair, signedPreKey, oneTimePreKeys };
+}
+
+/**
+ * Converts an ArrayBuffer to a Base64 encoded string.
+ * @param buffer The ArrayBuffer to convert.
+ */
+export function arrayBufferToBase64(buffer: ArrayBuffer): string {
+	let binary = '';
+	const bytes = new Uint8Array(buffer);
+	for (let i = 0; i < bytes.byteLength; i++) {
+		binary += String.fromCharCode(bytes[i]);
+	}
+	return btoa(binary);
+}
+
+/**
+ * Converts a Base64 encoded string back to an ArrayBuffer.
+ * @param base64 The Base64 encoded string.
+ */
+export function base64ToArrayBuffer(base64: string): ArrayBuffer {
+	const binaryString = atob(base64);
+	const length = binaryString.length;
+	const bytes = new Uint8Array(length);
+	for (let i = 0; i < length; i++) {
+		bytes[i] = binaryString.charCodeAt(i);
+	}
+	return bytes.buffer;
 }

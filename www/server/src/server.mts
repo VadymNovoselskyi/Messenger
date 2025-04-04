@@ -12,11 +12,13 @@ import {
   createChat,
   createUser,
   findUser,
+  savePreKeys,
 } from "./api.mjs";
-import { generateToken, sendResponse } from "./utils.mjs";
+import { base64ToBinary, generateToken, sendResponse } from "./utils.mjs";
 
 import * as types from "./types/types.mjs";
 import { ObjectId } from "mongodb";
+import { BinaryPreKeyBundle } from "./types/signalTypes.mjs";
 
 dotenv.config(); // Load .env variables into process.env
 const JWT_KEY = process.env.JWT_KEY || "";
@@ -201,8 +203,8 @@ wss.on("connection", ws => {
         }
         case types.API.CREATE_CHAT: {
           const { username } = payload as types.createChatPayload;
-          const { createdChat, receivingUserId } = await createChat(new ObjectId(userId), username);
-          sendResponse(ws, api, id, "SUCCESS", { createdChat });
+          const { createdChat, receivingUserId, preKeyBundle } = await createChat(new ObjectId(userId), username);
+          sendResponse(ws, api, id, "SUCCESS", { createdChat, preKeyBundle });
           if (onlineUsers[receivingUserId.toString()]) {
             sendResponse(onlineUsers[receivingUserId.toString()], api, undefined, "SUCCESS", {
               createdChat,
@@ -210,6 +212,30 @@ wss.on("connection", ws => {
           }
           break;
         }
+        case types.API.SEND_KEYS: {
+          let { preKeyBundle } = payload as types.sendKeysPayload;
+          const preKeyBundleReconstructed: BinaryPreKeyBundle = {
+            registrationId: preKeyBundle.registrationId,
+            identityKey: base64ToBinary(preKeyBundle.identityKey),
+            signedPreKey: {
+              keyId: preKeyBundle.signedPreKey.keyId,
+              publicKey: base64ToBinary(preKeyBundle.signedPreKey.publicKey),
+              signature: base64ToBinary(preKeyBundle.signedPreKey.signature),
+            },
+            preKeys: [],
+          };
+          console.log(base64ToBinary(preKeyBundle.identityKey));
+          for (const preKey of preKeyBundle.preKeys) {
+            preKeyBundleReconstructed.preKeys.push({
+              keyId: preKey.keyId,
+              publicKey: base64ToBinary(preKey.publicKey),
+            });
+          }
+
+          await savePreKeys(new ObjectId(userId), preKeyBundleReconstructed);
+          break;
+        }
+
         default: {
           console.error(`Unknown api call: ${api}`);
           sendResponse(ws, api, id, "ERROR", { message: "Invalid api call" });

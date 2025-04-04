@@ -1,3 +1,5 @@
+import type { PreKeyBundle, StringifiedPreKeyBundle } from './signalTypes';
+
 /** API endpoints enumeration */
 export enum API {
 	GET_CHATS = 'getChats',
@@ -9,7 +11,8 @@ export enum API {
 	READ_ALL = 'readAll',
 	CREATE_CHAT = 'createChat',
 	LOGIN = 'login',
-	SIGNUP = 'signup'
+	SIGNUP = 'signup',
+	SEND_KEYS = 'sendKeys'
 }
 
 /** Structure for API call messages */
@@ -38,7 +41,8 @@ export type messagePayload =
 	| readAllPayload
 	| createChatPayload
 	| loginPayload
-	| signupPayload;
+	| signupPayload
+	| sendKeysPayload;
 
 /** Union type for response payloads */
 export type responsePayload =
@@ -52,8 +56,8 @@ export type responsePayload =
 	| createChatResponse
 	| loginResponse
 	| signupResponse
-	| errorResponse;
-
+	| errorResponse
+	| sendKeysResponse;
 
 /** Chat representation */
 export interface Chat {
@@ -81,7 +85,6 @@ export interface Message {
 	sendTime: string; //ISO-date
 	sending?: boolean;
 }
-
 
 export interface Link {
 	path: string;
@@ -130,6 +133,10 @@ export type signupPayload = {
 	password: string;
 };
 
+export type sendKeysPayload = {
+	preKeyBundle: StringifiedPreKeyBundle;
+};
+
 //Responses
 export type getChatsResponse = {
 	chats: Chat[];
@@ -165,6 +172,7 @@ export type readAllResponse = Record<string, never>;
 
 export type createChatResponse = {
 	createdChat: Chat;
+	preKeyBundle?: StringifiedPreKeyBundle
 };
 
 export type loginResponse = {
@@ -176,6 +184,8 @@ export type signupResponse = {
 	userId: string;
 	token: string; //JWT
 };
+
+export type sendKeysResponse = Record<string, never>;
 
 export type errorResponse = {
 	message: string;

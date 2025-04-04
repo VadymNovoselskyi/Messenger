@@ -1,7 +1,14 @@
 import { page } from '$app/state';
 import { goto } from '$app/navigation';
 import { memory } from '$lib/stores/memory.svelte';
-import { generateId, setCookie, getCookie, sortChats } from '$lib/utils';
+import {
+	generateId,
+	setCookie,
+	getCookie,
+	sortChats,
+	arrayBufferToBase64,
+	base64ToArrayBuffer
+} from '$lib/utils';
 import type {
 	APIMessage,
 	APIResponse,
@@ -22,6 +29,9 @@ import type {
 	signupResponse
 } from '$lib/types';
 import { API } from '$lib/types';
+import type { PreKeyBundle, StringifiedPreKeyBundle, unorgonizedKeys } from './signalTypes';
+import { SessionBuilder } from '@privacyresearch/libsignal-protocol-typescript';
+import { SignalProtocolStore } from './stores/SignalProtocolStore';
 
 const pendingRequests = new Map<
 	string,
@@ -206,7 +216,29 @@ export async function createChat(event: SubmitEvent): Promise<void> {
 	const call = createAPICall(API.CREATE_CHAT, { username });
 	try {
 		const response = await sendRequest(call);
-		const { createdChat } = response as createChatResponse;
+		const { createdChat, preKeyBundle } = response as createChatResponse;
+		if (!preKeyBundle) throw new Error(`no preKeyBundle received`);
+		const { registrationId, identityKey, signedPreKey, preKeys } = preKeyBundle;
+		const normalizedPreKeyBundle: PreKeyBundle = {
+			registrationId,
+			identityKey: base64ToArrayBuffer(identityKey),
+			signedPreKey: {
+				keyId: signedPreKey.keyId,
+				publicKey: base64ToArrayBuffer(signedPreKey.publicKey),
+				signature: base64ToArrayBuffer(signedPreKey.signature)
+			},
+			preKeys: [
+				{
+					keyId: preKeys[0].keyId,
+					publicKey: base64ToArrayBuffer(preKeys[0].publicKey)
+				}
+			]
+		};
+		console.log(JSON.stringify(preKeyBundle));
+		const store = new SignalProtocolStore();
+		const sessionBuilder = new SessionBuilder(store, normalizedPreKeyBundle);
+		const result = await sessionBuilder.processPreKey(normalizedPreKeyBundle);
+		console.log(result);
 		memory.chats = [createdChat, ...memory.chats];
 	} catch (error) {
 		console.error('Error in createChat:', error);
@@ -248,6 +280,35 @@ export async function signup(event: SubmitEvent): Promise<void> {
 		setCookie('userId', userId, 28);
 		setCookie('token', token, 28);
 		goto('/');
+	} catch (error) {
+		console.error('Error in signup:', error);
+		throw error;
+	}
+}
+
+export async function sendKeys(keys: unorgonizedKeys): Promise<void> {
+	// Create a PreKey Bundle for publishing or for use by the SessionBuilder.
+	// You might choose one of your one-time pre-keys (say, the first one) to include in the bundle.
+	const preKeyBundle: StringifiedPreKeyBundle = {
+		registrationId: keys.registrationId,
+		identityKey: arrayBufferToBase64(keys.identityKeyPair.pubKey), // Public part of the identity key
+		signedPreKey: {
+			keyId: keys.signedPreKey.keyId,
+			publicKey: arrayBufferToBase64(keys.signedPreKey.keyPair.pubKey),
+			signature: arrayBufferToBase64(keys.signedPreKey.signature)
+		},
+		preKeys: []
+	};
+	for (const preKey of keys.oneTimePreKeys) {
+		preKeyBundle.preKeys.push({
+			keyId: preKey.keyId,
+			publicKey: arrayBufferToBase64(preKey.keyPair.pubKey)
+		});
+	}
+
+	const call = createAPICall(API.SEND_KEYS, { preKeyBundle });
+	try {
+		await sendRequest(call);
 	} catch (error) {
 		console.error('Error in signup:', error);
 		throw error;
