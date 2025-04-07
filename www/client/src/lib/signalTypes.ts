@@ -1,14 +1,10 @@
-import type {
-	KeyPairType,
-	PreKeyPairType,
-	SignedPreKeyPairType
-} from '@privacyresearch/libsignal-protocol-typescript/lib/types';
+import * as libsignal from '@privacyresearch/libsignal-protocol-typescript';
 
 export type unorgonizedKeys = {
 	registrationId: number;
-	identityKeyPair: KeyPairType<ArrayBuffer>;
-	signedPreKey: SignedPreKeyPairType<ArrayBuffer>;
-	oneTimePreKeys: PreKeyPairType[];
+	identityKeyPair: libsignal.KeyPairType<ArrayBuffer>;
+	signedPreKey: libsignal.SignedPreKeyPairType;
+	oneTimePreKeys: libsignal.PreKeyPairType[];
 };
 
 export type StringifiedPreKeyBundle = {

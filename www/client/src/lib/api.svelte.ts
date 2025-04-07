@@ -1,49 +1,23 @@
 import { page } from '$app/state';
 import { goto } from '$app/navigation';
 import { memory } from '$lib/stores/memory.svelte';
-import {
-	generateId,
-	setCookie,
-	getCookie,
-	sortChats,
-	arrayBufferToBase64,
-	base64ToArrayBuffer
-} from '$lib/utils';
-import type {
-	APIMessage,
-	APIResponse,
-	createChatResponse,
-	errorResponse,
-	getChatsResponse,
-	getExtraMessagesResponse,
-	getExtraNewMessagesResponse,
-	loginResponse,
-	Message,
-	messagePayload,
-	readUpdateResponse,
-	receiveMessageResponse,
-	responsePayload,
-	sendMessagePayload,
-	sendMessageResponse,
-	signupPayload,
-	signupResponse
-} from '$lib/types';
-import { API } from '$lib/types';
-import type { PreKeyBundle, StringifiedPreKeyBundle, unorgonizedKeys } from './signalTypes';
-import { SessionBuilder } from '@privacyresearch/libsignal-protocol-typescript';
+import * as utils from '$lib/utils';
+import * as types from '$lib/types';
+import * as signalTypes from './signalTypes';
+import * as libsignal from '@privacyresearch/libsignal-protocol-typescript';
 import { SignalProtocolStore } from './stores/SignalProtocolStore';
 
 const pendingRequests = new Map<
 	string,
-	{ resolve: (value: responsePayload) => void; reject: (reason: any) => void }
+	{ resolve: (value: types.responsePayload) => void; reject: (reason: any) => void }
 >();
 
 // Helper: constructs an API message
-function createAPICall(api: API, payload: messagePayload): APIMessage {
+function createAPICall(api: types.API, payload: types.messagePayload): types.APIMessage {
 	return {
 		api,
-		id: generateId(),
-		token: getCookie('token'),
+		id: utils.generateId(),
+		token: utils.getCookie('token'),
 		payload
 	};
 }
@@ -76,12 +50,12 @@ export async function getWS(): Promise<WebSocket> {
 }
 
 export async function getChats(): Promise<void> {
-	const call = createAPICall(API.GET_CHATS, {});
+	const call = createAPICall(types.API.GET_CHATS, {});
 	try {
 		const response = await sendRequest(call);
-		const { chats } = response as getChatsResponse;
+		const { chats } = response as types.getChatsResponse;
 		memory.chats = chats;
-		sortChats();
+		utils.sortChats();
 	} catch (error) {
 		console.error('Error in getChats:', error);
 		throw error;
@@ -106,23 +80,27 @@ export async function sendMessage(event: Event): Promise<void> {
 		memory.chats = [...memory.chats];
 	}
 
-	const tempMID = generateId();
+	const tempMID = utils.generateId();
 	const currentTime = new Date().toISOString();
 	chat.messages.push({
 		_id: tempMID,
-		from: getCookie('userId') ?? '',
+		from: utils.getCookie('userId') ?? '',
 		text: input,
 		sendTime: currentTime,
 		sending: true
 	});
 	chat.lastModified = currentTime;
-	sortChats();
+	utils.sortChats();
 
 	// Create and send API call for sending a message
-	const call = createAPICall(API.SEND_MESSAGE, { chatId, text: input, tempMessageId: tempMID });
+	const call = createAPICall(types.API.SEND_MESSAGE, {
+		chatId,
+		text: input,
+		tempMessageId: tempMID
+	});
 	try {
 		const response = await sendRequest(call);
-		const { chatId, message, tempMessageId } = response as sendMessageResponse;
+		const { chatId, message, tempMessageId } = response as types.sendMessageResponse;
 		const chat = memory.chats.find((chat) => chat._id === chatId);
 		if (!chat) throw new Error(`Chat with id ${chatId} not found`);
 
@@ -133,7 +111,7 @@ export async function sendMessage(event: Event): Promise<void> {
 		}
 		chat.messages[index] = message;
 		chat.lastModified = message.sendTime;
-		sortChats();
+		utils.sortChats();
 	} catch (error) {
 		console.error('Error in sendMessage:', error);
 		throw error;
@@ -141,7 +119,7 @@ export async function sendMessage(event: Event): Promise<void> {
 }
 
 export async function sendReadUpdate(chatId: string, messageId: string): Promise<void> {
-	const call = createAPICall(API.READ_UPDATE, { chatId, messageId });
+	const call = createAPICall(types.API.READ_UPDATE, { chatId, messageId });
 	try {
 		sendRequest(call);
 	} catch (error) {
@@ -151,10 +129,10 @@ export async function sendReadUpdate(chatId: string, messageId: string): Promise
 }
 
 export async function getExtraMessages(chatId: string, currentIndex: number): Promise<void> {
-	const call = createAPICall(API.EXTRA_MESSAGES, { chatId, currentIndex });
+	const call = createAPICall(types.API.EXTRA_MESSAGES, { chatId, currentIndex });
 	try {
 		const response = await sendRequest(call);
-		const { extraMessages } = response as getExtraMessagesResponse;
+		const { extraMessages } = response as types.getExtraMessagesResponse;
 		const chat = memory.chats.find((chat) => chat._id === chatId);
 		if (!chat) {
 			alert(`No chat to add extra messages ${chatId}`);
@@ -168,10 +146,10 @@ export async function getExtraMessages(chatId: string, currentIndex: number): Pr
 }
 
 export async function getExtraNewMessages(chatId: string, unreadCount: number): Promise<void> {
-	const call = createAPICall(API.EXTRA_NEW_MESSAGES, { chatId, unreadCount });
+	const call = createAPICall(types.API.EXTRA_NEW_MESSAGES, { chatId, unreadCount });
 	try {
 		const response = await sendRequest(call);
-		const { extraNewMessages } = response as getExtraNewMessagesResponse;
+		const { extraNewMessages } = response as types.getExtraNewMessagesResponse;
 		const chat = memory.chats.find((chat) => chat._id === chatId);
 		if (!chat) {
 			alert(`No chat to add extra messages ${chatId}`);
@@ -186,7 +164,7 @@ export async function getExtraNewMessages(chatId: string, unreadCount: number): 
 }
 
 export async function readAllUpdate(chatId: string): Promise<void> {
-	const call = createAPICall(API.READ_ALL, { chatId });
+	const call = createAPICall(types.API.READ_ALL, { chatId });
 	try {
 		await sendRequest(call);
 		const chat = memory.chats.find((chat) => chat._id === chatId);
@@ -213,32 +191,57 @@ export async function createChat(event: SubmitEvent): Promise<void> {
 	if (!username) return;
 	usernameInput.value = '';
 
-	const call = createAPICall(API.CREATE_CHAT, { username });
+	const call = createAPICall(types.API.CREATE_CHAT, { username });
 	try {
 		const response = await sendRequest(call);
-		const { createdChat, preKeyBundle } = response as createChatResponse;
+		const { createdChat, preKeyBundle } = response as types.createChatResponse;
 		if (!preKeyBundle) throw new Error(`no preKeyBundle received`);
 		const { registrationId, identityKey, signedPreKey, preKeys } = preKeyBundle;
-		const normalizedPreKeyBundle: PreKeyBundle = {
+
+		const serializedPreKey: libsignal.DeviceType = {
 			registrationId,
-			identityKey: base64ToArrayBuffer(identityKey),
+			identityKey: utils.base64ToArrayBuffer(identityKey),
 			signedPreKey: {
 				keyId: signedPreKey.keyId,
-				publicKey: base64ToArrayBuffer(signedPreKey.publicKey),
-				signature: base64ToArrayBuffer(signedPreKey.signature)
+				publicKey: utils.base64ToArrayBuffer(signedPreKey.publicKey),
+				signature: utils.base64ToArrayBuffer(signedPreKey.signature)
 			},
-			preKeys: [
-				{
-					keyId: preKeys[0].keyId,
-					publicKey: base64ToArrayBuffer(preKeys[0].publicKey)
-				}
-			]
+			preKey:
+				preKeys && preKeys.length > 0
+					? { keyId: preKeys[0].keyId, publicKey: utils.base64ToArrayBuffer(preKeys[0].publicKey) }
+					: undefined
 		};
-		console.log(JSON.stringify(preKeyBundle));
+
+		const ephemeralKeyPair = await libsignal.KeyHelper.generatePreKey(9999); // Use a temporary id.
+
+		const receiverAddressType: libsignal.SignalProtocolAddressType = {
+			name: username,
+			deviceId: 1,
+			equals: (other: libsignal.SignalProtocolAddressType) => true
+		};
+		const receiverAddress: libsignal.SignalProtocolAddress = new libsignal.SignalProtocolAddress(
+			username,
+			1
+		);
+
 		const store = new SignalProtocolStore();
-		const sessionBuilder = new SessionBuilder(store, normalizedPreKeyBundle);
-		const result = await sessionBuilder.processPreKey(normalizedPreKeyBundle);
-		console.log(result);
+		const sessionBuilder = new libsignal.SessionBuilder(store, receiverAddressType);
+
+		// Start session as initiator
+		const session = await sessionBuilder.startSessionAsInitiator(
+			ephemeralKeyPair.keyPair, // EKa: Your ephemeral key pair.
+			serializedPreKey.identityKey, // IKb: Remote identity public key.
+			serializedPreKey.signedPreKey.publicKey, // SPKb: Remote signed pre-key public key.
+			serializedPreKey.preKey ? serializedPreKey.preKey.publicKey : undefined, // OPKb: Optional one-time pre-key.
+			serializedPreKey.registrationId // Optionally, the remote registration ID.
+		);
+		console.log(session)
+		store.storeSession(`${username}.1`, session);
+
+		const senderSessionCipher = new libsignal.SessionCipher(store, receiverAddress);
+		const ciphertext = await senderSessionCipher.encrypt(utils.base64ToArrayBuffer('V2F6enVw'));
+		console.log(ciphertext);
+
 		memory.chats = [createdChat, ...memory.chats];
 	} catch (error) {
 		console.error('Error in createChat:', error);
@@ -253,12 +256,12 @@ export async function login(event: SubmitEvent): Promise<void> {
 	usernameLogin.value = '';
 	passwordLogin.value = '';
 
-	const call = createAPICall(API.LOGIN, { username, password });
+	const call = createAPICall(types.API.LOGIN, { username, password });
 	try {
 		const response = await sendRequest(call);
-		const { userId, token } = response as loginResponse;
-		setCookie('userId', userId, 28);
-		setCookie('token', token, 28);
+		const { userId, token } = response as types.loginResponse;
+		utils.setCookie('userId', userId, 28);
+		utils.setCookie('token', token, 28);
 		goto('/');
 	} catch (error) {
 		console.error('Error in login:', error);
@@ -273,12 +276,12 @@ export async function signup(event: SubmitEvent): Promise<void> {
 	usernameSignup.value = '';
 	passwordSignup.value = '';
 
-	const call = createAPICall(API.SIGNUP, { username, password });
+	const call = createAPICall(types.API.SIGNUP, { username, password });
 	try {
 		const response = await sendRequest(call);
-		const { userId, token } = response as signupResponse;
-		setCookie('userId', userId, 28);
-		setCookie('token', token, 28);
+		const { userId, token } = response as types.signupResponse;
+		utils.setCookie('userId', userId, 28);
+		utils.setCookie('token', token, 28);
 		goto('/');
 	} catch (error) {
 		console.error('Error in signup:', error);
@@ -286,27 +289,27 @@ export async function signup(event: SubmitEvent): Promise<void> {
 	}
 }
 
-export async function sendKeys(keys: unorgonizedKeys): Promise<void> {
+export async function sendKeys(keys: signalTypes.unorgonizedKeys): Promise<void> {
 	// Create a PreKey Bundle for publishing or for use by the SessionBuilder.
 	// You might choose one of your one-time pre-keys (say, the first one) to include in the bundle.
-	const preKeyBundle: StringifiedPreKeyBundle = {
+	const preKeyBundle: signalTypes.StringifiedPreKeyBundle = {
 		registrationId: keys.registrationId,
-		identityKey: arrayBufferToBase64(keys.identityKeyPair.pubKey), // Public part of the identity key
+		identityKey: utils.arrayBufferToBase64(keys.identityKeyPair.pubKey), // Public part of the identity key
 		signedPreKey: {
 			keyId: keys.signedPreKey.keyId,
-			publicKey: arrayBufferToBase64(keys.signedPreKey.keyPair.pubKey),
-			signature: arrayBufferToBase64(keys.signedPreKey.signature)
+			publicKey: utils.arrayBufferToBase64(keys.signedPreKey.keyPair.pubKey),
+			signature: utils.arrayBufferToBase64(keys.signedPreKey.signature)
 		},
 		preKeys: []
 	};
 	for (const preKey of keys.oneTimePreKeys) {
 		preKeyBundle.preKeys.push({
 			keyId: preKey.keyId,
-			publicKey: arrayBufferToBase64(preKey.keyPair.pubKey)
+			publicKey: utils.arrayBufferToBase64(preKey.keyPair.pubKey)
 		});
 	}
 
-	const call = createAPICall(API.SEND_KEYS, { preKeyBundle });
+	const call = createAPICall(types.API.SEND_KEYS, { preKeyBundle });
 	try {
 		await sendRequest(call);
 	} catch (error) {
@@ -315,7 +318,10 @@ export async function sendKeys(keys: unorgonizedKeys): Promise<void> {
 	}
 }
 
-async function sendRequest(message: APIMessage, timeout?: number): Promise<responsePayload> {
+async function sendRequest(
+	message: types.APIMessage,
+	timeout?: number
+): Promise<types.responsePayload> {
 	const ws = await getWS();
 	return new Promise((resolve, reject) => {
 		pendingRequests.set(message.id, { resolve, reject });
@@ -333,13 +339,13 @@ async function sendRequest(message: APIMessage, timeout?: number): Promise<respo
 }
 
 export function handleServerMessage(event: MessageEvent): void {
-	const data: APIResponse = JSON.parse(event.data);
+	const data: types.APIResponse = JSON.parse(event.data);
 	console.log(data);
 	const { api, id, status, payload } = data;
 	if (pendingRequests.has(id)) {
 		const { resolve, reject } = pendingRequests.get(id)!;
 		if (status === 'ERROR') {
-			const { message } = payload as errorResponse;
+			const { message } = payload as types.errorResponse;
 			if (message === 'Invalid Token. Login again' || message === 'invalid signature') {
 				goto('/login');
 			} else {
@@ -350,8 +356,8 @@ export function handleServerMessage(event: MessageEvent): void {
 			resolve(payload);
 		}
 		pendingRequests.delete(id);
-	} else if (api === API.RECEIVE_MESSAGE) {
-		const { chatId, message } = payload as receiveMessageResponse;
+	} else if (api === types.API.RECEIVE_MESSAGE) {
+		const { chatId, message } = payload as types.receiveMessageResponse;
 		const chat = memory.chats.find((chat) => chat._id === chatId);
 		if (!chat) throw new Error(`Chat with id ${chatId} not found`);
 		chat.latestMessages = [...chat.latestMessages, message];
@@ -359,9 +365,9 @@ export function handleServerMessage(event: MessageEvent): void {
 		chat.receivedUnreadCount++;
 		chat.receivedNewCount++;
 		chat.lastModified = message.sendTime;
-		sortChats();
-	} else if (api === API.READ_UPDATE) {
-		const { chatId, lastSeen } = payload as readUpdateResponse;
+		utils.sortChats();
+	} else if (api === types.API.READ_UPDATE) {
+		const { chatId, lastSeen } = payload as types.readUpdateResponse;
 		console.log(chatId, lastSeen);
 	} else {
 		console.warn('Received response for unknown request ID:', id);

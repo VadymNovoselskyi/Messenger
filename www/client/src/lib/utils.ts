@@ -88,27 +88,33 @@ export function createObserver(
 
 export async function generateKeys(): Promise<unorgonizedKeys> {
 	const store = new SignalProtocolStore();
-	// Generate a registration ID (used as an identifier for this user)
+
+	// Generate and store registration ID
 	const registrationId = await libsignal.KeyHelper.generateRegistrationId();
 	await store.put('registrationId', registrationId);
 
-	// Generate a long-term identity key pair
+	// Generate and store identity key pair
 	const identityKeyPair = await libsignal.KeyHelper.generateIdentityKeyPair();
 	await store.put('identityKeyPair', identityKeyPair);
 
-	// Generate a signed pre-key; the second argument is a key ID
+	// Generate and store signed pre-key
 	const signedPreKey = await libsignal.KeyHelper.generateSignedPreKey(identityKeyPair, 1);
-	await store.put('signedPreKey', signedPreKey);
+	await store.storeSignedPreKey(signedPreKey.keyId, signedPreKey.keyPair);
 
-	// Generate a batch of one-time pre-keys; here, we generate 100
-	let oneTimePreKeys: libsignal.PreKeyPairType[] = [];
+	// Generate and store 100 one-time pre-keys
+	const oneTimePreKeys: libsignal.PreKeyPairType[] = [];
 	for (let i = 0; i < 100; i++) {
 		const prekey = await libsignal.KeyHelper.generatePreKey(i + 2);
 		oneTimePreKeys.push(prekey);
+		await store.storePreKey(prekey.keyId, prekey.keyPair);
 	}
-	await store.put('oneTimePreKeys', oneTimePreKeys);
 
-	return { registrationId, identityKeyPair, signedPreKey, oneTimePreKeys };
+	return {
+		registrationId,
+		identityKeyPair,
+		signedPreKey,
+		oneTimePreKeys
+	};
 }
 
 /**
@@ -124,6 +130,23 @@ export function arrayBufferToBase64(buffer: ArrayBuffer): string {
 	return btoa(binary);
 }
 
+export function convertBuffersToBase64(obj: any): any {
+	if (obj instanceof ArrayBuffer) {
+		return arrayBufferToBase64(obj);
+	} else if (Array.isArray(obj)) {
+		return obj.map(convertBuffersToBase64);
+	} else if (obj && typeof obj === 'object') {
+		const newObj: any = {};
+		for (const key in obj) {
+			if (Object.prototype.hasOwnProperty.call(obj, key)) {
+				newObj[key] = convertBuffersToBase64(obj[key]);
+			}
+		}
+		return newObj;
+	}
+	return obj;
+}
+
 /**
  * Converts a Base64 encoded string back to an ArrayBuffer.
  * @param base64 The Base64 encoded string.
@@ -136,4 +159,27 @@ export function base64ToArrayBuffer(base64: string): ArrayBuffer {
 		bytes[i] = binaryString.charCodeAt(i);
 	}
 	return bytes.buffer;
+}
+
+export function convertBase64ToBuffers(obj: any): any {
+	// Check if the object is a string that is a valid base64 (you might need a more robust check)
+	if (typeof obj === 'string' && /^[A-Za-z0-9+/]+={0,2}$/.test(obj)) {
+		try {
+			// Attempt conversion; if it fails, leave it as string.
+			return base64ToArrayBuffer(obj);
+		} catch (e) {
+			return obj;
+		}
+	} else if (Array.isArray(obj)) {
+		return obj.map(convertBase64ToBuffers);
+	} else if (obj && typeof obj === 'object') {
+		const newObj: any = {};
+		for (const key in obj) {
+			if (Object.prototype.hasOwnProperty.call(obj, key)) {
+				newObj[key] = convertBase64ToBuffers(obj[key]);
+			}
+		}
+		return newObj;
+	}
+	return obj;
 }

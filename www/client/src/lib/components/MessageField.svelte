@@ -6,7 +6,7 @@
 	}
 
 	let textInput: HTMLInputElement;
-
+	
 	$effect(() => {
 		const { chatId } = page.params;
 
