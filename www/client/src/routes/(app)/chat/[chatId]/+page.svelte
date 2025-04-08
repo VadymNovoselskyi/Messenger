@@ -5,7 +5,7 @@
 	import { browser } from '$app/environment';
 	import { memory } from '$lib/stores/memory.svelte';
 
-	import { getChats, sendMessage } from '$lib/api.svelte';
+	import { getChats, getExtraMessages, readAllUpdate, sendMessage } from '$lib/api.svelte';
 	import { getCookie } from '$lib/utils';
 	import type { Chat, Message } from '$lib/types';
 
@@ -37,8 +37,28 @@
 		else if (memory.chats.length) goto('/');
 		untrack(() => {
 			chantChange++;
-		})
+		});
 	});
+
+	async function sendMessagePrep(event: SubmitEvent) {
+		event.preventDefault();
+		const messageInput = (event.currentTarget as HTMLFormElement).message as HTMLInputElement;
+		const input = messageInput.value;
+		if (!input) return;
+		messageInput.value = '';
+
+		const { chatId } = page.params;
+		const chat = memory.chats.find((chat) => chat._id === chatId);
+		if (!chat) throw new Error(`Chat with id ${chatId} not found`);
+
+		// Update UI immediately and reset unread if needed
+		if (chat.unreadCount) {
+			await readAllUpdate(chatId);
+			await getExtraMessages(chatId, 0);
+			memory.chats = [...memory.chats];
+		}
+		sendMessage(chatId, input);
+	}
 </script>
 
 <svelte:head>
@@ -57,7 +77,7 @@
 	{#if chat}
 		{#key chantChange}
 			<!-- re-renders the component when chats change -->
-			<MessageList bind:this={messageList} {chat} submitFn={sendMessage} />
+			<MessageList bind:this={messageList} {chat} submitFn={sendMessagePrep} />
 		{/key}
 	{/if}
 </div>

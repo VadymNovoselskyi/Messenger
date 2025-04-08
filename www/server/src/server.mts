@@ -203,7 +203,10 @@ wss.on("connection", ws => {
         }
         case types.API.CREATE_CHAT: {
           const { username } = payload as types.createChatPayload;
-          const { createdChat, receivingUserId, preKeyBundle } = await createChat(new ObjectId(userId), username);
+          const { createdChat, receivingUserId, preKeyBundle } = await createChat(
+            new ObjectId(userId),
+            username
+          );
           sendResponse(ws, api, id, "SUCCESS", { createdChat, preKeyBundle });
           if (onlineUsers[receivingUserId.toString()]) {
             sendResponse(onlineUsers[receivingUserId.toString()], api, undefined, "SUCCESS", {
@@ -233,6 +236,31 @@ wss.on("connection", ws => {
           }
 
           await savePreKeys(new ObjectId(userId), preKeyBundleReconstructed);
+          break;
+        }
+        case types.API.SEND_ENC_MESSAGE: {
+          const { chatId, ciphertext } = payload as types.sendEncMessagePayload;
+          const { message, receivingUserId } = await sendMessage(
+            new ObjectId(userId),
+            new ObjectId(chatId),
+            text
+          );
+          // Forward the message if the recipient is online.
+          if (onlineUsers[receivingUserId.toString()]) {
+            sendResponse(
+              onlineUsers[receivingUserId.toString()],
+              types.API.RECEIVE_MESSAGE,
+              undefined,
+              "SUCCESS",
+              { chatId, message }
+            );
+          }
+          // Confirm message delivery to the sender.
+          sendResponse(ws, types.API.RECEIVE_MESSAGE, id, "SUCCESS", {
+            chatId,
+            message,
+            tempMessageId,
+          });
           break;
         }
 

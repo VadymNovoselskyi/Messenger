@@ -1,5 +1,11 @@
 import type { Binary, ObjectId } from "mongodb";
-import { BinaryPreKey, BinarySignedPreKey, StringifiedPreKey, StringifiedPreKeyBundle } from "./signalTypes.mjs";
+import {
+  BinaryPreKey,
+  BinarySignedPreKey,
+  StringifiedPreKey,
+  StringifiedPreKeyBundle,
+} from "./signalTypes.mjs";
+import { MessageType } from "@privacyresearch/libsignal-protocol-typescript";
 
 /** API endpoints enumeration */
 export enum API {
@@ -14,6 +20,7 @@ export enum API {
   LOGIN = "login",
   SIGNUP = "signup",
   SEND_KEYS = "sendKeys",
+  SEND_ENC_MESSAGE = "sendEncMessage",
 }
 
 /** Structure for API call messages */
@@ -34,7 +41,8 @@ export type messagePayload =
   | readAllPayload
   | createChatPayload
   | loginPayload
-  | sendKeysPayload;
+  | sendKeysPayload
+  | sendEncMessagePayload;
 
 /** Union type for response payloads */
 export type responsePayload =
@@ -49,7 +57,8 @@ export type responsePayload =
   | loginResponse
   | signupResponse
   | errorResponse
-  | sendKeysResponse;
+  | sendKeysResponse
+  | sendEncMessageResponse;
 
 /** Chat representation */
 export type Chat = {
@@ -149,6 +158,11 @@ export type sendKeysPayload = {
   preKeyBundle: StringifiedPreKeyBundle;
 };
 
+export type sendEncMessagePayload = {
+  chatId: string;
+  ciphertext: MessageType;
+};
+
 //Responses
 export type getChatsResponse = {
   chats: Chat[];
@@ -184,7 +198,7 @@ export type readAllResponse = Record<string, never>;
 
 export type createChatResponse = {
   createdChat: Chat;
-  preKeyBundle?: StringifiedPreKeyBundle
+  preKeyBundle?: StringifiedPreKeyBundle;
 };
 
 export type loginResponse = {
@@ -198,6 +212,8 @@ export type signupResponse = {
 };
 
 export type sendKeysResponse = Record<string, never>;
+
+export type sendEncMessageResponse = { tempMessageId: string };
 
 export type errorResponse = {
   message: string;

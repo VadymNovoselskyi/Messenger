@@ -62,30 +62,16 @@ export async function getChats(): Promise<void> {
 	}
 }
 
-export async function sendMessage(event: Event): Promise<void> {
-	event.preventDefault();
-	const messageInput = (event.currentTarget as HTMLFormElement).message as HTMLInputElement;
-	const input = messageInput.value;
-	if (!input) return;
-	messageInput.value = '';
-
-	const chatId = page.params.chatId;
+export async function sendMessage(chatId: string, text: string): Promise<void> {
 	const chat = memory.chats.find((chat) => chat._id === chatId);
 	if (!chat) throw new Error(`Chat with id ${chatId} not found`);
-
-	// Update UI immediately and reset unread if needed
-	if (chat.unreadCount) {
-		await readAllUpdate(chatId);
-		await getExtraMessages(chatId, 0);
-		memory.chats = [...memory.chats];
-	}
 
 	const tempMID = utils.generateId();
 	const currentTime = new Date().toISOString();
 	chat.messages.push({
 		_id: tempMID,
 		from: utils.getCookie('userId') ?? '',
-		text: input,
+		text,
 		sendTime: currentTime,
 		sending: true
 	});
@@ -95,7 +81,7 @@ export async function sendMessage(event: Event): Promise<void> {
 	// Create and send API call for sending a message
 	const call = createAPICall(types.API.SEND_MESSAGE, {
 		chatId,
-		text: input,
+		text,
 		tempMessageId: tempMID
 	});
 	try {
@@ -196,51 +182,7 @@ export async function createChat(event: SubmitEvent): Promise<void> {
 		const response = await sendRequest(call);
 		const { createdChat, preKeyBundle } = response as types.createChatResponse;
 		if (!preKeyBundle) throw new Error(`no preKeyBundle received`);
-		const { registrationId, identityKey, signedPreKey, preKeys } = preKeyBundle;
-
-		const serializedPreKey: libsignal.DeviceType = {
-			registrationId,
-			identityKey: utils.base64ToArrayBuffer(identityKey),
-			signedPreKey: {
-				keyId: signedPreKey.keyId,
-				publicKey: utils.base64ToArrayBuffer(signedPreKey.publicKey),
-				signature: utils.base64ToArrayBuffer(signedPreKey.signature)
-			},
-			preKey:
-				preKeys && preKeys.length > 0
-					? { keyId: preKeys[0].keyId, publicKey: utils.base64ToArrayBuffer(preKeys[0].publicKey) }
-					: undefined
-		};
-
-		const ephemeralKeyPair = await libsignal.KeyHelper.generatePreKey(9999); // Use a temporary id.
-
-		const receiverAddressType: libsignal.SignalProtocolAddressType = {
-			name: username,
-			deviceId: 1,
-			equals: (other: libsignal.SignalProtocolAddressType) => true
-		};
-		const receiverAddress: libsignal.SignalProtocolAddress = new libsignal.SignalProtocolAddress(
-			username,
-			1
-		);
-
-		const store = new SignalProtocolStore();
-		const sessionBuilder = new libsignal.SessionBuilder(store, receiverAddressType);
-
-		// Start session as initiator
-		const session = await sessionBuilder.startSessionAsInitiator(
-			ephemeralKeyPair.keyPair, // EKa: Your ephemeral key pair.
-			serializedPreKey.identityKey, // IKb: Remote identity public key.
-			serializedPreKey.signedPreKey.publicKey, // SPKb: Remote signed pre-key public key.
-			serializedPreKey.preKey ? serializedPreKey.preKey.publicKey : undefined, // OPKb: Optional one-time pre-key.
-			serializedPreKey.registrationId // Optionally, the remote registration ID.
-		);
-		console.log(session)
-		store.storeSession(`${username}.1`, session);
-
-		const senderSessionCipher = new libsignal.SessionCipher(store, receiverAddress);
-		const ciphertext = await senderSessionCipher.encrypt(utils.base64ToArrayBuffer('V2F6enVw'));
-		console.log(ciphertext);
+		handleSessionBootstrap(username, createdChat, preKeyBundle);
 
 		memory.chats = [createdChat, ...memory.chats];
 	} catch (error) {
@@ -316,6 +258,85 @@ export async function sendKeys(keys: signalTypes.unorgonizedKeys): Promise<void>
 		console.error('Error in signup:', error);
 		throw error;
 	}
+}
+
+export async function sendEncMessage(chatId: string, ciphertext: libsignal.MessageType) {
+	const chat = memory.chats.find((chat) => chat._id === chatId);
+	if (!chat) throw new Error(`Chat with id ${chatId} not found`);
+
+	// Create and send API call for sending a message
+	const call = createAPICall(types.API.SEND_ENC_MESSAGE, {
+		chatId,
+		ciphertext
+	});
+	try {
+		const response = await sendRequest(call);
+		// const { chatId, message } = response as types.sendEncMessageResponse;
+		// const chat = memory.chats.find((chat) => chat._id === chatId);
+		// if (!chat) throw new Error(`Chat with id ${chatId} not found`);
+
+		// const index = chat.messages.findIndex((msg) => msg._id === tempMessageId);
+		// if (index === -1) {
+		// 	alert(`Couldn't find message with tempMessageId: ${tempMessageId}`);
+		// 	return;
+		// }
+		// chat.messages[index] = message;
+		// chat.lastModified = message.sendTime;
+		// utils.sortChats();
+	} catch (error) {
+		console.error('Error in sendMessage:', error);
+		throw error;
+	}
+}
+
+async function handleSessionBootstrap(
+	username: string,
+	createdChat: types.Chat,
+	preKeyBundle: signalTypes.StringifiedPreKeyBundle
+) {
+	const { _id } = createdChat;
+	const { registrationId, identityKey, signedPreKey, preKeys } = preKeyBundle;
+	const serializedPreKey: libsignal.DeviceType = {
+		registrationId,
+		identityKey: utils.base64ToArrayBuffer(identityKey),
+		signedPreKey: {
+			keyId: signedPreKey.keyId,
+			publicKey: utils.base64ToArrayBuffer(signedPreKey.publicKey),
+			signature: utils.base64ToArrayBuffer(signedPreKey.signature)
+		},
+		preKey:
+			preKeys && preKeys.length > 0
+				? { keyId: preKeys[0].keyId, publicKey: utils.base64ToArrayBuffer(preKeys[0].publicKey) }
+				: undefined
+	};
+	const receiverAddressType: libsignal.SignalProtocolAddressType = {
+		name: username,
+		deviceId: 1,
+		equals: (other: libsignal.SignalProtocolAddressType) => true
+	};
+	const receiverAddress: libsignal.SignalProtocolAddress = new libsignal.SignalProtocolAddress(
+		username,
+		1
+	);
+	const receiverDevice: libsignal.DeviceType = {
+		identityKey: serializedPreKey.identityKey,
+		signedPreKey: serializedPreKey.signedPreKey,
+		preKey: serializedPreKey.preKey,
+		registrationId: serializedPreKey.registrationId
+	};
+
+	const store = new SignalProtocolStore();
+	const sessionBuilder = new libsignal.SessionBuilder(store, receiverAddressType);
+
+	// Start session as initiator
+	const session = await sessionBuilder.processPreKey(receiverDevice);
+	console.log(session);
+	store.storeSession(`${username}.1`, session);
+
+	const senderSessionCipher = new libsignal.SessionCipher(store, receiverAddress);
+	const ciphertext = await senderSessionCipher.encrypt(utils.base64ToArrayBuffer('V2F6enVw'));
+	console.log(ciphertext);
+	sendEncMessage(_id, ciphertext);
 }
 
 async function sendRequest(
