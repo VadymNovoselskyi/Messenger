@@ -13,6 +13,7 @@ import {
   createUser,
   findUser,
   savePreKeys,
+  sendEncMessage,
 } from "./api.mjs";
 import { base64ToBinary, generateToken, sendResponse } from "./utils.mjs";
 
@@ -208,11 +209,13 @@ wss.on("connection", ws => {
             username
           );
           sendResponse(ws, api, id, "SUCCESS", { createdChat, preKeyBundle });
-          if (onlineUsers[receivingUserId.toString()]) {
-            sendResponse(onlineUsers[receivingUserId.toString()], api, undefined, "SUCCESS", {
-              createdChat,
-            });
-          }
+
+          //Maybe return
+          // if (onlineUsers[receivingUserId.toString()]) {
+          //   sendResponse(onlineUsers[receivingUserId.toString()], api, undefined, "SUCCESS", {
+          //     createdChat,
+          //   });
+          // }
           break;
         }
         case types.API.SEND_KEYS: {
@@ -240,11 +243,12 @@ wss.on("connection", ws => {
         }
         case types.API.SEND_ENC_MESSAGE: {
           const { chatId, ciphertext } = payload as types.sendEncMessagePayload;
-          const { message, receivingUserId } = await sendMessage(
+          const { chat, message, receivingUserId } = await sendEncMessage(
             new ObjectId(userId),
             new ObjectId(chatId),
-            text
+            ciphertext
           );
+
           // Forward the message if the recipient is online.
           if (onlineUsers[receivingUserId.toString()]) {
             sendResponse(
@@ -252,15 +256,11 @@ wss.on("connection", ws => {
               types.API.RECEIVE_MESSAGE,
               undefined,
               "SUCCESS",
-              { chatId, message }
+              { chat, chatId, message }
             );
           }
           // Confirm message delivery to the sender.
-          sendResponse(ws, types.API.RECEIVE_MESSAGE, id, "SUCCESS", {
-            chatId,
-            message,
-            tempMessageId,
-          });
+          // sendRespx
           break;
         }
 

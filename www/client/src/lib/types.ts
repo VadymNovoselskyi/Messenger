@@ -158,6 +158,7 @@ export type sendMessageResponse = {
 };
 
 export type receiveMessageResponse = {
+	chat?: Chat;
 	chatId: string;
 	message: Message;
 };

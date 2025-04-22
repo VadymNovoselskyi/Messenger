@@ -135,27 +135,15 @@ export class SignalProtocolStore implements StorageType {
 		await this.remove(`signedPreKey:${keyId}`);
 	}
 
-	// Session storage
-	async loadSession(identifier: string): Promise<any> {
-		console.log(`loadSession, identifier: ${identifier}`);
-		const storedRecord = await this.get(`session:${identifier}`);
-		if (!storedRecord) return undefined;
-		return storedRecord;
+	async storeSession(identifier: string, record: any): Promise<void> {
+		console.log(`storeSession, identifier: ${identifier}; record: ${JSON.stringify(record)}`);
+		await this.put(`session:${identifier}`, record);
 	}
 
-	async storeSession(identifier: string, record: any): Promise<void> {
-		const serializedRecord = utils.convertBuffersToBase64(record);
-		console.log(
-			`storeSession, identifier: ${identifier}; serializedRecord: ${JSON.stringify(serializedRecord)}`
-		);
-		// Wrap the record in an object that contains a "version" and "sessions" property:
-		const wrapper = {
-			version: 'v1',
-			sessions: {
-				[identifier]: serializedRecord
-			}
-		};
-		await this.put(`session:${identifier}`, JSON.stringify(wrapper));
+	async loadSession(identifier: string): Promise<any> {
+		console.log(`loadSession, identifier: ${identifier}`);
+		const rec = await this.get(`session:${identifier}`);
+		return rec;
 	}
 
 	async removeSession(identifier: string): Promise<boolean> {

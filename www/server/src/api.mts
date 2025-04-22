@@ -11,6 +11,7 @@ import {
 } from "./types/types.mjs";
 import { BinaryPreKeyBundle, StringifiedPreKeyBundle } from "./types/signalTypes.mjs";
 import { binaryToBase64 } from "./utils.mjs";
+import { MessageType } from "@privacyresearch/libsignal-protocol-typescript";
 
 // Constants to manage pagination limits.
 const INIT_CHATS = 10;
@@ -75,6 +76,7 @@ export async function getChats(userId: ObjectId): Promise<Chat[]> {
 /**
  * Inserts a new message into a chat and updates the chat's timestamp.
  */
+//OLD
 export async function sendMessage(
   userId: ObjectId,
   chatId: ObjectId,
@@ -109,6 +111,66 @@ export async function sendMessage(
     if (!sentMessage)
       throw new Error(`Couldn't find inserted message: ${message} for chatId: ${chatId}`);
     return { message: sentMessage, receivingUserId };
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : "An unknown error occurred";
+    throw new Error(`Error sending message in chat ID ${chatId}: ${errMsg}`);
+  }
+}
+
+/**
+ * Inserts a new message into a chat and updates the chat's timestamp.
+ */
+//NEW
+export async function sendEncMessage(
+  userId: ObjectId,
+  chatId: ObjectId,
+  ciphertext: MessageType
+): Promise<{ chat: Chat; message: Message; receivingUserId: ObjectId }> {
+  try {
+    const { acknowledged, insertedId } = await messagesCollection.insertOne({
+      cid: chatId,
+      from: userId,
+      text: ciphertext as unknown as string, //VERY BAD, CHANGE TYPES
+      sendTime: new Date(),
+    });
+
+    const { modifiedCount } = await chatsCollection.updateOne(
+      { _id: chatId },
+      { $set: { lastModified: new Date() } }
+    );
+
+    if (!acknowledged || !insertedId || modifiedCount !== 1) {
+      throw new Error(
+        `Failed to send message in chat ID ${chatId}. acknowledged: ${acknowledged}, insertedId: ${insertedId}, modifiedCount: ${modifiedCount}`
+      );
+    }
+
+    const chat = await chatsCollection.findOne({ _id: chatId });
+    if (!chat) throw new Error(`Couldn't find chat with chatId ${chatId}`);
+
+    // Identify the recipient (the user who is not the sender).
+    const receivingUserId = chat.users.find((user: User) => !user._id.equals(userId))!._id;
+    const sentMessage: MessageDocument | null = await messagesCollection.findOne({
+      _id: insertedId,
+    });
+    if (!sentMessage)
+      throw new Error(
+        `Couldn't find inserted message: ${JSON.stringify(ciphertext)} for chatId: ${chatId}`
+      );
+    return {
+      chat: {
+        _id: chat._id,
+        users: chat.users,
+        messages: [sentMessage],
+        latestMessages: [],
+        unreadCount: 1,
+        receivedUnreadCount: 1,
+        receivedNewCount: 0,
+        lastModified: chat.lastModified,
+      },
+      message: sentMessage,
+      receivingUserId,
+    };
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : "An unknown error occurred";
     throw new Error(`Error sending message in chat ID ${chatId}: ${errMsg}`);
@@ -274,7 +336,8 @@ export async function createChat(
 
     //Get the preKeyBundle
     const { registrationId, identityKey, signedPreKey, preKeys } = creatingUser;
-    const randomIndex = Math.floor(Math.random() * preKeys!.length);
+    // const randomIndex = Math.floor(Math.random() * preKeys!.length);
+    const randomIndex = 0;
     const preKeyBundle: StringifiedPreKeyBundle = {
       registrationId: registrationId!,
       identityKey: binaryToBase64(identityKey!),

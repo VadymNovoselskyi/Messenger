@@ -62,6 +62,8 @@ export async function getChats(): Promise<void> {
 	}
 }
 
+//The old one
+//
 export async function sendMessage(chatId: string, text: string): Promise<void> {
 	const chat = memory.chats.find((chat) => chat._id === chatId);
 	if (!chat) throw new Error(`Chat with id ${chatId} not found`);
@@ -231,12 +233,11 @@ export async function signup(event: SubmitEvent): Promise<void> {
 	}
 }
 
+// Create a PreKey Bundle for publishing or for use by the SessionBuilder.
 export async function sendKeys(keys: signalTypes.unorgonizedKeys): Promise<void> {
-	// Create a PreKey Bundle for publishing or for use by the SessionBuilder.
-	// You might choose one of your one-time pre-keys (say, the first one) to include in the bundle.
 	const preKeyBundle: signalTypes.StringifiedPreKeyBundle = {
 		registrationId: keys.registrationId,
-		identityKey: utils.arrayBufferToBase64(keys.identityKeyPair.pubKey), // Public part of the identity key
+		identityKey: utils.arrayBufferToBase64(keys.identityKeyPair.pubKey),
 		signedPreKey: {
 			keyId: keys.signedPreKey.keyId,
 			publicKey: utils.arrayBufferToBase64(keys.signedPreKey.keyPair.pubKey),
@@ -260,6 +261,7 @@ export async function sendKeys(keys: signalTypes.unorgonizedKeys): Promise<void>
 	}
 }
 
+//New sendMessage
 export async function sendEncMessage(chatId: string, ciphertext: libsignal.MessageType) {
 	const chat = memory.chats.find((chat) => chat._id === chatId);
 	if (!chat) throw new Error(`Chat with id ${chatId} not found`);
@@ -267,24 +269,16 @@ export async function sendEncMessage(chatId: string, ciphertext: libsignal.Messa
 	// Create and send API call for sending a message
 	const call = createAPICall(types.API.SEND_ENC_MESSAGE, {
 		chatId,
-		ciphertext
+		ciphertext: {
+			type: ciphertext.type,
+			registrationId: ciphertext.registrationId,
+			body: btoa(ciphertext.body!)
+		}
 	});
 	try {
-		const response = await sendRequest(call);
-		// const { chatId, message } = response as types.sendEncMessageResponse;
-		// const chat = memory.chats.find((chat) => chat._id === chatId);
-		// if (!chat) throw new Error(`Chat with id ${chatId} not found`);
-
-		// const index = chat.messages.findIndex((msg) => msg._id === tempMessageId);
-		// if (index === -1) {
-		// 	alert(`Couldn't find message with tempMessageId: ${tempMessageId}`);
-		// 	return;
-		// }
-		// chat.messages[index] = message;
-		// chat.lastModified = message.sendTime;
-		// utils.sortChats();
+		await sendRequest(call);
 	} catch (error) {
-		console.error('Error in sendMessage:', error);
+		console.error('Error in sendEncMessage:', error);
 		throw error;
 	}
 }
@@ -305,15 +299,11 @@ async function handleSessionBootstrap(
 			signature: utils.base64ToArrayBuffer(signedPreKey.signature)
 		},
 		preKey:
-			preKeys && preKeys.length > 0
+			preKeys && preKeys.length
 				? { keyId: preKeys[0].keyId, publicKey: utils.base64ToArrayBuffer(preKeys[0].publicKey) }
 				: undefined
 	};
-	const receiverAddressType: libsignal.SignalProtocolAddressType = {
-		name: username,
-		deviceId: 1,
-		equals: (other: libsignal.SignalProtocolAddressType) => true
-	};
+
 	const receiverAddress: libsignal.SignalProtocolAddress = new libsignal.SignalProtocolAddress(
 		username,
 		1
@@ -326,15 +316,14 @@ async function handleSessionBootstrap(
 	};
 
 	const store = new SignalProtocolStore();
-	const sessionBuilder = new libsignal.SessionBuilder(store, receiverAddressType);
+	const sessionBuilder = new libsignal.SessionBuilder(store, receiverAddress);
+	const sessionCipher = new libsignal.SessionCipher(store, receiverAddress);
 
 	// Start session as initiator
 	const session = await sessionBuilder.processPreKey(receiverDevice);
-	console.log(session);
-	store.storeSession(`${username}.1`, session);
+	// console.log(session);
 
-	const senderSessionCipher = new libsignal.SessionCipher(store, receiverAddress);
-	const ciphertext = await senderSessionCipher.encrypt(utils.base64ToArrayBuffer('V2F6enVw'));
+	const ciphertext = await sessionCipher.encrypt(utils.base64ToArrayBuffer('V2F6enVw'));
 	console.log(ciphertext);
 	sendEncMessage(_id, ciphertext);
 }
@@ -359,7 +348,7 @@ async function sendRequest(
 	});
 }
 
-export function handleServerMessage(event: MessageEvent): void {
+export async function handleServerMessage(event: MessageEvent): Promise<void> {
 	const data: types.APIResponse = JSON.parse(event.data);
 	console.log(data);
 	const { api, id, status, payload } = data;
@@ -378,14 +367,49 @@ export function handleServerMessage(event: MessageEvent): void {
 		}
 		pendingRequests.delete(id);
 	} else if (api === types.API.RECEIVE_MESSAGE) {
-		const { chatId, message } = payload as types.receiveMessageResponse;
-		const chat = memory.chats.find((chat) => chat._id === chatId);
-		if (!chat) throw new Error(`Chat with id ${chatId} not found`);
-		chat.latestMessages = [...chat.latestMessages, message];
-		chat.unreadCount++;
-		chat.receivedUnreadCount++;
-		chat.receivedNewCount++;
-		chat.lastModified = message.sendTime;
+		const { chat, chatId, message } = payload as types.receiveMessageResponse;
+
+		let chatPresent = !!memory.chats.find((chat) => chat._id === chatId);
+		if (!chat) console.error(`No chat found with id ${chatId}`);
+		else if (!chatPresent) {
+			memory.chats = [chat, ...memory.chats];
+		}
+		const finalChat = memory.chats.find((chat) => chat._id === chatId);
+		if (!finalChat) throw new Error(`Chat with id ${chatId} not found`);
+
+		const senderAddress: libsignal.SignalProtocolAddress = new libsignal.SignalProtocolAddress(
+			finalChat.users.find((user) => user._id !== utils.getCookie('userId'))?.username ?? '',
+			1
+		);
+
+		const store = new SignalProtocolStore();
+		const sessionCipher = new libsignal.SessionCipher(store, senderAddress);
+		const cipherMessage = message.text as unknown as libsignal.MessageType;
+		const cipher = atob(cipherMessage.body!);
+		console.log("✅ got binary string length:", cipher.length);
+		
+		const key5 = await store.get('preKey:5');
+		console.log(key5.pubKey);
+		console.log(key5.privKey);
+
+		let plaintext;
+		if (cipherMessage.type === 3) {
+			try {
+				console.log('decryptPreKeyWhisperMessage');
+				plaintext = await sessionCipher.decryptPreKeyWhisperMessage(cipher!, 'binary');
+			} catch (e) {
+				console.log(e);
+			}
+		} else if (cipherMessage.type === 1) {
+			// It is a WhisperMessage for an established session.
+			console.log('decryptWhisperMessage');
+			plaintext = await sessionCipher.decryptWhisperMessage(cipher!, 'binary');
+		}
+		console.log(plaintext);
+		plaintext = new TextDecoder().decode(new Uint8Array(plaintext!));
+		console.log(plaintext);
+		message.text = plaintext;
+
 		utils.sortChats();
 	} else if (api === types.API.READ_UPDATE) {
 		const { chatId, lastSeen } = payload as types.readUpdateResponse;
