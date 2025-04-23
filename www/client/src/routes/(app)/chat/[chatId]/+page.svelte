@@ -5,7 +5,7 @@
 	import { browser } from '$app/environment';
 	import { memory } from '$lib/stores/memory.svelte';
 
-	import { getChats, getExtraMessages, readAllUpdate, sendMessage } from '$lib/api.svelte';
+	import { getChats, getExtraMessages, readAllUpdate, sendEncMessage, sendMessage } from '$lib/api.svelte';
 	import { getCookie } from '$lib/utils';
 	import type { Chat, Message } from '$lib/types';
 
@@ -57,7 +57,7 @@
 			await getExtraMessages(chatId, 0);
 			memory.chats = [...memory.chats];
 		}
-		sendMessage(chatId, input);
+		sendEncMessage(chatId, input);
 	}
 </script>
 

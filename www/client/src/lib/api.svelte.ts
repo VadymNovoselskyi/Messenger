@@ -262,20 +262,23 @@ export async function sendKeys(keys: signalTypes.unorgonizedKeys): Promise<void>
 }
 
 //New sendMessage
-export async function sendEncMessage(chatId: string, ciphertext: libsignal.MessageType) {
-	const chat = memory.chats.find((chat) => chat._id === chatId);
-	if (!chat) throw new Error(`Chat with id ${chatId} not found`);
-
-	// Create and send API call for sending a message
-	const call = createAPICall(types.API.SEND_ENC_MESSAGE, {
-		chatId,
-		ciphertext: {
-			type: ciphertext.type,
-			registrationId: ciphertext.registrationId,
-			body: btoa(ciphertext.body!)
-		}
-	});
+export async function sendEncMessage(chatId: string, text: string) {
 	try {
+		const chat = memory.chats.find((chat) => chat._id === chatId);
+		if (!chat) throw new Error(`Chat with id ${chatId} not found`);
+
+		const address: libsignal.SignalProtocolAddress = new libsignal.SignalProtocolAddress(
+			utils.getOtherUsername(chatId),
+			1
+		);
+		const store = new SignalProtocolStore();
+		const sessionCipher = new libsignal.SessionCipher(store, address);
+
+		const ciphertext = await sessionCipher.encrypt(utils.textToArrayBuffer(text));
+		const base64Body = btoa(ciphertext.body!);
+		ciphertext.body = base64Body;
+
+		const call = createAPICall(types.API.SEND_ENC_MESSAGE, { chatId, ciphertext });
 		await sendRequest(call);
 	} catch (error) {
 		console.error('Error in sendEncMessage:', error);
@@ -317,15 +320,9 @@ async function handleSessionBootstrap(
 
 	const store = new SignalProtocolStore();
 	const sessionBuilder = new libsignal.SessionBuilder(store, receiverAddress);
-	const sessionCipher = new libsignal.SessionCipher(store, receiverAddress);
-
-	// Start session as initiator
-	const session = await sessionBuilder.processPreKey(receiverDevice);
-	// console.log(session);
-
-	const ciphertext = await sessionCipher.encrypt(utils.base64ToArrayBuffer('V2F6enVw'));
-	console.log(ciphertext);
-	sendEncMessage(_id, ciphertext);
+	await sessionBuilder.processPreKey(receiverDevice);
+	
+	sendEncMessage(_id, 'EC3XDH Key Exchange was performed!');
 }
 
 async function sendRequest(
@@ -367,53 +364,49 @@ export async function handleServerMessage(event: MessageEvent): Promise<void> {
 		}
 		pendingRequests.delete(id);
 	} else if (api === types.API.RECEIVE_MESSAGE) {
-		const { chat, chatId, message } = payload as types.receiveMessageResponse;
+		const { chatId, message } = payload as types.receiveMessageResponse;
 
-		let chatPresent = !!memory.chats.find((chat) => chat._id === chatId);
-		if (!chat) console.error(`No chat found with id ${chatId}`);
-		else if (!chatPresent) {
-			memory.chats = [chat, ...memory.chats];
-		}
-		const finalChat = memory.chats.find((chat) => chat._id === chatId);
-		if (!finalChat) throw new Error(`Chat with id ${chatId} not found`);
+		const chat = memory.chats.find((chat) => chat._id === chatId);
+		if (!chat) throw new Error(`Chat with id ${chatId} not found`);
 
 		const senderAddress: libsignal.SignalProtocolAddress = new libsignal.SignalProtocolAddress(
-			finalChat.users.find((user) => user._id !== utils.getCookie('userId'))?.username ?? '',
+			chat.users.find((user) => user._id !== utils.getCookie('userId'))?.username ?? '',
 			1
 		);
 
 		const store = new SignalProtocolStore();
 		const sessionCipher = new libsignal.SessionCipher(store, senderAddress);
 		const cipherMessage = message.text as unknown as libsignal.MessageType;
-		const cipher = atob(cipherMessage.body!);
-		console.log("✅ got binary string length:", cipher.length);
-		
-		const key5 = await store.get('preKey:5');
-		console.log(key5.pubKey);
-		console.log(key5.privKey);
+		const cipherBinary = atob(cipherMessage.body!);
 
-		let plaintext;
 		if (cipherMessage.type === 3) {
 			try {
 				console.log('decryptPreKeyWhisperMessage');
-				plaintext = await sessionCipher.decryptPreKeyWhisperMessage(cipher!, 'binary');
+				await sessionCipher.decryptPreKeyWhisperMessage(cipherBinary!, 'binary');
+				return;
 			} catch (e) {
 				console.log(e);
 			}
-		} else if (cipherMessage.type === 1) {
-			// It is a WhisperMessage for an established session.
-			console.log('decryptWhisperMessage');
-			plaintext = await sessionCipher.decryptWhisperMessage(cipher!, 'binary');
 		}
-		console.log(plaintext);
-		plaintext = new TextDecoder().decode(new Uint8Array(plaintext!));
+		if (cipherMessage.type !== 1) throw new Error(`Unknown message type: ${cipherMessage.type}`);
+
+		let bufferText: ArrayBuffer;
+		console.log('decryptWhisperMessage');
+		bufferText = await sessionCipher.decryptWhisperMessage(cipherBinary!, 'binary');
+
+		const plaintext = new TextDecoder().decode(new Uint8Array(bufferText!));
 		console.log(plaintext);
 		message.text = plaintext;
+		chat.messages = [...chat.messages, message];
+		chat.messages.forEach((message) => console.log(JSON.stringify(message)));
 
 		utils.sortChats();
 	} else if (api === types.API.READ_UPDATE) {
 		const { chatId, lastSeen } = payload as types.readUpdateResponse;
 		console.log(chatId, lastSeen);
+	} else if (api === types.API.CREATE_CHAT) {
+		const { createdChat } = payload as types.createChatResponse;
+		memory.chats = [createdChat, ...memory.chats];
 	} else {
 		console.warn('Received response for unknown request ID:', id);
 	}

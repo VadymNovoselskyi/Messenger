@@ -28,7 +28,7 @@ export class SignalProtocolStore implements StorageType {
 
 	// Base CRUD methods for IndexedDB
 	async get(key: string): Promise<any> {
-		console.log(`get key: ${key}`);
+		// console.log(`get key: ${key}`);
 		const db = await this.dbPromise;
 		return new Promise((resolve, reject) => {
 			const transaction = db.transaction(this.storeName, 'readonly');
@@ -40,7 +40,7 @@ export class SignalProtocolStore implements StorageType {
 	}
 
 	async put(key: string, value: any): Promise<any> {
-		console.log(`put key: ${key}; value: ${value}`);
+		// console.log(`put key: ${key}; value: ${value}`);
 		const db = await this.dbPromise;
 		return new Promise((resolve, reject) => {
 			const transaction = db.transaction(this.storeName, 'readwrite');
@@ -136,12 +136,12 @@ export class SignalProtocolStore implements StorageType {
 	}
 
 	async storeSession(identifier: string, record: any): Promise<void> {
-		console.log(`storeSession, identifier: ${identifier}; record: ${JSON.stringify(record)}`);
+		// console.log(`storeSession, identifier: ${identifier}; record: ${JSON.stringify(record)}`);
 		await this.put(`session:${identifier}`, record);
 	}
 
 	async loadSession(identifier: string): Promise<any> {
-		console.log(`loadSession, identifier: ${identifier}`);
+		// console.log(`loadSession, identifier: ${identifier}`);
 		const rec = await this.get(`session:${identifier}`);
 		return rec;
 	}

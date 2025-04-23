@@ -161,6 +161,18 @@ export function base64ToArrayBuffer(base64: string): ArrayBuffer {
 	return bytes.buffer;
 }
 
+/**
+ * Converts a JavaScript string to an ArrayBuffer (UTF-8 encoded).
+ */
+export function textToArrayBuffer(text: string): ArrayBuffer {
+	const encoder = new TextEncoder();
+	const uint8 = encoder.encode(text);
+	const buf = new ArrayBuffer(uint8.length);
+	const view = new Uint8Array(buf);
+	view.set(uint8);
+	return buf;
+}
+
 export function convertBase64ToBuffers(obj: any): any {
 	// Check if the object is a string that is a valid base64 (you might need a more robust check)
 	if (typeof obj === 'string' && /^[A-Za-z0-9+/]+={0,2}$/.test(obj)) {
@@ -182,4 +194,14 @@ export function convertBase64ToBuffers(obj: any): any {
 		return newObj;
 	}
 	return obj;
+}
+
+export function getOtherUsername(chatId: string): string {
+	const chat = memory.chats.find((chat) => chat?._id === chatId);
+	if (!chat) throw new Error(`No chat found for chatId: ${chatId}`);
+
+	const otherUser = chat.users.find((user) => user._id !== getCookie('userId'));
+	if (!otherUser) throw new Error(`Coulndt find other user for chat: ${chat}`);
+
+	return otherUser.username;
 }

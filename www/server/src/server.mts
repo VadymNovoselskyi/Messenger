@@ -211,11 +211,11 @@ wss.on("connection", ws => {
           sendResponse(ws, api, id, "SUCCESS", { createdChat, preKeyBundle });
 
           //Maybe return
-          // if (onlineUsers[receivingUserId.toString()]) {
-          //   sendResponse(onlineUsers[receivingUserId.toString()], api, undefined, "SUCCESS", {
-          //     createdChat,
-          //   });
-          // }
+          if (onlineUsers[receivingUserId.toString()]) {
+            sendResponse(onlineUsers[receivingUserId.toString()], api, undefined, "SUCCESS", {
+              createdChat,
+            });
+          }
           break;
         }
         case types.API.SEND_KEYS: {
@@ -243,7 +243,7 @@ wss.on("connection", ws => {
         }
         case types.API.SEND_ENC_MESSAGE: {
           const { chatId, ciphertext } = payload as types.sendEncMessagePayload;
-          const { chat, message, receivingUserId } = await sendEncMessage(
+          const { message, receivingUserId } = await sendEncMessage(
             new ObjectId(userId),
             new ObjectId(chatId),
             ciphertext
@@ -256,7 +256,7 @@ wss.on("connection", ws => {
               types.API.RECEIVE_MESSAGE,
               undefined,
               "SUCCESS",
-              { chat, chatId, message }
+              { chatId, message }
             );
           }
           // Confirm message delivery to the sender.

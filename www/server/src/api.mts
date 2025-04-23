@@ -125,7 +125,7 @@ export async function sendEncMessage(
   userId: ObjectId,
   chatId: ObjectId,
   ciphertext: MessageType
-): Promise<{ chat: Chat; message: Message; receivingUserId: ObjectId }> {
+): Promise<{ message: Message; receivingUserId: ObjectId }> {
   try {
     const { acknowledged, insertedId } = await messagesCollection.insertOne({
       cid: chatId,
@@ -158,16 +158,6 @@ export async function sendEncMessage(
         `Couldn't find inserted message: ${JSON.stringify(ciphertext)} for chatId: ${chatId}`
       );
     return {
-      chat: {
-        _id: chat._id,
-        users: chat.users,
-        messages: [sentMessage],
-        latestMessages: [],
-        unreadCount: 1,
-        receivedUnreadCount: 1,
-        receivedNewCount: 0,
-        lastModified: chat.lastModified,
-      },
       message: sentMessage,
       receivingUserId,
     };
