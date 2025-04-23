@@ -335,7 +335,7 @@ export async function createChat(
     };
 
     //Get the preKeyBundle
-    const { registrationId, identityKey, signedPreKey, preKeys } = creatingUser;
+    const { registrationId, identityKey, signedPreKey, preKeys } = receivingUser;
     // const randomIndex = Math.floor(Math.random() * preKeys!.length);
     const randomIndex = 0;
     const preKeyBundle: StringifiedPreKeyBundle = {
