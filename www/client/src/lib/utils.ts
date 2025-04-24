@@ -1,7 +1,9 @@
 import * as libsignal from '@privacyresearch/libsignal-protocol-typescript';
 import { memory } from './stores/memory.svelte';
-import { SignalProtocolStore } from './SignalProtocolStore';
-import type { unorgonizedKeys } from './signalTypes';
+import { SignalProtocolStore } from './stores/SignalProtocolStore';
+import type { unorgonizedKeys } from './types/signalTypes';
+import type { ApiChat, ApiMessage, UsedChat, StoredMessage, StoredChat } from './types/dataTypes';
+import { ChatStore } from './stores/ChatStore';
 
 export function formatISODate(isoDate: string): string {
 	const date = new Date(isoDate);
@@ -197,11 +199,49 @@ export function convertBase64ToBuffers(obj: any): any {
 }
 
 export function getOtherUsername(chatId: string): string {
-	const chat = memory.chats.find((chat) => chat?._id === chatId);
+	const chatStore = ChatStore.getInstance();
+	const chat = chatStore.getChat(chatId);
 	if (!chat) throw new Error(`No chat found for chatId: ${chatId}`);
 
 	const otherUser = chat.users.find((user) => user._id !== getCookie('userId'));
 	if (!otherUser) throw new Error(`Coulndt find other user for chat: ${chat}`);
 
 	return otherUser.username;
+}
+
+export function apiToUsedChat(chat: ApiChat): UsedChat {
+	return {
+		_id: chat._id,
+		users: chat.users,
+		messages: chat.messages,
+		latestMessages: [],
+		unreadCount: 0,
+		receivedUnreadCount: 0,
+		receivedNewCount: 0,
+		lastModified: chat.lastModified
+	};
+}
+
+export function storedToUsedChat(chat: StoredChat, messages: StoredMessage[]): UsedChat {
+	return {
+		_id: chat._id,
+		users: chat.users,
+		messages: messages,
+		latestMessages: [],
+		unreadCount: 0,
+		receivedUnreadCount: 0,
+		receivedNewCount: 0,
+		lastModified: chat.lastModified
+	};
+}
+
+export function toStoredMessage(message: ApiMessage): StoredMessage {
+	return {
+		_id: message._id,
+		chatId: message.chatId,
+		from: message.from,
+		ciphertext: message.ciphertext,
+		sequence: message.sequence,
+		sendTime: message.sendTime
+	};
 }

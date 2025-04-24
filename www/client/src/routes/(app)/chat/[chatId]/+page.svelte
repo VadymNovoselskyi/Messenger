@@ -5,15 +5,28 @@
 	import { browser } from '$app/environment';
 	import { memory } from '$lib/stores/memory.svelte';
 
-	import { getChats, getExtraMessages, readAllUpdate, sendEncMessage, sendMessage } from '$lib/api.svelte';
-	import { getCookie } from '$lib/utils';
-	import type { Chat, Message } from '$lib/types';
+	import {
+		loadAndSyncChats,
+		getExtraMessages,
+		readAllUpdate,
+		sendEncMessage,
+
+		sendKeys
+
+	} from '$lib/api.svelte';
+	import { generateKeys, getCookie, storedToUsedChat } from '$lib/utils';
+	import type { UsedChat, StoredMessage } from '$lib/types/dataTypes';
 
 	import ChatList from '$lib/components/ChatList.svelte';
 	import MessageList from '$lib/components/MessageList.svelte';
+	import { DbService } from '$lib/stores/DbService';
+	import { ChatStore } from '$lib/stores/ChatStore';
+	import { SignalProtocolStore } from '$lib/stores/SignalProtocolStore';
 
-	let chat: Chat | undefined = $state();
-	let chantChange: number = $state(0); //Workaraound to trigger reinit (made for readAll)
+	let chatStore: ChatStore = $state()!;
+	let dbService: DbService;
+	let chat: UsedChat | undefined = $state();
+	let chatChange: number = $state(0); //Workaraound to trigger reinit (made for readAll)
 	let index: number | undefined = $state();
 	let messageList = $state() as MessageList;
 
@@ -21,24 +34,46 @@
 		if (messageList) messageList.destroy();
 	}
 
-	onMount(() => {
+	onMount(async () => {
+		if (!browser) return;
 		if (!getCookie('userId') || !getCookie('token')) {
 			console.log(getCookie('userId'), getCookie('token'));
 			goto('/login');
 			return;
 		}
-		if (browser && !memory.chats.length) getChats();
+		const store = SignalProtocolStore.getInstance();
+		const isFilled = await store.check();
+		if (!isFilled) {
+			const keys = await generateKeys();
+			await sendKeys(keys);
+		}
+
+		chatStore = ChatStore.getInstance();
+		dbService = await DbService.getInstance();
 	});
 
 	$effect(() => {
 		const { chatId } = page.params;
-		chat = memory.chats.find((c) => c._id === chatId);
-		if (chat) index = memory.chats.indexOf(chat);
-		else if (memory.chats.length) goto('/');
-		untrack(() => {
-			chantChange++;
-		});
+		changeChat(chatId);
 	});
+
+	async function changeChat(chatId: string) {
+		console.log('Changing chat');
+		const chat = chatStore.getChat(chatId);
+		console.log(chat);
+		if (!chat) {
+			goto('/');
+			return;
+		}
+
+		const messages = await dbService.getLatestMessages(chatId);
+		console.log(messages);
+		chat.messages = messages;
+		index = chatStore.indexOf(chat);
+		untrack(() => {
+			chatChange++;
+		});
+	}
 
 	async function sendMessagePrep(event: SubmitEvent) {
 		event.preventDefault();
@@ -48,7 +83,8 @@
 		messageInput.value = '';
 
 		const { chatId } = page.params;
-		const chat = memory.chats.find((chat) => chat._id === chatId);
+
+		const chat = chatStore.getChat(chatId);
 		if (!chat) throw new Error(`Chat with id ${chatId} not found`);
 
 		// Update UI immediately and reset unread if needed
@@ -71,12 +107,11 @@
 
 <div id="wrapper">
 	<section id="chats-list">
-		<ChatList bind:chats={memory.chats} openedIndex={index} {onChatChange} />
+		<ChatList bind:chats={chatStore.chats} openedIndex={index} {onChatChange} />
 	</section>
 
 	{#if chat}
-		{#key chantChange}
-			<!-- re-renders the component when chats change -->
+		{#key chatChange}
 			<MessageList bind:this={messageList} {chat} submitFn={sendMessagePrep} />
 		{/key}
 	{/if}

@@ -6,13 +6,13 @@
 	import AddChatButton from '$lib/components/AddChatButton.svelte';
 
 	import { formatISODate, getCookie, createObserver } from '$lib/utils';
-	import type { Chat, User } from '$lib/types';
+	import type { UsedChat } from '$lib/types/dataTypes';
 
 	let {
 		chats = $bindable(),
 		openedIndex,
 		onChatChange
-	}: { chats: Chat[]; openedIndex?: number; onChatChange?: () => void } = $props();
+	}: { chats: UsedChat[]; openedIndex?: number; onChatChange?: () => void } = $props();
 
 	let showAddChat = $state(false);
 	let bottomObserver = $state<IntersectionObserver>();
@@ -37,16 +37,15 @@
 		await checkContentHeight();
 	});
 
-
 	// Effect: re-check content height when derived chat list changes
 	$effect(() => {
 		lastChats; // dependency for reactivity
-		
+
 		requestAnimationFrame(async () => {
 			await tick();
 			await checkContentHeight();
 		});
-		
+
 		// Start observing bottom anchor for lazy loading after tick
 		if (scrollBar) bottomObserver!.observe(bottom_anchor);
 	});
@@ -117,11 +116,11 @@
 			>
 				<img
 					src={''}
-					alt={chat.users.find((user: User) => user._id !== getCookie('userId'))!.username}
+					alt={chat.users.find((user) => user._id !== getCookie('userId'))!.username}
 					class="profile-picture"
 				/>
 				<p class="chat-name">
-					{chat.users.find((user: User) => user._id !== getCookie('userId'))!.username}
+					{chat.users.find((user) => user._id !== getCookie('userId'))!.username}
 				</p>
 				{#if chat.unreadCount}
 					<p class="unread-count">
@@ -129,7 +128,7 @@
 					</p>
 				{/if}
 				<p class="chat-message" class:system-message={!chat.messages.length}>
-					{chat.messages[chat.messages.length - 1]?.text ?? 'No messages'}
+					{chat.messages[chat.messages.length - 1]?.plaintext ?? 'No messages'}
 				</p>
 				<p class="send-date">{formatISODate(chat.lastModified)}</p>
 			</a>

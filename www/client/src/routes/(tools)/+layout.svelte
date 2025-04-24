@@ -1,5 +1,5 @@
 <script lang="ts">
-    import type { Link } from '$lib/types';
+    import type { Link } from '$lib/types/dataTypes';
     import Nav from '$lib/components/Nav.svelte';
     import '$lib/style.scss';
     import './tools-style.scss';

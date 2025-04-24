@@ -1,13 +1,30 @@
-import type { Binary, ObjectId } from "mongodb";
-import {
-  BinaryPreKey,
-  BinarySignedPreKey,
-  StringifiedPreKey,
-  StringifiedPreKeyBundle,
-} from "./signalTypes.mjs";
+import { ObjectId } from "mongodb";
+import { StringifiedPreKeyBundle } from "./signalTypes.mjs";
 import { MessageType } from "@privacyresearch/libsignal-protocol-typescript";
+import { MessageDocument } from "./mongoTypes.mjs";
 
-/** API endpoints enumeration */
+export type ApiMessage = {
+  _id: string;
+  chatId: string;
+  from: string;
+  ciphertext: MessageType;
+  sequence: number;
+  sendTime: string; //ISO-date
+};
+
+export type ApiChat = {
+  _id: string;
+  users: ApiUser[];
+  messages: ApiMessage[];
+  messageCounter: number;
+  lastModified: string; //ISO-Date
+};
+
+export type ApiUser = {
+  _id: string;
+  username: string;
+};
+
 export enum API {
   GET_CHATS = "getChats",
   SEND_MESSAGE = "sendMessage",
@@ -60,60 +77,6 @@ export type responsePayload =
   | sendKeysResponse
   | sendEncMessageResponse;
 
-/** Chat representation */
-export type Chat = {
-  _id: ObjectId;
-  users: User[];
-  messages: Message[];
-  latestMessages: Message[];
-  unreadCount: number;
-  receivedUnreadCount: number;
-  receivedNewCount: number;
-  lastModified: Date;
-};
-
-/** User representation */
-export type User = {
-  _id: ObjectId;
-  username: string;
-  lastSeen: Date;
-};
-
-/** Message representation */
-export type Message = {
-  _id: ObjectId;
-  from: ObjectId;
-  text: string;
-  sendTime: Date;
-};
-
-/** MongoDB document for a chat */
-export type ChatDocument = {
-  _id: ObjectId;
-  users: User[];
-  messageCounter: number;
-  lastModified: Date;
-};
-
-/** MongoDB document for a user */
-export type UserDocument = {
-  _id: ObjectId;
-  username: string;
-  registrationId?: number; // B's registration id
-  identityKey?: Binary; // B's identity public key
-  signedPreKey?: BinarySignedPreKey; // B's signed pre-key
-  preKeys?: BinaryPreKey[]; // A one-time pre-key from B
-  password: string;
-};
-
-/** MongoDB document for a message */
-export type MessageDocument = {
-  _id: ObjectId;
-  cid: ObjectId; // Chat identifier
-  from: ObjectId;
-  text: string;
-  sendTime: Date;
-};
 export type getChatsPayload = Record<string, never>;
 
 export type sendMessagePayload = {
@@ -153,6 +116,7 @@ export type loginPayload = {
 export type signupPayload = {
   username: string;
   password: string;
+  preKeyBundle: StringifiedPreKeyBundle;
 };
 
 export type sendKeysPayload = {
@@ -166,19 +130,18 @@ export type sendEncMessagePayload = {
 
 //Responses
 export type getChatsResponse = {
-  chats: Chat[];
+  chats: ApiChat[];
 };
 
 export type sendMessageResponse = {
   chatId: string;
-  message: Message;
+  message: ApiMessage;
   tempMessageId: string;
 };
 
 export type receiveMessageResponse = {
-  chat?: Chat;
   chatId: string;
-  message: Message;
+  message: MessageDocument;
 };
 
 export type readUpdateResponse = {
@@ -188,18 +151,18 @@ export type readUpdateResponse = {
 
 export type getExtraMessagesResponse = {
   chatId: string;
-  extraMessages: Message[];
+  extraMessages: ApiMessage[];
 };
 
 export type getExtraNewMessagesResponse = {
   chatId: string;
-  extraNewMessages: Message[];
+  extraNewMessages: ApiMessage[];
 };
 
 export type readAllResponse = Record<string, never>;
 
 export type createChatResponse = {
-  createdChat: Chat;
+  createdChat: ApiChat;
   preKeyBundle?: StringifiedPreKeyBundle;
 };
 

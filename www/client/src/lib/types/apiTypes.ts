@@ -1,10 +1,11 @@
 import type { MessageType } from '@privacyresearch/libsignal-protocol-typescript';
-import type { PreKeyBundle, StringifiedPreKeyBundle } from './signalTypes';
+import type { StringifiedPreKeyBundle } from './signalTypes';
+import type { ApiChat, ApiMessage } from './dataTypes';
 
 /** API endpoints enumeration */
 export enum API {
 	GET_CHATS = 'getChats',
-	SEND_MESSAGE = 'sendMessage',
+	SEND_ENC_MESSAGE = 'sendEncMessage',
 	RECEIVE_MESSAGE = 'receiveMessage',
 	READ_UPDATE = 'readUpdate',
 	EXTRA_MESSAGES = 'extraMessages',
@@ -13,8 +14,7 @@ export enum API {
 	CREATE_CHAT = 'createChat',
 	LOGIN = 'login',
 	SIGNUP = 'signup',
-	SEND_KEYS = 'sendKeys',
-	SEND_ENC_MESSAGE = 'sendEncMessage'
+	SEND_KEYS = 'sendKeys'
 }
 
 /** Structure for API call messages */
@@ -36,7 +36,6 @@ export interface APIResponse {
 /** Union type for request payloads */
 export type messagePayload =
 	| getChatsPayload
-	| sendMessagePayload
 	| readUpdatePayload
 	| getExtraMessagesPayload
 	| getExtraNewMessagesPayload
@@ -50,7 +49,6 @@ export type messagePayload =
 /** Union type for response payloads */
 export type responsePayload =
 	| getChatsResponse
-	| sendMessageResponse
 	| receiveMessageResponse
 	| readUpdateResponse
 	| getExtraMessagesResponse
@@ -63,46 +61,7 @@ export type responsePayload =
 	| sendKeysResponse
 	| sendEncMessageResponse;
 
-/** Chat representation */
-export interface Chat {
-	_id: string; //ID type?
-	users: User[];
-	messages: Message[];
-	latestMessages: Message[];
-	unreadCount: number;
-	receivedUnreadCount: number;
-	receivedNewCount: number;
-	lastModified: string; //ISO-Date
-}
-
-/** User representation */
-export interface User {
-	_id: string;
-	username: string;
-}
-
-/** Message representation */
-export interface Message {
-	_id: string;
-	from: string; //User
-	text: string;
-	sendTime: string; //ISO-date
-	sending?: boolean;
-}
-
-export interface Link {
-	path: string;
-	title: string;
-	pathsToCheck?: string[];
-}
-
 export type getChatsPayload = Record<string, never>;
-
-export type sendMessagePayload = {
-	chatId: string;
-	text: string;
-	tempMessageId: string;
-};
 
 export type readUpdatePayload = {
 	chatId: string;
@@ -148,19 +107,13 @@ export type sendEncMessagePayload = {
 
 //Responses
 export type getChatsResponse = {
-	chats: Chat[];
-};
-
-export type sendMessageResponse = {
-	chatId: string;
-	message: Message;
-	tempMessageId: string;
+	chats: ApiChat[];
 };
 
 export type receiveMessageResponse = {
-	chat?: Chat;
+	chat?: ApiChat;
 	chatId: string;
-	message: Message;
+	message: ApiMessage;
 };
 
 export type readUpdateResponse = {
@@ -170,18 +123,18 @@ export type readUpdateResponse = {
 
 export type getExtraMessagesResponse = {
 	chatId: string;
-	extraMessages: Message[];
+	extraMessages: ApiMessage[];
 };
 
 export type getExtraNewMessagesResponse = {
 	chatId: string;
-	extraNewMessages: Message[];
+	extraNewMessages: ApiMessage[];
 };
 
 export type readAllResponse = Record<string, never>;
 
 export type createChatResponse = {
-	createdChat: Chat;
+	createdChat: ApiChat;
 	preKeyBundle?: StringifiedPreKeyBundle;
 };
 

@@ -2,18 +2,21 @@ import { page } from '$app/state';
 import { goto } from '$app/navigation';
 import { memory } from '$lib/stores/memory.svelte';
 import * as utils from '$lib/utils';
-import * as types from '$lib/types';
-import * as signalTypes from './signalTypes';
+import * as dataTypes from '$lib/types/dataTypes';
+import * as apiTypes from '$lib/types/apiTypes';
+import * as signalTypes from './types/signalTypes';
 import * as libsignal from '@privacyresearch/libsignal-protocol-typescript';
-import { SignalProtocolStore } from './SignalProtocolStore';
+import { SignalProtocolStore } from './stores/SignalProtocolStore';
+import { DbService } from './stores/DbService';
+import { ChatStore } from './stores/ChatStore';
 
 const pendingRequests = new Map<
 	string,
-	{ resolve: (value: types.responsePayload) => void; reject: (reason: any) => void }
+	{ resolve: (value: apiTypes.responsePayload) => void; reject: (reason: any) => void }
 >();
 
 // Helper: constructs an API message
-function createAPICall(api: types.API, payload: types.messagePayload): types.APIMessage {
+function createAPICall(api: apiTypes.API, payload: apiTypes.messagePayload): apiTypes.APIMessage {
 	return {
 		api,
 		id: utils.generateId(),
@@ -49,65 +52,34 @@ export async function getWS(): Promise<WebSocket> {
 	});
 }
 
-export async function getChats(): Promise<void> {
-	const call = createAPICall(types.API.GET_CHATS, {});
+export async function loadAndSyncChats(): Promise<void> {
+	const dbService = await DbService.getInstance();
+	const chatStore = ChatStore.getInstance();
+
+	const latestChats = await dbService.getLatestChats();
+	const convertedChats = await Promise.all(
+		latestChats.map(async (chat) => {
+			const messages = await dbService.getLatestMessages(chat._id);
+			return utils.storedToUsedChat(chat, messages);
+		})
+	);
+	chatStore.addChats(convertedChats);
+	utils.sortChats();
+
+	const call = createAPICall(apiTypes.API.GET_CHATS, {});
 	try {
 		const response = await sendRequest(call);
-		const { chats } = response as types.getChatsResponse;
-		memory.chats = chats;
-		utils.sortChats();
+		// const { chats } = response as apiTypes.getChatsResponse;
+		// memory.chats = chats.map((chat) => utils.apiToUsedChat(chat));
+		// utils.sortChats();
 	} catch (error) {
 		console.error('Error in getChats:', error);
 		throw error;
 	}
 }
 
-//The old one
-//
-export async function sendMessage(chatId: string, text: string): Promise<void> {
-	const chat = memory.chats.find((chat) => chat._id === chatId);
-	if (!chat) throw new Error(`Chat with id ${chatId} not found`);
-
-	const tempMID = utils.generateId();
-	const currentTime = new Date().toISOString();
-	chat.messages.push({
-		_id: tempMID,
-		from: utils.getCookie('userId') ?? '',
-		text,
-		sendTime: currentTime,
-		sending: true
-	});
-	chat.lastModified = currentTime;
-	utils.sortChats();
-
-	// Create and send API call for sending a message
-	const call = createAPICall(types.API.SEND_MESSAGE, {
-		chatId,
-		text,
-		tempMessageId: tempMID
-	});
-	try {
-		const response = await sendRequest(call);
-		const { chatId, message, tempMessageId } = response as types.sendMessageResponse;
-		const chat = memory.chats.find((chat) => chat._id === chatId);
-		if (!chat) throw new Error(`Chat with id ${chatId} not found`);
-
-		const index = chat.messages.findIndex((msg) => msg._id === tempMessageId);
-		if (index === -1) {
-			alert(`Couldn't find message with tempMessageId: ${tempMessageId}`);
-			return;
-		}
-		chat.messages[index] = message;
-		chat.lastModified = message.sendTime;
-		utils.sortChats();
-	} catch (error) {
-		console.error('Error in sendMessage:', error);
-		throw error;
-	}
-}
-
 export async function sendReadUpdate(chatId: string, messageId: string): Promise<void> {
-	const call = createAPICall(types.API.READ_UPDATE, { chatId, messageId });
+	const call = createAPICall(apiTypes.API.READ_UPDATE, { chatId, messageId });
 	try {
 		sendRequest(call);
 	} catch (error) {
@@ -117,16 +89,20 @@ export async function sendReadUpdate(chatId: string, messageId: string): Promise
 }
 
 export async function getExtraMessages(chatId: string, currentIndex: number): Promise<void> {
-	const call = createAPICall(types.API.EXTRA_MESSAGES, { chatId, currentIndex });
+	const call = createAPICall(apiTypes.API.EXTRA_MESSAGES, { chatId, currentIndex });
 	try {
 		const response = await sendRequest(call);
-		const { extraMessages } = response as types.getExtraMessagesResponse;
-		const chat = memory.chats.find((chat) => chat._id === chatId);
+		const { extraMessages } = response as apiTypes.getExtraMessagesResponse;
+		const chatStore = ChatStore.getInstance();
+		const chat = chatStore.getChat(chatId);
 		if (!chat) {
 			alert(`No chat to add extra messages ${chatId}`);
 			return;
 		}
-		chat.messages = [...extraMessages, ...chat.messages];
+		chat.messages = [
+			...extraMessages.map((message) => utils.toStoredMessage(message)),
+			...chat.messages
+		];
 	} catch (error) {
 		console.error('Error in getExtraMessages:', error);
 		throw error;
@@ -134,16 +110,20 @@ export async function getExtraMessages(chatId: string, currentIndex: number): Pr
 }
 
 export async function getExtraNewMessages(chatId: string, unreadCount: number): Promise<void> {
-	const call = createAPICall(types.API.EXTRA_NEW_MESSAGES, { chatId, unreadCount });
+	const call = createAPICall(apiTypes.API.EXTRA_NEW_MESSAGES, { chatId, unreadCount });
 	try {
 		const response = await sendRequest(call);
-		const { extraNewMessages } = response as types.getExtraNewMessagesResponse;
-		const chat = memory.chats.find((chat) => chat._id === chatId);
+		const { extraNewMessages } = response as apiTypes.getExtraNewMessagesResponse;
+		const chatStore = ChatStore.getInstance();
+		const chat = chatStore.getChat(chatId);
 		if (!chat) {
 			alert(`No chat to add extra messages ${chatId}`);
 			return;
 		}
-		chat.messages = [...chat.messages, ...extraNewMessages];
+		chat.messages = [
+			...chat.messages,
+			...extraNewMessages.map((message) => utils.toStoredMessage(message))
+		];
 		chat.receivedUnreadCount += extraNewMessages.length;
 	} catch (error) {
 		console.error('Error in getExtraNewMessages:', error);
@@ -152,10 +132,12 @@ export async function getExtraNewMessages(chatId: string, unreadCount: number): 
 }
 
 export async function readAllUpdate(chatId: string): Promise<void> {
-	const call = createAPICall(types.API.READ_ALL, { chatId });
+	const call = createAPICall(apiTypes.API.READ_ALL, { chatId });
 	try {
 		await sendRequest(call);
-		const chat = memory.chats.find((chat) => chat._id === chatId);
+
+		const chatStore = ChatStore.getInstance();
+		const chat = chatStore.getChat(chatId);
 		if (!chat) {
 			alert(`No chat to read all ${chatId}`);
 			return;
@@ -179,14 +161,20 @@ export async function createChat(event: SubmitEvent): Promise<void> {
 	if (!username) return;
 	usernameInput.value = '';
 
-	const call = createAPICall(types.API.CREATE_CHAT, { username });
+	const call = createAPICall(apiTypes.API.CREATE_CHAT, { username });
 	try {
 		const response = await sendRequest(call);
-		const { createdChat, preKeyBundle } = response as types.createChatResponse;
+		const { createdChat, preKeyBundle } = response as apiTypes.createChatResponse;
 		if (!preKeyBundle) throw new Error(`no preKeyBundle received`);
-		handleSessionBootstrap(username, createdChat, preKeyBundle);
+		const convertedChat = utils.apiToUsedChat(createdChat);
 
-		memory.chats = [createdChat, ...memory.chats];
+		const dbService = await DbService.getInstance();
+		const chatStore = ChatStore.getInstance();
+		dbService.putChat(createdChat);
+		chatStore.addChat(convertedChat);
+
+		await handleSessionBootstrap(username, convertedChat, preKeyBundle);
+		return;
 	} catch (error) {
 		console.error('Error in createChat:', error);
 		throw error;
@@ -200,10 +188,10 @@ export async function login(event: SubmitEvent): Promise<void> {
 	usernameLogin.value = '';
 	passwordLogin.value = '';
 
-	const call = createAPICall(types.API.LOGIN, { username, password });
+	const call = createAPICall(apiTypes.API.LOGIN, { username, password });
 	try {
 		const response = await sendRequest(call);
-		const { userId, token } = response as types.loginResponse;
+		const { userId, token } = response as apiTypes.loginResponse;
 		utils.setCookie('userId', userId, 28);
 		utils.setCookie('token', token, 28);
 		goto('/');
@@ -220,10 +208,10 @@ export async function signup(event: SubmitEvent): Promise<void> {
 	usernameSignup.value = '';
 	passwordSignup.value = '';
 
-	const call = createAPICall(types.API.SIGNUP, { username, password });
+	const call = createAPICall(apiTypes.API.SIGNUP, { username, password });
 	try {
 		const response = await sendRequest(call);
-		const { userId, token } = response as types.signupResponse;
+		const { userId, token } = response as apiTypes.signupResponse;
 		utils.setCookie('userId', userId, 28);
 		utils.setCookie('token', token, 28);
 		goto('/');
@@ -252,7 +240,7 @@ export async function sendKeys(keys: signalTypes.unorgonizedKeys): Promise<void>
 		});
 	}
 
-	const call = createAPICall(types.API.SEND_KEYS, { preKeyBundle });
+	const call = createAPICall(apiTypes.API.SEND_KEYS, { preKeyBundle });
 	try {
 		await sendRequest(call);
 	} catch (error) {
@@ -264,7 +252,9 @@ export async function sendKeys(keys: signalTypes.unorgonizedKeys): Promise<void>
 //New sendMessage
 export async function sendEncMessage(chatId: string, text: string) {
 	try {
-		const chat = memory.chats.find((chat) => chat._id === chatId);
+		const chatStore = ChatStore.getInstance();
+		const chat = chatStore.getChat(chatId);
+		console.log(chat);
 		if (!chat) throw new Error(`Chat with id ${chatId} not found`);
 
 		const address: libsignal.SignalProtocolAddress = new libsignal.SignalProtocolAddress(
@@ -278,7 +268,7 @@ export async function sendEncMessage(chatId: string, text: string) {
 		const base64Body = btoa(ciphertext.body!);
 		ciphertext.body = base64Body;
 
-		const call = createAPICall(types.API.SEND_ENC_MESSAGE, { chatId, ciphertext });
+		const call = createAPICall(apiTypes.API.SEND_ENC_MESSAGE, { chatId, ciphertext });
 		await sendRequest(call);
 	} catch (error) {
 		console.error('Error in sendEncMessage:', error);
@@ -288,7 +278,7 @@ export async function sendEncMessage(chatId: string, text: string) {
 
 async function handleSessionBootstrap(
 	username: string,
-	createdChat: types.Chat,
+	createdChat: dataTypes.UsedChat,
 	preKeyBundle: signalTypes.StringifiedPreKeyBundle
 ) {
 	const { _id } = createdChat;
@@ -326,9 +316,9 @@ async function handleSessionBootstrap(
 }
 
 async function sendRequest(
-	message: types.APIMessage,
+	message: apiTypes.APIMessage,
 	timeout?: number
-): Promise<types.responsePayload> {
+): Promise<apiTypes.responsePayload> {
 	const ws = await getWS();
 	return new Promise((resolve, reject) => {
 		pendingRequests.set(message.id, { resolve, reject });
@@ -345,28 +335,29 @@ async function sendRequest(
 	});
 }
 
-export async function handleServerMessage(event: MessageEvent): Promise<void> {
-	const data: types.APIResponse = JSON.parse(event.data);
+async function handleServerMessage(event: MessageEvent): Promise<void> {
+	const data: apiTypes.APIResponse = JSON.parse(event.data);
 	console.log(data);
 	const { api, id, status, payload } = data;
 	if (pendingRequests.has(id)) {
 		const { resolve, reject } = pendingRequests.get(id)!;
 		if (status === 'ERROR') {
-			const { message } = payload as types.errorResponse;
+			const { message } = payload as apiTypes.errorResponse;
 			if (message === 'Invalid Token. Login again' || message === 'invalid signature') {
 				goto('/login');
 			} else {
 				alert(message);
 			}
-			reject(message);
+			reject(`Error from server: ${message}`);
 		} else {
 			resolve(payload);
 		}
 		pendingRequests.delete(id);
-	} else if (api === types.API.RECEIVE_MESSAGE) {
-		const { chatId, message } = payload as types.receiveMessageResponse;
+	} else if (api === apiTypes.API.RECEIVE_MESSAGE) {
+		const { chatId, message } = payload as apiTypes.receiveMessageResponse;
 
-		const chat = memory.chats.find((chat) => chat._id === chatId);
+		const chatStore = ChatStore.getInstance();
+		const chat = chatStore.getChat(chatId);
 		if (!chat) throw new Error(`Chat with id ${chatId} not found`);
 
 		const senderAddress: libsignal.SignalProtocolAddress = new libsignal.SignalProtocolAddress(
@@ -376,7 +367,7 @@ export async function handleServerMessage(event: MessageEvent): Promise<void> {
 
 		const store = SignalProtocolStore.getInstance();
 		const sessionCipher = new libsignal.SessionCipher(store, senderAddress);
-		const cipherMessage = message.text as unknown as libsignal.MessageType;
+		const cipherMessage = message.ciphertext;
 		const cipherBinary = atob(cipherMessage.body!);
 
 		if (cipherMessage.type === 3) {
@@ -399,17 +390,28 @@ export async function handleServerMessage(event: MessageEvent): Promise<void> {
 		console.log(plaintext);
 		if (!plaintext) return;
 
-		message.text = plaintext;
-		chat.messages = [...chat.messages, message];
-		// chat.messages.forEach((message) => console.log(JSON.stringify(message)));
+		const messageToStore: dataTypes.StoredMessage = {
+			_id: message._id,
+			chatId,
+			from: message.from,
+			ciphertext: message.ciphertext,
+			plaintext,
+			sequence: message.sequence,
+			sendTime: message.sendTime
+		};
+		const dbService = await DbService.getInstance();
+		dbService.putMessage(messageToStore);
+
+		chat.messages = [...chat.messages, messageToStore];
 
 		utils.sortChats();
-	} else if (api === types.API.READ_UPDATE) {
-		const { chatId, lastSeen } = payload as types.readUpdateResponse;
+	} else if (api === apiTypes.API.READ_UPDATE) {
+		const { chatId, lastSeen } = payload as apiTypes.readUpdateResponse;
 		console.log(chatId, lastSeen);
-	} else if (api === types.API.CREATE_CHAT) {
-		const { createdChat } = payload as types.createChatResponse;
-		memory.chats = [createdChat, ...memory.chats];
+	} else if (api === apiTypes.API.CREATE_CHAT) {
+		const { createdChat } = payload as apiTypes.createChatResponse;
+		const chatStore = ChatStore.getInstance();
+		chatStore.addChat(utils.apiToUsedChat(createdChat));
 	} else {
 		console.warn('Received response for unknown request ID:', id);
 	}

@@ -1,6 +1,6 @@
 import dotenv from "dotenv";
 import { MongoClient, Db, Collection, OptionalId } from "mongodb";
-import { ChatDocument, MessageDocument, UserDocument } from "../types/types.mjs";
+import { ChatDocument, UserDocument, MessageDocument } from "../types/mongoTypes.mjs";
 
 dotenv.config(); // Load .env variables into process.env
 const MONGO_USERNAME = process.env.MONGO_USERNAME || "";
@@ -15,4 +15,5 @@ const db: Db = client.db("messenger");
 // Export collections for reuse in API functions.
 export const chatsCollection: Collection<OptionalId<ChatDocument>> = db.collection("chats");
 export const usersCollection: Collection<OptionalId<UserDocument>> = db.collection("users");
-export const messagesCollection: Collection<OptionalId<MessageDocument>> = db.collection("messages");
+export const messagesCollection: Collection<OptionalId<MessageDocument>> =
+  db.collection("messages");

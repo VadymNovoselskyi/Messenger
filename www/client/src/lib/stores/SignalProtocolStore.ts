@@ -28,7 +28,7 @@ export class SignalProtocolStore implements StorageType {
 
 	public static getInstance() {
 		if (!SignalProtocolStore.instance) {
-			const instance = SignalProtocolStore.getInstance();
+			const instance = new SignalProtocolStore();
 			SignalProtocolStore.instance = instance;
 		}
 		return SignalProtocolStore.instance;

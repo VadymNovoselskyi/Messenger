@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import type { Link } from '$lib/types';
+	import type { Link } from '$lib/types/dataTypes';
 
 	let { links, id }: { links: Link[]; id: string } = $props();
 	const currentPath = page.url.pathname;

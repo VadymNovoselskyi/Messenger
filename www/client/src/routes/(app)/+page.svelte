@@ -3,33 +3,38 @@
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
 
-	import { getChats, sendKeys } from '$lib/api.svelte';
+	import { loadAndSyncChats, sendKeys } from '$lib/api.svelte';
 	import { generateKeys, getCookie } from '$lib/utils';
 
 	import { memory } from '$lib/stores/memory.svelte';
 	import ChatList from '$lib/components/ChatList.svelte';
-	import { SignalProtocolStore } from '$lib/SignalProtocolStore';
-	import type { PreKeyBundle } from '$lib/signalTypes';
+	import { SignalProtocolStore } from '$lib/stores/SignalProtocolStore';
+	import { ChatStore } from '$lib/stores/ChatStore';
+	import { DbService } from '$lib/stores/DbService';
+
+	let chatStore: ChatStore = $state()!;
+	let dbService: DbService;
 
 	onMount(async () => {
+		if (!browser) return;
 		if (!getCookie('userId') || !getCookie('token')) {
+			console.log(getCookie('userId'), getCookie('token'));
 			goto('/login');
 			return;
 		}
-		if (browser && !memory.chats.length) getChats();
-
 		const store = SignalProtocolStore.getInstance();
 		const isFilled = await store.check();
 		if (!isFilled) {
 			const keys = await generateKeys();
-			console.log(keys);
-
-			const result = await sendKeys(keys)
-			console.log(`Result: ${result}`)
-		} else {
-			const registrationId = await store.get('registrationId');
-			console.log(registrationId);
+			await sendKeys(keys);
 		}
+
+		chatStore = ChatStore.getInstance();
+		dbService = await DbService.getInstance();
+		console.log(chatStore.chats);
+
+		if (!chatStore.chats.length) await loadAndSyncChats();
+		console.log(chatStore.chats);
 	});
 </script>
 
@@ -39,7 +44,9 @@
 
 <div id="wrapper">
 	<section id="chats-list">
-		<ChatList bind:chats={memory.chats} />
+		{#if chatStore}
+			<ChatList bind:chats={chatStore.chats} />
+		{/if}
 	</section>
 
 	<section id="chat-display"></section>
