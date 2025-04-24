@@ -1,6 +1,6 @@
 import * as libsignal from '@privacyresearch/libsignal-protocol-typescript';
 import { memory } from './stores/memory.svelte';
-import { SignalProtocolStore } from './stores/SignalProtocolStore';
+import { SignalProtocolStore } from './SignalProtocolStore';
 import type { unorgonizedKeys } from './signalTypes';
 
 export function formatISODate(isoDate: string): string {
@@ -87,7 +87,7 @@ export function createObserver(
 }
 
 export async function generateKeys(): Promise<unorgonizedKeys> {
-	const store = new SignalProtocolStore();
+	const store = SignalProtocolStore.getInstance();
 
 	// Generate and store registration ID
 	const registrationId = await libsignal.KeyHelper.generateRegistrationId();

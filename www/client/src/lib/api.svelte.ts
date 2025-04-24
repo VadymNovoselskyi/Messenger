@@ -5,7 +5,7 @@ import * as utils from '$lib/utils';
 import * as types from '$lib/types';
 import * as signalTypes from './signalTypes';
 import * as libsignal from '@privacyresearch/libsignal-protocol-typescript';
-import { SignalProtocolStore } from './stores/SignalProtocolStore';
+import { SignalProtocolStore } from './SignalProtocolStore';
 
 const pendingRequests = new Map<
 	string,
@@ -271,7 +271,7 @@ export async function sendEncMessage(chatId: string, text: string) {
 			utils.getOtherUsername(chatId),
 			1
 		);
-		const store = new SignalProtocolStore();
+		const store = SignalProtocolStore.getInstance();
 		const sessionCipher = new libsignal.SessionCipher(store, address);
 
 		const ciphertext = await sessionCipher.encrypt(utils.textToArrayBuffer(text));
@@ -318,11 +318,11 @@ async function handleSessionBootstrap(
 		registrationId: serializedPreKey.registrationId
 	};
 
-	const store = new SignalProtocolStore();
+	const store = SignalProtocolStore.getInstance();
 	const sessionBuilder = new libsignal.SessionBuilder(store, receiverAddress);
 	await sessionBuilder.processPreKey(receiverDevice);
-	
-	sendEncMessage(_id, 'EC3XDH Key Exchange was performed!');
+
+	sendEncMessage(_id, 'ESTABLISH_SESSION_SENDER');
 }
 
 async function sendRequest(
@@ -374,7 +374,7 @@ export async function handleServerMessage(event: MessageEvent): Promise<void> {
 			1
 		);
 
-		const store = new SignalProtocolStore();
+		const store = SignalProtocolStore.getInstance();
 		const sessionCipher = new libsignal.SessionCipher(store, senderAddress);
 		const cipherMessage = message.text as unknown as libsignal.MessageType;
 		const cipherBinary = atob(cipherMessage.body!);
@@ -383,6 +383,7 @@ export async function handleServerMessage(event: MessageEvent): Promise<void> {
 			try {
 				console.log('decryptPreKeyWhisperMessage');
 				await sessionCipher.decryptPreKeyWhisperMessage(cipherBinary!, 'binary');
+				sendEncMessage(chatId, '');
 				return;
 			} catch (e) {
 				console.log(e);
@@ -396,9 +397,11 @@ export async function handleServerMessage(event: MessageEvent): Promise<void> {
 
 		const plaintext = new TextDecoder().decode(new Uint8Array(bufferText!));
 		console.log(plaintext);
+		if (!plaintext) return;
+
 		message.text = plaintext;
 		chat.messages = [...chat.messages, message];
-		chat.messages.forEach((message) => console.log(JSON.stringify(message)));
+		// chat.messages.forEach((message) => console.log(JSON.stringify(message)));
 
 		utils.sortChats();
 	} else if (api === types.API.READ_UPDATE) {

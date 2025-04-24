@@ -91,7 +91,7 @@ export async function sendMessage(
     });
     const { modifiedCount } = await chatsCollection.updateOne(
       { _id: chatId },
-      { $set: { lastModified: new Date() } }
+      { $set: { lastModified: new Date() }, $inc: { messageCounter: 1 } }
     );
 
     if (!acknowledged || !insertedId || modifiedCount !== 1) {
@@ -136,7 +136,10 @@ export async function sendEncMessage(
 
     const { modifiedCount } = await chatsCollection.updateOne(
       { _id: chatId },
-      { $set: { lastModified: new Date() } }
+      {
+        $set: { lastModified: new Date() },
+        $inc: { messageCounter: ciphertext.type === 1 ? 1 : 0 },
+      }
     );
 
     if (!acknowledged || !insertedId || modifiedCount !== 1) {
@@ -300,6 +303,7 @@ export async function createChat(
         { _id: creatingUser._id, username: creatingUser.username, lastSeen: new Date() },
         { _id: receivingUser._id, username: receivingUser.username, lastSeen: new Date() },
       ],
+      messageCounter: 0,
       lastModified: new Date(),
     });
 

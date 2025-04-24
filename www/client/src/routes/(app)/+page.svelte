@@ -8,7 +8,7 @@
 
 	import { memory } from '$lib/stores/memory.svelte';
 	import ChatList from '$lib/components/ChatList.svelte';
-	import { SignalProtocolStore } from '$lib/stores/SignalProtocolStore';
+	import { SignalProtocolStore } from '$lib/SignalProtocolStore';
 	import type { PreKeyBundle } from '$lib/signalTypes';
 
 	onMount(async () => {
@@ -18,7 +18,7 @@
 		}
 		if (browser && !memory.chats.length) getChats();
 
-		const store = new SignalProtocolStore();
+		const store = SignalProtocolStore.getInstance();
 		const isFilled = await store.check();
 		if (!isFilled) {
 			const keys = await generateKeys();

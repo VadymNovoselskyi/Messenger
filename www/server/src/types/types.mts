@@ -91,6 +91,7 @@ export type Message = {
 export type ChatDocument = {
   _id: ObjectId;
   users: User[];
+  messageCounter: number;
   lastModified: Date;
 };
 

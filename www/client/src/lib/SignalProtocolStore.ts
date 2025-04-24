@@ -1,4 +1,3 @@
-import * as utils from '$lib/utils';
 import {
 	type StorageType,
 	Direction,
@@ -6,6 +5,7 @@ import {
 } from '@privacyresearch/libsignal-protocol-typescript';
 
 export class SignalProtocolStore implements StorageType {
+	private static instance: SignalProtocolStore;
 	private dbPromise: Promise<IDBDatabase>;
 	private dbName: string = 'SignalProtocolStore';
 	private storeName: string = 'store';
@@ -24,6 +24,14 @@ export class SignalProtocolStore implements StorageType {
 			request.onsuccess = () => resolve(request.result);
 			request.onerror = () => reject(request.error);
 		});
+	}
+
+	public static getInstance() {
+		if (!SignalProtocolStore.instance) {
+			const instance = SignalProtocolStore.getInstance();
+			SignalProtocolStore.instance = instance;
+		}
+		return SignalProtocolStore.instance;
 	}
 
 	// Base CRUD methods for IndexedDB
