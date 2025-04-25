@@ -9,9 +9,9 @@
 	import { memory } from '$lib/stores/memory.svelte';
 	import ChatList from '$lib/components/ChatList.svelte';
 	import { SignalProtocolStore } from '$lib/stores/SignalProtocolStore';
-	import { ChatsStore } from '$lib/stores/ChatsStore';
+	import { ChatsStore, chatsStore } from '$lib/stores/ChatsStore';
 	import { DbService } from '$lib/stores/DbService';
-	import { chats, chatsStore } from '$lib/chats.svelte';
+	import { chats } from '$lib/chats.svelte';
 
 	onMount(async () => {
 		if (!browser) return;
@@ -26,8 +26,17 @@
 			const keys = await generateKeys();
 			await sendPreKeys(keys);
 		}
-		
+
 		if (!chatsStore.chats.length) await loadAndSyncChats();
+	});
+
+	$effect(() => {
+		chats;
+		console.log('Running of the chats.svelte.ts');
+	});
+	$effect(() => {
+		$chatsStore;
+		console.log('Runing of the ChatsStore internal instance');
 	});
 </script>
 
@@ -37,9 +46,7 @@
 
 <div id="wrapper">
 	<section id="chats-list">
-		{#if chatsStore}
-			<ChatList {chats} />
-		{/if}
+		<ChatList chats={$chatsStore} />
 	</section>
 
 	<section id="chat-display"></section>

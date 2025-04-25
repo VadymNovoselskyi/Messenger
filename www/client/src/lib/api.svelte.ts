@@ -8,7 +8,7 @@ import * as signalTypes from './types/signalTypes';
 import * as libsignal from '@privacyresearch/libsignal-protocol-typescript';
 import { SignalProtocolStore } from './stores/SignalProtocolStore';
 import { DbService } from './stores/DbService';
-import { chatsStore } from './chats.svelte';
+import { chats, chatsStore } from './chats.svelte';
 import { getDbService } from './dbService.svelte';
 
 const pendingRequests = new Map<
@@ -380,8 +380,8 @@ async function handleServerMessage(event: MessageEvent): Promise<void> {
 		bufferText = await sessionCipher.decryptWhisperMessage(cipherBinary!, 'binary');
 
 		const plaintext = new TextDecoder().decode(new Uint8Array(bufferText!));
-		console.log(plaintext);
 		if (!plaintext) return;
+		console.log(plaintext);
 
 		const messageToStore: dataTypes.StoredMessage = {
 			_id: message._id,
@@ -398,11 +398,20 @@ async function handleServerMessage(event: MessageEvent): Promise<void> {
 			messageCounter: message.sequence,
 			lastModified: chat.lastModified
 		};
-
 		(await getDbService()).putMessage(messageToStore);
 		(await getDbService()).putChat(chatToStore);
-		// chat.messages = [...chat.messages, messageToStore];
 
+		const chatToUpdate: dataTypes.UsedChat = {
+			_id: chat._id,
+			users: chat.users,
+			messages: [...chat.messages, message],
+			latestMessages: [...chat.latestMessages, message],
+			unreadCount: chat.unreadCount,
+			receivedNewCount: chat.receivedNewCount,
+			receivedUnreadCount: chat.receivedUnreadCount,
+			lastModified: chat.lastModified
+		};
+		chatsStore.updateChat(chatToUpdate);
 		chatsStore.sortChats();
 	} else if (api === apiTypes.API.READ_UPDATE) {
 		const { chatId, lastSeen } = payload as apiTypes.readUpdateResponse;

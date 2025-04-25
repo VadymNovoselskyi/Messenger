@@ -18,19 +18,20 @@ export class ChatsStore {
 	}
 
 	public subscribe(callback: (value: UsedChat[]) => void): () => void {
-		// console.log(`New subscriber: ${callback}`);
+		console.log(`New subscriber`);
 		callback(this._chats); // immediately send current data
 		this.listeners.add(callback); // register for future updates
 		return () => this.listeners.delete(callback); // unsubscribe
 	}
 
-	public notify() {
-		// console.log(`Notifying: ${this.listeners.size}`);
+	private notify() {
+		console.log(`Notifying: ${this.listeners.size}`);
 		for (const callback of this.listeners) callback(this._chats);
 	}
 
 	public sortChats(): void {
 		this._chats = this._chats.sort((a, b) => b.lastModified.localeCompare(a.lastModified));
+		this.notify();
 	}
 
 	public get chats(): UsedChat[] {
@@ -50,7 +51,16 @@ export class ChatsStore {
 		this.notify();
 	}
 
+	public updateChat(chatToUpdate: UsedChat): void {
+		const i = this._chats.findIndex((c) => c._id === chatToUpdate._id);
+		if (i === -1) return;
+		this._chats.splice(i, 1, chatToUpdate);
+		this.notify();
+	}
+
 	public indexOf(chat: UsedChat): number {
 		return this._chats.indexOf(chat);
 	}
 }
+
+export const chatsStore = ChatsStore.getInstance();

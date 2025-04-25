@@ -17,13 +17,13 @@
 
 	import ChatList from '$lib/components/ChatList.svelte';
 	import MessageList from '$lib/components/MessageList.svelte';
-	import { DbService } from '$lib/stores/DbService';
-	import { ChatsStore } from '$lib/stores/ChatsStore';
 	import { SignalProtocolStore } from '$lib/stores/SignalProtocolStore';
-	import { chats, chatsStore } from '$lib/chats.svelte';
+	import { chats } from '$lib/chats.svelte';
 	import { getDbService } from '$lib/dbService.svelte';
+	import { chatsStore } from '$lib/stores/ChatsStore';
 
-	let chat: UsedChat | undefined = $state();
+	let chatId = $derived(page.params.chatId);
+	let chat = $derived(chatsStore.chats.find((c) => c._id === chatId));
 	let chatChange: number = $state(0); //Workaraound to trigger reinit (made for readAll)
 	let index: number | undefined = $state();
 	let messageList = $state() as MessageList;
@@ -53,7 +53,7 @@
 	});
 
 	async function changeChat(chatId: string) {
-		const newChat = chatsStore.getChat(chatId);
+		const newChat = $chatsStore.find((chat) => chat._id === chatId);
 		console.log(newChat);
 		if (!newChat) {
 			goto('/');
@@ -79,7 +79,7 @@
 
 		const { chatId } = page.params;
 
-		const chat = chatsStore.getChat(chatId);
+		const chat = $chatsStore.find((chat) => chat._id === chatId);
 		if (!chat) throw new Error(`Chat with id ${chatId} not found`);
 
 		// Update UI immediately and reset unread if needed
@@ -90,6 +90,15 @@
 		}
 		sendEncMessage(chatId, input);
 	}
+
+	$effect(() => {
+		chats;
+		console.log('Running of the chats.svelte.ts');
+	});
+	$effect(() => {
+		$chatsStore;
+		console.log('Runing of the ChatsStore internal instance');
+	});
 </script>
 
 <svelte:head>
@@ -102,7 +111,7 @@
 
 <div id="wrapper">
 	<section id="chats-list">
-		<ChatList {chats} openedIndex={index} {onChatChange} />
+		<ChatList chats={$chatsStore} openedIndex={index} {onChatChange} />
 	</section>
 
 	{#if chat}
