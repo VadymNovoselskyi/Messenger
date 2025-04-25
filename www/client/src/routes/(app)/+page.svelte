@@ -3,17 +3,15 @@
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
 
-	import { loadAndSyncChats, sendKeys } from '$lib/api.svelte';
+	import { loadAndSyncChats, sendPreKeys } from '$lib/api.svelte';
 	import { generateKeys, getCookie } from '$lib/utils';
 
 	import { memory } from '$lib/stores/memory.svelte';
 	import ChatList from '$lib/components/ChatList.svelte';
 	import { SignalProtocolStore } from '$lib/stores/SignalProtocolStore';
-	import { ChatStore } from '$lib/stores/ChatStore';
+	import { ChatsStore } from '$lib/stores/ChatsStore';
 	import { DbService } from '$lib/stores/DbService';
-
-	let chatStore: ChatStore = $state()!;
-	let dbService: DbService;
+	import { chats, chatsStore } from '$lib/chats.svelte';
 
 	onMount(async () => {
 		if (!browser) return;
@@ -26,15 +24,10 @@
 		const isFilled = await store.check();
 		if (!isFilled) {
 			const keys = await generateKeys();
-			await sendKeys(keys);
+			await sendPreKeys(keys);
 		}
-
-		chatStore = ChatStore.getInstance();
-		dbService = await DbService.getInstance();
-		console.log(chatStore.chats);
-
-		if (!chatStore.chats.length) await loadAndSyncChats();
-		console.log(chatStore.chats);
+		
+		if (!chatsStore.chats.length) await loadAndSyncChats();
 	});
 </script>
 
@@ -44,8 +37,8 @@
 
 <div id="wrapper">
 	<section id="chats-list">
-		{#if chatStore}
-			<ChatList bind:chats={chatStore.chats} />
+		{#if chatsStore}
+			<ChatList {chats} />
 		{/if}
 	</section>
 

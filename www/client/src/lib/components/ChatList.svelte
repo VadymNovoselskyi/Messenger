@@ -9,7 +9,7 @@
 	import type { UsedChat } from '$lib/types/dataTypes';
 
 	let {
-		chats = $bindable(),
+		chats,
 		openedIndex,
 		onChatChange
 	}: { chats: UsedChat[]; openedIndex?: number; onChatChange?: () => void } = $props();

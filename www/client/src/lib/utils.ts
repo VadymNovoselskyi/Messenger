@@ -3,7 +3,7 @@ import { memory } from './stores/memory.svelte';
 import { SignalProtocolStore } from './stores/SignalProtocolStore';
 import type { unorgonizedKeys } from './types/signalTypes';
 import type { ApiChat, ApiMessage, UsedChat, StoredMessage, StoredChat } from './types/dataTypes';
-import { ChatStore } from './stores/ChatStore';
+import { chatsStore } from './chats.svelte';
 
 export function formatISODate(isoDate: string): string {
 	const date = new Date(isoDate);
@@ -43,14 +43,6 @@ export function getCookie(name: string): string | null {
 		if (key === name) return value;
 	}
 	return null;
-}
-
-export function sortChats(): void {
-	memory.chats = memory.chats.sort((a, b) => {
-		const aTime: number = new Date(a.lastModified).getTime();
-		const bTime: number = new Date(b.lastModified).getTime();
-		return bTime - aTime;
-	});
 }
 
 // Overload signatures
@@ -199,8 +191,7 @@ export function convertBase64ToBuffers(obj: any): any {
 }
 
 export function getOtherUsername(chatId: string): string {
-	const chatStore = ChatStore.getInstance();
-	const chat = chatStore.getChat(chatId);
+	const chat = chatsStore.getChat(chatId);
 	if (!chat) throw new Error(`No chat found for chatId: ${chatId}`);
 
 	const otherUser = chat.users.find((user) => user._id !== getCookie('userId'));

@@ -8,7 +8,8 @@ import * as signalTypes from './types/signalTypes';
 import * as libsignal from '@privacyresearch/libsignal-protocol-typescript';
 import { SignalProtocolStore } from './stores/SignalProtocolStore';
 import { DbService } from './stores/DbService';
-import { ChatStore } from './stores/ChatStore';
+import { chatsStore } from './chats.svelte';
+import { getDbService } from './dbService.svelte';
 
 const pendingRequests = new Map<
 	string,
@@ -53,25 +54,22 @@ export async function getWS(): Promise<WebSocket> {
 }
 
 export async function loadAndSyncChats(): Promise<void> {
-	const dbService = await DbService.getInstance();
-	const chatStore = ChatStore.getInstance();
-
-	const latestChats = await dbService.getLatestChats();
+	const latestChats = await (await getDbService()).getLatestChats();
 	const convertedChats = await Promise.all(
 		latestChats.map(async (chat) => {
-			const messages = await dbService.getLatestMessages(chat._id);
+			const messages = await (await getDbService()).getLatestMessages(chat._id);
 			return utils.storedToUsedChat(chat, messages);
 		})
 	);
-	chatStore.addChats(convertedChats);
-	utils.sortChats();
+	chatsStore.addChats(convertedChats);
+	chatsStore.sortChats();
 
 	const call = createAPICall(apiTypes.API.GET_CHATS, {});
 	try {
 		const response = await sendRequest(call);
 		// const { chats } = response as apiTypes.getChatsResponse;
 		// memory.chats = chats.map((chat) => utils.apiToUsedChat(chat));
-		// utils.sortChats();
+		// chatsStore.sortChats();
 	} catch (error) {
 		console.error('Error in getChats:', error);
 		throw error;
@@ -93,8 +91,8 @@ export async function getExtraMessages(chatId: string, currentIndex: number): Pr
 	try {
 		const response = await sendRequest(call);
 		const { extraMessages } = response as apiTypes.getExtraMessagesResponse;
-		const chatStore = ChatStore.getInstance();
-		const chat = chatStore.getChat(chatId);
+
+		const chat = chatsStore.getChat(chatId);
 		if (!chat) {
 			alert(`No chat to add extra messages ${chatId}`);
 			return;
@@ -114,8 +112,8 @@ export async function getExtraNewMessages(chatId: string, unreadCount: number): 
 	try {
 		const response = await sendRequest(call);
 		const { extraNewMessages } = response as apiTypes.getExtraNewMessagesResponse;
-		const chatStore = ChatStore.getInstance();
-		const chat = chatStore.getChat(chatId);
+
+		const chat = chatsStore.getChat(chatId);
 		if (!chat) {
 			alert(`No chat to add extra messages ${chatId}`);
 			return;
@@ -136,8 +134,7 @@ export async function readAllUpdate(chatId: string): Promise<void> {
 	try {
 		await sendRequest(call);
 
-		const chatStore = ChatStore.getInstance();
-		const chat = chatStore.getChat(chatId);
+		const chat = chatsStore.getChat(chatId);
 		if (!chat) {
 			alert(`No chat to read all ${chatId}`);
 			return;
@@ -168,10 +165,8 @@ export async function createChat(event: SubmitEvent): Promise<void> {
 		if (!preKeyBundle) throw new Error(`no preKeyBundle received`);
 		const convertedChat = utils.apiToUsedChat(createdChat);
 
-		const dbService = await DbService.getInstance();
-		const chatStore = ChatStore.getInstance();
-		dbService.putChat(createdChat);
-		chatStore.addChat(convertedChat);
+		(await getDbService()).putChat(createdChat);
+		chatsStore.addChat(convertedChat);
 
 		await handleSessionBootstrap(username, convertedChat, preKeyBundle);
 		return;
@@ -222,7 +217,7 @@ export async function signup(event: SubmitEvent): Promise<void> {
 }
 
 // Create a PreKey Bundle for publishing or for use by the SessionBuilder.
-export async function sendKeys(keys: signalTypes.unorgonizedKeys): Promise<void> {
+export async function sendPreKeys(keys: signalTypes.unorgonizedKeys): Promise<void> {
 	const preKeyBundle: signalTypes.StringifiedPreKeyBundle = {
 		registrationId: keys.registrationId,
 		identityKey: utils.arrayBufferToBase64(keys.identityKeyPair.pubKey),
@@ -252,8 +247,7 @@ export async function sendKeys(keys: signalTypes.unorgonizedKeys): Promise<void>
 //New sendMessage
 export async function sendEncMessage(chatId: string, text: string) {
 	try {
-		const chatStore = ChatStore.getInstance();
-		const chat = chatStore.getChat(chatId);
+		const chat = chatsStore.getChat(chatId);
 		console.log(chat);
 		if (!chat) throw new Error(`Chat with id ${chatId} not found`);
 
@@ -356,8 +350,7 @@ async function handleServerMessage(event: MessageEvent): Promise<void> {
 	} else if (api === apiTypes.API.RECEIVE_MESSAGE) {
 		const { chatId, message } = payload as apiTypes.receiveMessageResponse;
 
-		const chatStore = ChatStore.getInstance();
-		const chat = chatStore.getChat(chatId);
+		const chat = chatsStore.getChat(chatId);
 		if (!chat) throw new Error(`Chat with id ${chatId} not found`);
 
 		const senderAddress: libsignal.SignalProtocolAddress = new libsignal.SignalProtocolAddress(
@@ -399,19 +392,32 @@ async function handleServerMessage(event: MessageEvent): Promise<void> {
 			sequence: message.sequence,
 			sendTime: message.sendTime
 		};
-		const dbService = await DbService.getInstance();
-		dbService.putMessage(messageToStore);
+		const chatToStore: dataTypes.StoredChat = {
+			_id: chat._id,
+			users: chat.users,
+			messageCounter: message.sequence,
+			lastModified: chat.lastModified
+		};
 
-		chat.messages = [...chat.messages, messageToStore];
+		(await getDbService()).putMessage(messageToStore);
+		(await getDbService()).putChat(chatToStore);
+		// chat.messages = [...chat.messages, messageToStore];
 
-		utils.sortChats();
+		chatsStore.sortChats();
 	} else if (api === apiTypes.API.READ_UPDATE) {
 		const { chatId, lastSeen } = payload as apiTypes.readUpdateResponse;
 		console.log(chatId, lastSeen);
 	} else if (api === apiTypes.API.CREATE_CHAT) {
 		const { createdChat } = payload as apiTypes.createChatResponse;
-		const chatStore = ChatStore.getInstance();
-		chatStore.addChat(utils.apiToUsedChat(createdChat));
+		const chatToStore: dataTypes.StoredChat = {
+			_id: createdChat._id,
+			users: createdChat.users,
+			messageCounter: createdChat.messageCounter,
+			lastModified: createdChat.lastModified
+		};
+		(await getDbService()).putChat(chatToStore);
+
+		chatsStore.addChat(utils.apiToUsedChat(createdChat));
 	} else {
 		console.warn('Received response for unknown request ID:', id);
 	}

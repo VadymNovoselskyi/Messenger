@@ -10,9 +10,7 @@
 		getExtraMessages,
 		readAllUpdate,
 		sendEncMessage,
-
-		sendKeys
-
+		sendPreKeys
 	} from '$lib/api.svelte';
 	import { generateKeys, getCookie, storedToUsedChat } from '$lib/utils';
 	import type { UsedChat, StoredMessage } from '$lib/types/dataTypes';
@@ -20,11 +18,11 @@
 	import ChatList from '$lib/components/ChatList.svelte';
 	import MessageList from '$lib/components/MessageList.svelte';
 	import { DbService } from '$lib/stores/DbService';
-	import { ChatStore } from '$lib/stores/ChatStore';
+	import { ChatsStore } from '$lib/stores/ChatsStore';
 	import { SignalProtocolStore } from '$lib/stores/SignalProtocolStore';
+	import { chats, chatsStore } from '$lib/chats.svelte';
+	import { getDbService } from '$lib/dbService.svelte';
 
-	let chatStore: ChatStore = $state()!;
-	let dbService: DbService;
 	let chat: UsedChat | undefined = $state();
 	let chatChange: number = $state(0); //Workaraound to trigger reinit (made for readAll)
 	let index: number | undefined = $state();
@@ -45,11 +43,8 @@
 		const isFilled = await store.check();
 		if (!isFilled) {
 			const keys = await generateKeys();
-			await sendKeys(keys);
+			await sendPreKeys(keys);
 		}
-
-		chatStore = ChatStore.getInstance();
-		dbService = await DbService.getInstance();
 	});
 
 	$effect(() => {
@@ -58,19 +53,19 @@
 	});
 
 	async function changeChat(chatId: string) {
-		console.log('Changing chat');
-		const chat = chatStore.getChat(chatId);
-		console.log(chat);
-		if (!chat) {
+		const newChat = chatsStore.getChat(chatId);
+		console.log(newChat);
+		if (!newChat) {
 			goto('/');
 			return;
 		}
 
-		const messages = await dbService.getLatestMessages(chatId);
+		const messages = await (await getDbService()).getLatestMessages(chatId);
 		console.log(messages);
-		chat.messages = messages;
-		index = chatStore.indexOf(chat);
+		newChat.messages = messages;
+		index = chatsStore.indexOf(newChat);
 		untrack(() => {
+			chat = newChat;
 			chatChange++;
 		});
 	}
@@ -84,7 +79,7 @@
 
 		const { chatId } = page.params;
 
-		const chat = chatStore.getChat(chatId);
+		const chat = chatsStore.getChat(chatId);
 		if (!chat) throw new Error(`Chat with id ${chatId} not found`);
 
 		// Update UI immediately and reset unread if needed
@@ -107,7 +102,7 @@
 
 <div id="wrapper">
 	<section id="chats-list">
-		<ChatList bind:chats={chatStore.chats} openedIndex={index} {onChatChange} />
+		<ChatList {chats} openedIndex={index} {onChatChange} />
 	</section>
 
 	{#if chat}

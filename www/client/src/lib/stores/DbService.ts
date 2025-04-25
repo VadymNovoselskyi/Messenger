@@ -27,8 +27,8 @@ export class DbService {
 				messageStore.createIndex('by-chat-seq', ['chatId', 'sequence'], { unique: true });
 
 				// chats store, keyed by id
-				const chatStore = db.createObjectStore(this.chatsStoreName, { keyPath: '_id' });
-				chatStore.createIndex('by-timestamp', 'lastModified');
+				const chatsStore = db.createObjectStore(this.chatsStoreName, { keyPath: '_id' });
+				chatsStore.createIndex('by-timestamp', 'lastModified');
 			};
 			req.onsuccess = () => {
 				this.db = req.result;
@@ -69,7 +69,7 @@ export class DbService {
 			req.onsuccess = () => {
 				const cursor = req.result;
 				if (!cursor) {
-					return resolve(result);
+					return resolve(result.reverse());
 				}
 				result.push(cursor.value);
 				cursor.continue();
@@ -120,7 +120,7 @@ export class DbService {
 				const cursor = req.result;
 				// Stop if either no more records, or we've reached the limit:
 				if (!cursor || result.length >= maxCount) {
-					return resolve(result);
+					return resolve(result.reverse());
 				}
 				result.push(cursor.value);
 				cursor.continue();
