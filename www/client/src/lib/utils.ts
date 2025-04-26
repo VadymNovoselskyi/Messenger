@@ -3,7 +3,7 @@ import { memory } from './stores/memory.svelte';
 import { SignalProtocolStore } from './stores/SignalProtocolStore';
 import type { unorgonizedKeys } from './types/signalTypes';
 import type { ApiChat, ApiMessage, UsedChat, StoredMessage, StoredChat } from './types/dataTypes';
-import { chatsStore } from './chats.svelte';
+import { chatsStore } from './stores/ChatsStore.svelte';
 
 export function formatISODate(isoDate: string): string {
 	const date = new Date(isoDate);
@@ -192,12 +192,14 @@ export function convertBase64ToBuffers(obj: any): any {
 
 export function getOtherUsername(chatId: string): string {
 	const chat = chatsStore.getChat(chatId);
-	if (!chat) throw new Error(`No chat found for chatId: ${chatId}`);
+	if (!chat) {
+		console.warn(`No chat found for chatId: ${chatId}`);
+		return '';
+	}
 
 	const otherUser = chat.users.find((user) => user._id !== getCookie('userId'));
-	if (!otherUser) throw new Error(`Coulndt find other user for chat: ${chat}`);
 
-	return otherUser.username;
+	return otherUser?.username ?? '';
 }
 
 export function apiToUsedChat(chat: ApiChat): UsedChat {
@@ -205,10 +207,8 @@ export function apiToUsedChat(chat: ApiChat): UsedChat {
 		_id: chat._id,
 		users: chat.users,
 		messages: chat.messages,
-		latestMessages: [],
 		unreadCount: 0,
-		receivedUnreadCount: 0,
-		receivedNewCount: 0,
+		lastSequence: 0,
 		lastModified: chat.lastModified
 	};
 }
@@ -218,10 +218,8 @@ export function storedToUsedChat(chat: StoredChat, messages: StoredMessage[]): U
 		_id: chat._id,
 		users: chat.users,
 		messages: messages,
-		latestMessages: [],
 		unreadCount: 0,
-		receivedUnreadCount: 0,
-		receivedNewCount: 0,
+		lastSequence: 0,
 		lastModified: chat.lastModified
 	};
 }

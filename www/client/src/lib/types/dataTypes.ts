@@ -7,11 +7,9 @@ export type UsedChat = {
 		username: string;
 	}[];
 	messages: StoredMessage[];
-	latestMessages: StoredMessage[];
 	unreadCount: number;
-	receivedUnreadCount: number;
-	receivedNewCount: number;
-	lastModified: string; //ISO-Date
+	lastSequence: number;
+	lastModified: string;
 };
 
 export type StoredChat = {
@@ -20,20 +18,8 @@ export type StoredChat = {
 		_id: string;
 		username: string;
 	}[];
-	messageCounter: number;
-	lastModified: string; //ISO-Date
-};
-
-export type StoredMessage = {
-	_id: string;
-	chatId: string;
-	from: string;
-	ciphertext: MessageType;
-	plaintext?: string;
-	sequence: number;
-	sendTime: string; //ISO-date
-	sending?: boolean;
-	// status?: "SENDING" | "SENT";
+	lastSequence: number;
+	lastModified: string;
 };
 
 export type ApiChat = {
@@ -43,8 +29,23 @@ export type ApiChat = {
 		username: string;
 	}[];
 	messages: ApiMessage[];
-	messageCounter: number;
-	lastModified: string; //ISO-Date
+	lastSequence: number;
+	lastModified: string;
+};
+
+export type StoredMessage = {
+	_id: string;
+	chatId: string;
+	from: string;
+	ciphertext: MessageType;
+	plaintext?: string;
+	sequence: number;
+	sendTime: string;
+};
+
+export type PendingMessage = StoredMessage & {
+	tempId: string;
+	plaintext: string;
 };
 
 export type ApiMessage = {
@@ -53,7 +54,7 @@ export type ApiMessage = {
 	from: string;
 	ciphertext: MessageType;
 	sequence: number;
-	sendTime: string; //ISO-date
+	sendTime: string;
 };
 
 export type Link = {

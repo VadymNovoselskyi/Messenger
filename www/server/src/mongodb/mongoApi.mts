@@ -30,12 +30,11 @@ export async function getChats(userId: ObjectId): Promise<ApiChat[]> {
     // Transform each document into a structured Chat.
     const chats: ApiChat[] = await Promise.all(
       chatDocuments.map(async (chatDocument: ChatDocument) => {
-        // Retrieve the last seen timestamp for this user.
         const { lastSeen } = chatDocument.users.find(user => user._id.equals(userId))!;
 
         // Count unread messages since last seen.
         const unreadCount = await messagesCollection.countDocuments({
-          chatId: chatDocument._id,
+          chatId: chatDocument._id.toString,
           from: { $ne: userId },
           sendTime: { $gt: lastSeen },
         });
@@ -51,13 +50,10 @@ export async function getChats(userId: ObjectId): Promise<ApiChat[]> {
           .toArray();
 
         return {
-          _id: chatDocument._id,
+          _id: chatDocument._id.toString(),
           users: chatDocument.users,
           messages: messages.reverse(),
-          latestMessages: [],
-          unreadCount,
-          receivedUnreadCount: Math.min(unreadCount, INIT_MESSAGES),
-          receivedNewCount: 0,
+          lastSequence: chatDocument.lastSequence,
           lastModified: chatDocument.lastModified,
         } as unknown as ApiChat; //CHANGE
       })
@@ -87,7 +83,7 @@ export async function sendEncMessage(
       chatId,
       from: userId,
       ciphertext,
-      sequence: chat.messageCounter,
+      sequence: chat.lastSequence,
       sendTime: new Date(),
     });
 
@@ -95,7 +91,7 @@ export async function sendEncMessage(
       { _id: chatId },
       {
         $set: { lastModified: new Date() },
-        $inc: { messageCounter: ciphertext.type === 1 ? 1 : 0 },
+        $inc: { lastSequence: ciphertext.type === 1 ? 1 : 0 },
       }
     );
 
@@ -257,7 +253,7 @@ export async function createChat(
         { _id: creatingUser._id, username: creatingUser.username, lastSeen: new Date() },
         { _id: receivingUser._id, username: receivingUser.username, lastSeen: new Date() },
       ],
-      messageCounter: 0,
+      lastSequence: 0,
       lastModified: new Date(),
     });
 

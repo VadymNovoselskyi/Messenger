@@ -10,7 +10,7 @@ export type ChatDocument = {
     username: string;
     lastSeen: Date;
   }[];
-  messageCounter: number;
+  lastSequence: number;
   lastModified: Date;
 };
 

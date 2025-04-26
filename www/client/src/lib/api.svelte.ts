@@ -8,9 +8,8 @@ import * as signalTypes from './types/signalTypes';
 import * as libsignal from '@privacyresearch/libsignal-protocol-typescript';
 import { SignalProtocolStore } from './stores/SignalProtocolStore';
 import { DbService } from './stores/DbService';
-import { chats, chatsStore } from './chats.svelte';
 import { getDbService } from './dbService.svelte';
-
+import { chatsStore } from './stores/ChatsStore.svelte';
 const pendingRequests = new Map<
 	string,
 	{ resolve: (value: apiTypes.responsePayload) => void; reject: (reason: any) => void }
@@ -63,6 +62,7 @@ export async function loadAndSyncChats(): Promise<void> {
 	);
 	chatsStore.addChats(convertedChats);
 	chatsStore.sortChats();
+	chatsStore.notify();
 
 	const call = createAPICall(apiTypes.API.GET_CHATS, {});
 	try {
@@ -122,7 +122,6 @@ export async function getExtraNewMessages(chatId: string, unreadCount: number): 
 			...chat.messages,
 			...extraNewMessages.map((message) => utils.toStoredMessage(message))
 		];
-		chat.receivedUnreadCount += extraNewMessages.length;
 	} catch (error) {
 		console.error('Error in getExtraNewMessages:', error);
 		throw error;
@@ -141,10 +140,7 @@ export async function readAllUpdate(chatId: string): Promise<void> {
 		}
 		// Reset messages and unread counts in UI
 		chat.messages = [];
-		chat.latestMessages = [];
-		chat.unreadCount = 0;
-		chat.receivedUnreadCount = 0;
-		chat.receivedNewCount = 0;
+		chat.lastSequence = 0;
 	} catch (error) {
 		console.error('Error in readAllUpdate:', error);
 		throw error;
@@ -167,6 +163,7 @@ export async function createChat(event: SubmitEvent): Promise<void> {
 
 		(await getDbService()).putChat(createdChat);
 		chatsStore.addChat(convertedChat);
+		chatsStore.notify();
 
 		await handleSessionBootstrap(username, convertedChat, preKeyBundle);
 		return;
@@ -244,17 +241,12 @@ export async function sendPreKeys(keys: signalTypes.unorgonizedKeys): Promise<vo
 	}
 }
 
-//New sendMessage
 export async function sendEncMessage(chatId: string, text: string) {
 	try {
 		const chat = chatsStore.getChat(chatId);
-		console.log(chat);
 		if (!chat) throw new Error(`Chat with id ${chatId} not found`);
 
-		const address: libsignal.SignalProtocolAddress = new libsignal.SignalProtocolAddress(
-			utils.getOtherUsername(chatId),
-			1
-		);
+		const address = new libsignal.SignalProtocolAddress(utils.getOtherUsername(chatId), 1);
 		const store = SignalProtocolStore.getInstance();
 		const sessionCipher = new libsignal.SessionCipher(store, address);
 
@@ -262,12 +254,70 @@ export async function sendEncMessage(chatId: string, text: string) {
 		const base64Body = btoa(ciphertext.body!);
 		ciphertext.body = base64Body;
 
+		const tempId = utils.generateId();
+		const pendingMessage: dataTypes.PendingMessage = {
+			_id: tempId,
+			sequence: -1,
+			tempId: tempId,
+			chatId,
+			from: utils.getCookie('userId') ?? '',
+			ciphertext,
+			plaintext: text,
+			sendTime: new Date().toISOString()
+		};
+		(await getDbService()).putPendingMessage(pendingMessage);
+		chatsStore.addMessage({ ...pendingMessage, _id: tempId, sequence: -1 });
+		chatsStore.forceUpdateChat(chatId);
+		chatsStore.sortChats();
+		chatsStore.notify();
+
 		const call = createAPICall(apiTypes.API.SEND_ENC_MESSAGE, { chatId, ciphertext });
-		await sendRequest(call);
+		console.log(chatsStore.chats);
+		const response = await sendRequest(call);
+
+		const { sentMessage } = response as apiTypes.sendEncMessageResponse;
+		const messageToStore: dataTypes.StoredMessage = {
+			...sentMessage,
+			plaintext: text
+		};
+		const chatToStore = $state.snapshot({
+			...chat,
+			lastSequence: Math.max(chat.lastSequence, sentMessage.sequence),
+			lastModified:
+				chat.lastModified.localeCompare(sentMessage.sendTime) > 0
+					? chat.lastModified
+					: sentMessage.sendTime
+		});
+
+		(await getDbService()).promotePendingMessage(tempId, messageToStore);
+		(await getDbService()).putChat(chatToStore);
+		chatsStore.updateMessage(messageToStore, tempId);
+		// chatsStore.forceUpdateMessages(chatId);
+		chatsStore.forceUpdateChat(chatToStore);
+		chatsStore.sortChats();
+		chatsStore.notify();
+		return;
 	} catch (error) {
 		console.error('Error in sendEncMessage:', error);
 		throw error;
 	}
+}
+
+async function sendPreKeyMessage(chatId: string) {
+	const chat = chatsStore.getChat(chatId);
+	if (!chat) throw new Error(`Chat with id ${chatId} not found`);
+
+	const address = new libsignal.SignalProtocolAddress(utils.getOtherUsername(chatId), 1);
+	const store = SignalProtocolStore.getInstance();
+	const sessionCipher = new libsignal.SessionCipher(store, address);
+
+	const ciphertext = await sessionCipher.encrypt(
+		utils.textToArrayBuffer('ESTABLISH_SESSION_SENDER')
+	);
+	const base64Body = btoa(ciphertext.body!);
+	ciphertext.body = base64Body;
+	const call = createAPICall(apiTypes.API.SEND_ENC_MESSAGE, { chatId, ciphertext });
+	await sendRequest(call);
 }
 
 async function handleSessionBootstrap(
@@ -306,7 +356,7 @@ async function handleSessionBootstrap(
 	const sessionBuilder = new libsignal.SessionBuilder(store, receiverAddress);
 	await sessionBuilder.processPreKey(receiverDevice);
 
-	sendEncMessage(_id, 'ESTABLISH_SESSION_SENDER');
+	sendPreKeyMessage(_id);
 }
 
 async function sendRequest(
@@ -354,7 +404,7 @@ async function handleServerMessage(event: MessageEvent): Promise<void> {
 		if (!chat) throw new Error(`Chat with id ${chatId} not found`);
 
 		const senderAddress: libsignal.SignalProtocolAddress = new libsignal.SignalProtocolAddress(
-			chat.users.find((user) => user._id !== utils.getCookie('userId'))?.username ?? '',
+			utils.getOtherUsername(chatId),
 			1
 		);
 
@@ -370,19 +420,20 @@ async function handleServerMessage(event: MessageEvent): Promise<void> {
 				sendEncMessage(chatId, '');
 				return;
 			} catch (e) {
-				console.log(e);
+				console.error(e);
 			}
 		}
 		if (cipherMessage.type !== 1) throw new Error(`Unknown message type: ${cipherMessage.type}`);
 
 		let bufferText: ArrayBuffer;
-		console.log('decryptWhisperMessage');
 		bufferText = await sessionCipher.decryptWhisperMessage(cipherBinary!, 'binary');
 
 		const plaintext = new TextDecoder().decode(new Uint8Array(bufferText!));
 		if (!plaintext) return;
-		console.log(plaintext);
 
+		const lastModified =
+			chat.lastModified.localeCompare(message.sendTime) > 0 ? chat.lastModified : message.sendTime;
+		const lastSequence = Math.max(chat.lastSequence, message.sequence);
 		const messageToStore: dataTypes.StoredMessage = {
 			_id: message._id,
 			chatId,
@@ -392,27 +443,27 @@ async function handleServerMessage(event: MessageEvent): Promise<void> {
 			sequence: message.sequence,
 			sendTime: message.sendTime
 		};
-		const chatToStore: dataTypes.StoredChat = {
+		const chatToStore: dataTypes.StoredChat = $state.snapshot({
 			_id: chat._id,
 			users: chat.users,
-			messageCounter: message.sequence,
-			lastModified: chat.lastModified
-		};
+			lastSequence,
+			lastModified
+		});
 		(await getDbService()).putMessage(messageToStore);
 		(await getDbService()).putChat(chatToStore);
 
 		const chatToUpdate: dataTypes.UsedChat = {
 			_id: chat._id,
 			users: chat.users,
-			messages: [...chat.messages, message],
-			latestMessages: [...chat.latestMessages, message],
-			unreadCount: chat.unreadCount,
-			receivedNewCount: chat.receivedNewCount,
-			receivedUnreadCount: chat.receivedUnreadCount,
-			lastModified: chat.lastModified
+			messages: chat.messages,
+			unreadCount: chat.unreadCount + 1,
+			lastSequence,
+			lastModified
 		};
-		chatsStore.updateChat(chatToUpdate);
+		chatsStore.addMessage(messageToStore);
+		chatsStore.forceUpdateChat(chatToUpdate);
 		chatsStore.sortChats();
+		chatsStore.notify();
 	} else if (api === apiTypes.API.READ_UPDATE) {
 		const { chatId, lastSeen } = payload as apiTypes.readUpdateResponse;
 		console.log(chatId, lastSeen);
@@ -421,12 +472,15 @@ async function handleServerMessage(event: MessageEvent): Promise<void> {
 		const chatToStore: dataTypes.StoredChat = {
 			_id: createdChat._id,
 			users: createdChat.users,
-			messageCounter: createdChat.messageCounter,
+			lastSequence: createdChat.lastSequence,
 			lastModified: createdChat.lastModified
 		};
-		(await getDbService()).putChat(chatToStore);
 
+		(await getDbService()).putChat(chatToStore);
 		chatsStore.addChat(utils.apiToUsedChat(createdChat));
+		chatsStore.sortChats();
+		chatsStore.notify();
+		return;
 	} else {
 		console.warn('Received response for unknown request ID:', id);
 	}

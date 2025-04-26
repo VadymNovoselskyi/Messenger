@@ -1,10 +1,11 @@
-import type { UsedChat, StoredMessage, StoredChat } from '$lib/types/dataTypes';
+import type { UsedChat, StoredMessage, StoredChat, PendingMessage } from '$lib/types/dataTypes';
 
 export class DbService {
 	private static instance: DbService;
 	private db!: IDBDatabase;
 	private dbName = 'AccountStorage';
 	private messagesStoreName = 'messages';
+	private pendingStoreName = 'pending';
 	private chatsStoreName = 'chats';
 
 	public static async getInstance(): Promise<DbService> {
@@ -25,6 +26,12 @@ export class DbService {
 				// messages store, keyed by id, and index by chatId+sequence for queries
 				const messageStore = db.createObjectStore(this.messagesStoreName, { keyPath: '_id' });
 				messageStore.createIndex('by-chat-seq', ['chatId', 'sequence'], { unique: true });
+
+				// pending store, keyed by id, and has autoIncrement
+				const pendingStore = db.createObjectStore(this.pendingStoreName, {
+					keyPath: 'tempId',
+					autoIncrement: true
+				});
 
 				// chats store, keyed by id
 				const chatsStore = db.createObjectStore(this.chatsStoreName, { keyPath: '_id' });
@@ -53,10 +60,10 @@ export class DbService {
 	 */
 	public async getLatestMessages(chatId: string, limit: number = 20): Promise<StoredMessage[]> {
 		const chat = await this.getChat(chatId);
-		if (!chat || chat.messageCounter <= 0) {
+		if (!chat || chat.lastSequence <= 0) {
 			return [];
 		}
-		const high = chat.messageCounter;
+		const high = chat.lastSequence;
 		const low = Math.max(1, high - limit + 1);
 
 		const tx = this.db.transaction(this.messagesStoreName, 'readonly');
@@ -76,6 +83,25 @@ export class DbService {
 			};
 			req.onerror = () => reject(req.error);
 		});
+	}
+
+	/** add or update a pending message */
+	public async putPendingMessage(message: PendingMessage): Promise<void> {
+		const tx = this.db.transaction(this.pendingStoreName, 'readwrite');
+		tx.objectStore(this.pendingStoreName).put(message);
+		return new Promise((res, rej) => {
+			tx.oncomplete = () => res();
+			tx.onerror = () => rej(tx.error);
+		});
+	}
+
+	/** promote a pending message to a stored message */
+	public async promotePendingMessage(tempId: string, message: StoredMessage): Promise<void> {
+		const tx = this.db.transaction(this.pendingStoreName, 'readwrite');
+		const pendingMessage = tx.objectStore(this.pendingStoreName).get(tempId);
+		if (!pendingMessage) return;
+		tx.objectStore(this.pendingStoreName).delete(tempId);
+		await this.putMessage(message);
 	}
 
 	/** add or update a chat */
@@ -111,14 +137,12 @@ export class DbService {
 		const tx = this.db.transaction(this.chatsStoreName, 'readonly');
 		const store = tx.objectStore(this.chatsStoreName);
 		const idx = store.index('by-timestamp');
-		// Open cursor over the whole index, newest-first:
 		const req = idx.openCursor(null, 'prev');
 
 		const result: StoredChat[] = [];
 		return new Promise((resolve, reject) => {
 			req.onsuccess = () => {
 				const cursor = req.result;
-				// Stop if either no more records, or we've reached the limit:
 				if (!cursor || result.length >= maxCount) {
 					return resolve(result.reverse());
 				}

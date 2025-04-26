@@ -5,14 +5,13 @@
 	import Scrollbar from '$lib/components/Scrollbar.svelte';
 	import AddChatButton from '$lib/components/AddChatButton.svelte';
 
-	import { formatISODate, getCookie, createObserver } from '$lib/utils';
+	import { formatISODate, createObserver, getOtherUsername } from '$lib/utils';
 	import type { UsedChat } from '$lib/types/dataTypes';
 
-	let {
+	const {
 		chats,
-		openedIndex,
 		onChatChange
-	}: { chats: UsedChat[]; openedIndex?: number; onChatChange?: () => void } = $props();
+	}: { chats: UsedChat[]; onChatChange?: () => void } = $props();
 
 	let showAddChat = $state(false);
 	let bottomObserver = $state<IntersectionObserver>();
@@ -26,8 +25,8 @@
 	//dynamic loading of messages
 	let stacksLoaded = $state(1);
 	let indexesToShow = $derived(
-		(chats?.length || 0) >= stacksLoaded * INDEXES_PER_STACK + (openedIndex ?? 0)
-			? stacksLoaded * INDEXES_PER_STACK + (openedIndex ?? 0)
+		(chats?.length || 0) >= stacksLoaded * INDEXES_PER_STACK
+			? stacksLoaded * INDEXES_PER_STACK
 			: chats?.length || 0
 	);
 	let lastChats = $derived(chats?.slice(0, indexesToShow));
@@ -114,28 +113,18 @@
 					if (page.params.chatId !== chat._id && onChatChange) onChatChange();
 				}}
 			>
-				<img
-					src={''}
-					alt={chat.users.find((user) => user._id !== getCookie('userId'))!.username}
-					class="profile-picture"
-				/>
-				<p class="chat-name">
-					{chat.users.find((user) => user._id !== getCookie('userId'))!.username}
-				</p>
+				<img src={''} alt={getOtherUsername(chat._id)} class="profile-picture" />
+				<p class="chat-name">{getOtherUsername(chat._id)}</p>
 				{#if chat.unreadCount}
-					<p class="unread-count">
-						{chat.unreadCount}
-					</p>
+					<p class="unread-count">{chat.unreadCount}</p>
 				{/if}
 				<p class="chat-message" class:system-message={!chat.messages.length}>
 					{chat.messages[chat.messages.length - 1]?.plaintext ?? 'No messages'}
 				</p>
 				<p class="send-date">{formatISODate(chat.lastModified)}</p>
 			</a>
-			{#if i === (indexesToShow > 8 ? indexesToShow - 4 : indexesToShow - 1)}
-				<div bind:this={bottom_anchor} class="anchor"></div>
-			{/if}
 		{/each}
+		<div bind:this={bottom_anchor} class="anchor"></div>
 	</div>
 	{#if showScrollbar}
 		<Scrollbar

@@ -12,25 +12,21 @@
 		sendEncMessage,
 		sendPreKeys
 	} from '$lib/api.svelte';
-	import { generateKeys, getCookie, storedToUsedChat } from '$lib/utils';
+	import { generateKeys, getCookie, getOtherUsername, storedToUsedChat } from '$lib/utils';
 	import type { UsedChat, StoredMessage } from '$lib/types/dataTypes';
 
 	import ChatList from '$lib/components/ChatList.svelte';
 	import MessageList from '$lib/components/MessageList.svelte';
 	import { SignalProtocolStore } from '$lib/stores/SignalProtocolStore';
-	import { chats } from '$lib/chats.svelte';
 	import { getDbService } from '$lib/dbService.svelte';
-	import { chatsStore } from '$lib/stores/ChatsStore';
+	import { chatsStore } from '$lib/stores/ChatsStore.svelte';
 
-	let chatId = $derived(page.params.chatId);
-	let chat = $derived(chatsStore.chats.find((c) => c._id === chatId));
-	let chatChange: number = $state(0); //Workaraound to trigger reinit (made for readAll)
-	let index: number | undefined = $state();
+	let chat = $derived($chatsStore.find((chat) => chat._id === page.params.chatId));
 	let messageList = $state() as MessageList;
 
-	function onChatChange() {
-		if (messageList) messageList.destroy();
-	}
+	// function onChatChange() {
+	// 	if (messageList) messageList.destroy();
+	// }
 
 	onMount(async () => {
 		if (!browser) return;
@@ -39,6 +35,8 @@
 			goto('/login');
 			return;
 		}
+		if (!$chatsStore.length) await loadAndSyncChats();
+
 		const store = SignalProtocolStore.getInstance();
 		const isFilled = await store.check();
 		if (!isFilled) {
@@ -49,26 +47,11 @@
 
 	$effect(() => {
 		const { chatId } = page.params;
-		changeChat(chatId);
-	});
-
-	async function changeChat(chatId: string) {
-		const newChat = $chatsStore.find((chat) => chat._id === chatId);
-		console.log(newChat);
-		if (!newChat) {
+		if (!chat) {
 			goto('/');
 			return;
 		}
-
-		const messages = await (await getDbService()).getLatestMessages(chatId);
-		console.log(messages);
-		newChat.messages = messages;
-		index = chatsStore.indexOf(newChat);
-		untrack(() => {
-			chat = newChat;
-			chatChange++;
-		});
-	}
+	});
 
 	async function sendMessagePrep(event: SubmitEvent) {
 		event.preventDefault();
@@ -82,41 +65,30 @@
 		const chat = $chatsStore.find((chat) => chat._id === chatId);
 		if (!chat) throw new Error(`Chat with id ${chatId} not found`);
 
-		// Update UI immediately and reset unread if needed
-		if (chat.unreadCount) {
-			await readAllUpdate(chatId);
-			await getExtraMessages(chatId, 0);
-			memory.chats = [...memory.chats];
-		}
+		// // Update UI immediately and reset unread if needed
+		// if (chat.lastSequence) {
+		// 	await readAllUpdate(chatId);
+		// 	await getExtraMessages(chatId, 0);
+		// 	memory.chats = [...memory.chats];
+		// }
 		sendEncMessage(chatId, input);
 	}
-
-	$effect(() => {
-		chats;
-		console.log('Running of the chats.svelte.ts');
-	});
-	$effect(() => {
-		$chatsStore;
-		console.log('Runing of the ChatsStore internal instance');
-	});
 </script>
 
 <svelte:head>
 	<title>
-		{chat?.users.find((user) => {
-			return user._id !== getCookie('userId');
-		})?.username || 'Chat'}
+		{getOtherUsername(page.params.chatId)}
 	</title>
 </svelte:head>
 
 <div id="wrapper">
 	<section id="chats-list">
-		<ChatList chats={$chatsStore} openedIndex={index} {onChatChange} />
+		<ChatList chats={$chatsStore} />
 	</section>
 
 	{#if chat}
-		{#key chatChange}
-			<MessageList bind:this={messageList} {chat} submitFn={sendMessagePrep} />
+		{#key chat._id}
+			<MessageList bind:this={messageList} bind:chat submitFn={sendMessagePrep} />
 		{/key}
 	{/if}
 </div>

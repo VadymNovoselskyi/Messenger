@@ -150,7 +150,7 @@ export type signupResponse = {
 
 export type sendKeysResponse = Record<string, never>;
 
-export type sendEncMessageResponse = { tempMessageId: string };
+export type sendEncMessageResponse = { sentMessage: ApiMessage };
 
 export type errorResponse = {
 	message: string;

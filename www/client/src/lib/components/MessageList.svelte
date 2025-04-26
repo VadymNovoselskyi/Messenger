@@ -13,458 +13,151 @@
 	// ===============================================================
 	// Props & Derived values from chat
 	// ===============================================================
-	let { chat, submitFn }: { chat: UsedChat; submitFn: (event: SubmitEvent) => void } = $props();
-	let {
-		messages,
-		latestMessages,
-		unreadCount,
-		receivedUnreadCount,
-		receivedNewCount,
-		lastModified
-	} = $derived(chat);
+	const {
+		chat = $bindable(),
+		submitFn
+	}: { chat: UsedChat; submitFn: (event: SubmitEvent) => void } = $props();
+	const { messages, lastSequence, unreadCount, lastModified } = $derived(chat);
+	let newlyReadMessageCount = $state(0);
 
-	// Calculate the read count from received messages and latest messages
-	const receivedReadCount = $derived(messages.length - receivedUnreadCount + latestMessages.length);
+	const SCROLL_ADJUSTMENT = 24;
 
-	// Calculate old and total unread counts
-	// svelte-ignore state_referenced_locally
-	const oldUnreadCount = chat.unreadCount - receivedNewCount;
-	const totalUnreadCount = $derived(oldUnreadCount + receivedNewCount);
-
-	// ===============================================================
-	// Constants & Variables for Dynamic Message Loading
-	// ===============================================================
-	const TOP_ANCHOR_INDEX = 0;
-	// This value should remain a multiple of 'INIT_MESSAGES' and 'EXTRA_MESSAGES' in the server API.
-	const INDEXES_PER_STACK = 20;
-	const MAX_STACKS = 5;
-
-	// Variables to track read/unread stacks and index offsets for pagination
-	let readStacksLoaded = $state(1);
-	let unreadStacksLoaded = $state(0);
-	let indexOffset = $state(0);
-
-	let readIndexesToShow = $state(0);
-	let unreadIndexesToShow = $state(0);
-
-	let topIndex = $state(0);
-	let bottomIndex = $state(0);
-	let lastMessages = $state([]) as StoredMessage[];
-
-	// ===============================================================
-	// State Variables: Anchors, Scrollbar, and Promises for async messages
-	// ===============================================================
-	let firstUnreadId = $state<string>();
-	let extraMessagesPromise: Promise<void> = $state(Promise.resolve());
-	let unreadMessagesPromise: Promise<void> = $state(Promise.resolve());
-
-	// Elements references for scrolling and anchors
 	let scrollableContent = $state() as HTMLElement;
-	let top_anchor = $state() as HTMLElement;
-	let unread_anchor = $state() as HTMLElement;
-	let bottom_anchor = $state() as HTMLElement;
-
-	// Scrollbar instance and flag for showing it
 	let scrollBar = $state() as Scrollbar;
 	let showScrollbar = $state<boolean>();
 
-	// ===============================================================
-	// Observers for Lazy-loading and Read Detection
-	// ===============================================================
-	let topObserver = createObserver(handleTopIntersection);
-	let bottomObserver = createObserver(handleBottomIntersection);
+	let topAnchor = $state() as HTMLElement;
+	let unreadAnchor = $state() as HTMLElement;
+	let bottomAnchor = $state() as HTMLElement;
+
+	// let topObserver = createObserver(handleTopIntersection);
+	// let bottomObserver = createObserver(handleBottomIntersection);
 	let readObserver = createObserver((entry: IntersectionObserverEntry) => {
-		// Stop observing the element once read
 		readObserver.unobserve(entry.target);
-		handleMessageRead();
+		handleMessageRead(entry.target);
 	}, 0.9);
 
-	// ===============================================================
-	// Read Update Stashing Variables
-	// ===============================================================
-	let stashedReadCount = $state(0);
-	let readTimeoutId = $state(0);
-	const MAX_STASHED_COUNT = 5;
-	const MAX_READ_TIMEOUT = 2000; // in ms
-
-	// ===============================================================
-	// Recalculate Indexes: Pagination and Dynamic Loading
-	// ===============================================================
-	export async function recalculateIndexes(direction: number): Promise<void> {
-		let isFullRange = false;
-		if (direction === 1) {
-			const readThreshold = readStacksLoaded * INDEXES_PER_STACK + indexOffset;
-			isFullRange = receivedReadCount >= readThreshold;
-		} else if (direction === -1) {
-			const unreadThreshold = unreadStacksLoaded * INDEXES_PER_STACK - indexOffset;
-			const currentUnreadRange = topIndex - receivedReadCount;
-			isFullRange = currentUnreadRange >= unreadThreshold;
-		}
-
-		// Adjust stacks or index offset based on range fullness and MAX_STACKS
-		if (!isFullRange) null;
-		else if (readStacksLoaded + unreadStacksLoaded === MAX_STACKS) {
-			if (
-				indexOffset ||
-				(direction === 1 && unreadStacksLoaded === 0) ||
-				(direction === -1 && readStacksLoaded === 0)
-			) {
-				indexOffset += direction * INDEXES_PER_STACK;
-			} else {
-				readStacksLoaded += direction;
-				unreadStacksLoaded -= direction;
-			}
-		} else if (direction === 1) {
-			readStacksLoaded++;
-		} else if (direction === -1) {
-			unreadStacksLoaded++;
-		}
-
-		// Merge latest messages into main messages if all have been read
-		if (totalUnreadCount - receivedUnreadCount === 0 && latestMessages.length) {
-			chat.messages = [...chat.messages, ...chat.latestMessages];
-			chat.latestMessages = [];
-		}
-
-		// ---------------------------------------------------------------
-		// Determine stack capacities and update visible indexes.
-		// ---------------------------------------------------------------
-		const readStackCapacity = readStacksLoaded * INDEXES_PER_STACK;
-		const unreadStackCapacity = unreadStacksLoaded * INDEXES_PER_STACK;
-
-		readIndexesToShow = Math.min(receivedReadCount, readStackCapacity);
-		unreadIndexesToShow = Math.min(receivedUnreadCount, unreadStackCapacity);
-
-		// Calculate base index and determine top and bottom indexes.
-		const baseIndex = receivedReadCount - indexOffset;
-		bottomIndex = Math.max(baseIndex - readIndexesToShow, 0);
-		topIndex = Math.min(baseIndex + unreadIndexesToShow, messages.length);
-
-		lastMessages = [...messages.slice(bottomIndex, topIndex)];
-		await tick();
-		requestAnimationFrame(() => null);
-	}
-
-	// ===============================================================
-	// Reactive Effects for Recalculation on Data Changes
-	// ===============================================================
-	$effect(() => {
-		lastModified;
-		untrack(() => {
-			// Recalculate if we are at the boundaries of the message list
-			if (topIndex >= messages.length - 1 || (topIndex === 0 && messages.length !== 0))
-				recalculateIndexes(0);
-		});
-	});
-	$effect(() => {
-		receivedNewCount;
-		untrack(async () => {
-			if (totalUnreadCount >= INDEXES_PER_STACK * MAX_STACKS || !receivedNewCount) return;
-
-			// Disconnect observer and recalc indexes based on unread stacks
-			readObserver.disconnect();
-			totalUnreadCount <= unreadStacksLoaded * INDEXES_PER_STACK
-				? await recalculateIndexes(0)
-				: await recalculateIndexes(-1);
-
-			// ---------------------------------------------------------------
-			// Compute unread messages remaining and observe them if needed.
-			// ---------------------------------------------------------------
-			const unreadUnrenderedCount =
-				receivedUnreadCount - latestMessages.length - (topIndex - receivedReadCount);
-			const leftUnreadCount = receivedUnreadCount - (totalUnreadCount - unreadCount);
-
-			if (unreadUnrenderedCount <= leftUnreadCount && unreadCount && unreadIndexesToShow) {
-				const lastMessagesEl = Array.from(document.querySelectorAll('.message'));
-				const sliceCount = Math.min(leftUnreadCount - unreadUnrenderedCount, INDEXES_PER_STACK);
-				lastMessagesEl.slice(-sliceCount).forEach((message) => readObserver.observe(message));
-			}
-		});
-	});
-
-	// ===============================================================
-	// Reactive Statements for Scrollbar and Observer Updates
-	// ===============================================================
-	$effect(() => {
-		messages.length;
-		// Update scrollbar visibility when messages are loaded
-		if (!showScrollbar && messages.length) {
-			showScrollbar = scrollableContent.scrollHeight !== scrollableContent.clientHeight;
-		}
-	});
-
-	$effect(() => {
-		if (!top_anchor) return;
-		// Re-observe top anchor changes
-		topObserver.disconnect();
-		topObserver.observe(top_anchor);
-	});
-	$effect(() => {
-		if (!bottom_anchor) return;
-		// Re-observe bottom anchor changes
-		bottomObserver.disconnect();
-		bottomObserver.observe(bottom_anchor);
-	});
-
-	$effect(() => {
-		console.log(chat.messages);
-	});
-
-	// ===============================================================
-	// Lifecycle: onMount and destroy
-	// ===============================================================
-	onMount(async () => {
-		// Initial index calculation and anchor setup
-		recalculateIndexes(0);
-		if (unreadCount) await recalculateIndexes(-1);
-		firstUnreadId = (messages[receivedReadCount - 1] ?? [])._id;
-		setAnchors();
-	});
-
-	// Destroy function to cleanup observers and send final read update
-	export function destroy() {
-		if (stashedReadCount) {
-			clearInterval(readTimeoutId);
-			const lastReadIndex =
-				messages.length - receivedUnreadCount + (totalUnreadCount - unreadCount) - 1;
-			if (lastReadIndex < messages.length) sendReadUpdate(chat._id, messages[lastReadIndex]._id);
-		}
-		chat.receivedUnreadCount -= totalUnreadCount - unreadCount;
-
-		topObserver.disconnect();
-		bottomObserver.disconnect();
-		readObserver.disconnect();
-	}
-
-	// ===============================================================
-	// Intersection Handlers: Top and Bottom
-	// ===============================================================
-
-	// Handler when the top anchor comes into view
-	async function handleTopIntersection(): Promise<void> {
-		// Save current top element ID for scroll position restoration
-		const prevTopId = lastMessages[0]._id;
-
-		// Check for dragging and update scrollbar state
-		const wasDragging = scrollBar && scrollBar.isDraggingOn();
-		if (wasDragging) {
-			scrollBar.onMouseUp();
-		}
-
-		if (bottomIndex === 0) {
-			const extraMessageCount =
-				messages.length + latestMessages.length + (totalUnreadCount - receivedUnreadCount);
-			extraMessagesPromise = getExtraMessages(chat._id, extraMessageCount);
-			await extraMessagesPromise;
-		}
-
-		// Recalculate indexes for upward pagination
-		await recalculateIndexes(1);
-
-		// Restore previous scroll position with margin adjustment
-		const prevTopElement = document.getElementById(prevTopId);
-		if (prevTopElement) {
-			prevTopElement.scrollIntoView({ behavior: 'instant', block: 'start' });
-			const marginAdjustment = 15;
-			scrollableContent.scrollTop -= marginAdjustment;
-		}
-
-		if (wasDragging) {
-			scrollBar.onMouseDown();
-		}
-	}
-
-	// Handler when the bottom anchor comes into view
-	async function handleBottomIntersection(): Promise<void> {
-		// Disconnect observer to clear previous observations
-		readObserver.disconnect();
-
-		// ---------------------------------------------------------------
-		// Update unread count if scrolling fast.
-		// ---------------------------------------------------------------
-		const currentUnreadDelta = totalUnreadCount - (topIndex - receivedReadCount);
-		if (currentUnreadDelta < unreadCount && unreadCount) {
-			console.log(currentUnreadDelta, unreadCount);
-			const newUnreadCount = totalUnreadCount - topIndex + receivedReadCount;
-			chat.unreadCount = newUnreadCount;
-
-			const computedLastReadIndex =
-				messages.length -
-				receivedUnreadCount +
-				totalUnreadCount -
-				unreadCount +
-				(totalUnreadCount - oldUnreadCount) -
-				1;
-			if (computedLastReadIndex <= messages.length) {
-				sendReadUpdate(chat._id, messages[computedLastReadIndex]._id);
-			} else {
-				sendReadUpdate(chat._id, messages[messages.length - 1]._id);
-			}
-		}
-
-		// Check dragging state and update scrollbar
-		const wasDragging = scrollBar && scrollBar.isDraggingOn();
-		if (wasDragging) {
-			scrollBar.onMouseUp();
-		}
-
-		// Save current bottom element ID
-		const prevBottomId = (lastMessages[lastMessages.length - 1] ?? [])._id;
-
-		const conditionForExtra =
-			unreadIndexesToShow - indexOffset >= receivedUnreadCount - latestMessages.length;
-		if (unreadCount && conditionForExtra) {
-			unreadMessagesPromise = getExtraNewMessages(chat._id, unreadCount);
-			await unreadMessagesPromise;
-		}
-
-		// Recalculate indexes for downward pagination
-		await recalculateIndexes(-1);
-
-		// Restore scroll position with margin adjustment
-		const prevBottomElement = document.getElementById(prevBottomId);
-		if (prevBottomElement) {
-			prevBottomElement.scrollIntoView({ behavior: 'instant', block: 'end' });
-			const marginAdjustment = 15;
-			scrollableContent.scrollTop += marginAdjustment;
-		}
-
-		const unreadUnrenderedCount =
-			receivedUnreadCount - latestMessages.length - (topIndex - receivedReadCount);
-		const leftUnreadCount = receivedUnreadCount - (totalUnreadCount - unreadCount);
-		if (unreadUnrenderedCount <= leftUnreadCount && unreadCount && unreadIndexesToShow) {
-			const lastMessagesEl = Array.from(scrollableContent.querySelectorAll('.message'));
-			const sliceCount = Math.min(leftUnreadCount - unreadUnrenderedCount, INDEXES_PER_STACK);
-			lastMessagesEl.slice(-sliceCount).forEach((message) => readObserver.observe(message));
-		}
-
-		if (wasDragging) {
-			scrollBar.onMouseDown();
-		}
-	}
-
-	// ===============================================================
-	// Handler for Marking Messages as Read
-	// ===============================================================
-	async function handleMessageRead() {
-		// Decrement unread count
-		chat.unreadCount--;
-
-		// Define a common computation for the last-read message index
-		const computeLastReadIndex = () =>
-			messages.length -
-			receivedUnreadCount +
-			totalUnreadCount -
-			unreadCount +
-			(totalUnreadCount - oldUnreadCount) -
-			1;
-
-		// Start timeout if no updates are stashed
-		if (!stashedReadCount) {
-			readTimeoutId = window.setTimeout(() => {
-				const lastReadIndex = computeLastReadIndex();
-				if (lastReadIndex <= messages.length) {
-					sendReadUpdate(chat._id, messages[lastReadIndex]._id);
-				} else {
-					sendReadUpdate(chat._id, messages[messages.length - 1]._id);
-				}
-				stashedReadCount = 0;
-			}, MAX_READ_TIMEOUT);
-		}
-		stashedReadCount++;
-
-		// If stashed count exceeds limit, trigger update immediately
-		if (stashedReadCount >= MAX_STASHED_COUNT) {
-			const lastReadIndex = computeLastReadIndex();
-			if (lastReadIndex <= messages.length) {
-				sendReadUpdate(chat._id, messages[lastReadIndex]._id);
-			} else {
-				sendReadUpdate(chat._id, messages[messages.length - 1]._id);
-			}
-			clearTimeout(readTimeoutId);
-			stashedReadCount = 0;
-		}
-	}
+	onMount(setAnchors);
 
 	// ===============================================================
 	// Anchor Setup for Scroll Position and Lazy-loading
 	// ===============================================================
 	async function setAnchors() {
-		// Wait for messages to load before setting anchors
 		await tick();
-		if (!top_anchor && !bottom_anchor) {
+		if (!topAnchor || !bottomAnchor) {
 			requestAnimationFrame(setAnchors);
 			return;
 		}
+		const scrollTop = unreadAnchor
+			? unreadAnchor.offsetTop - scrollableContent.clientHeight + SCROLL_ADJUSTMENT
+			: bottomAnchor.offsetTop;
+		scrollableContent.scrollTo({
+			top: scrollTop,
+			behavior: 'instant'
+		});
 
-		// Determine whether to show the scrollbar based on content height
-		showScrollbar = scrollableContent.scrollHeight !== scrollableContent.clientHeight;
 		await tick();
-
-		requestAnimationFrame(async () => {
-			const scrollAdjustment = 24;
-			const scrollTop = unread_anchor
-				? unread_anchor.offsetTop - scrollableContent.clientHeight + scrollAdjustment
-				: bottom_anchor.offsetTop;
-			scrollableContent.scrollTo({
-				top: scrollTop,
-				behavior: 'instant'
-			});
-		});
-
-		// Setup observers for anchors and new messages
-		requestAnimationFrame(async () => {
-			await tick();
-			readObserver.disconnect();
-			bottomObserver.observe(bottom_anchor);
-			if (scrollBar) topObserver.observe(top_anchor);
-			if (unreadCount) {
-				const lastMessagesEls = Array.from(scrollableContent.querySelectorAll('.message'));
-				lastMessagesEls
-					.slice(-unreadIndexesToShow)
-					.forEach((message) => readObserver.observe(message));
-			}
-		});
+		updateUnreadObserver();
 	}
+
+	function handleMessageRead(target: Element) {
+		newlyReadMessageCount++;
+		chat.unreadCount--;
+
+		const messageSequence = messages.findIndex((message) => message._id === target.id);
+		console.log(messageSequence);
+
+		// // Define a common computation for the last-read message index
+		// const computeLastReadIndex = () =>
+		// 	messages.length -
+		// 	receivedUnreadCount +
+		// 	totalUnreadCount -
+		// 	unreadCount +
+		// 	(totalUnreadCount - oldUnreadCount) -
+		// 	1;
+
+		// // Start timeout if no updates are stashed
+		// if (!stashedReadCount) {
+		// 	readTimeoutId = window.setTimeout(() => {
+		// 		const lastReadIndex = computeLastReadIndex();
+		// 		if (lastReadIndex <= messages.length) {
+		// 			sendReadUpdate(chat._id, messages[lastReadIndex]._id);
+		// 		} else {
+		// 			sendReadUpdate(chat._id, messages[messages.length - 1]._id);
+		// 		}
+		// 		stashedReadCount = 0;
+		// 	}, MAX_READ_TIMEOUT);
+		// }
+		// stashedReadCount++;
+
+		// // If stashed count exceeds limit, trigger update immediately
+		// if (stashedReadCount >= MAX_STASHED_COUNT) {
+		// 	const lastReadIndex = computeLastReadIndex();
+		// 	if (lastReadIndex <= messages.length) {
+		// 		sendReadUpdate(chat._id, messages[lastReadIndex]._id);
+		// 	} else {
+		// 		sendReadUpdate(chat._id, messages[messages.length - 1]._id);
+		// 	}
+		// 	clearTimeout(readTimeoutId);
+		// 	stashedReadCount = 0;
+		// }
+	}
+
+	function updateUnreadObserver() {
+		if (unreadCount && readObserver) {
+			const lastMessagesEls = Array.from(scrollableContent.querySelectorAll('.message'));
+			lastMessagesEls.slice(-unreadCount).forEach((message) => readObserver.observe(message));
+		}
+	}
+
+	$effect(() => {
+		messages.length;
+		if (!showScrollbar && messages.length) {
+			// Update scrollbar visibility when messages are loaded
+			showScrollbar = scrollableContent.scrollHeight !== scrollableContent.clientHeight;
+		}
+	});
+
+	$effect(() => {
+		chat.unreadCount;
+		updateUnreadObserver();
+	});
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
 	id="message-list"
-	onmouseover={showScrollbar ? scrollBar.show : null}
-	onmouseleave={showScrollbar ? scrollBar.hide : null}
-	onfocus={showScrollbar ? scrollBar.show : null}
-	onblur={showScrollbar ? scrollBar.hide : null}
+	onmouseover={showScrollbar && scrollBar ? scrollBar.show : null}
+	onmouseleave={showScrollbar && scrollBar ? scrollBar.hide : null}
+	onfocus={showScrollbar && scrollBar ? scrollBar.show : null}
+	onblur={showScrollbar && scrollBar ? scrollBar.hide : null}
 >
 	<section
 		id="messages"
 		bind:this={scrollableContent}
-		onscroll={showScrollbar ? scrollBar.updateThumbPosition : null}
+		onscroll={showScrollbar && scrollBar ? scrollBar.updateThumbPosition : null}
 		aria-label="Messages"
 	>
-		<Loader promise={extraMessagesPromise} />
+		<!-- <Loader promise={extraMessagesPromise} /> -->
 
-		{#each lastMessages as { _id, from, plaintext, sendTime, sending }, i (_id)}
-			{#if i === TOP_ANCHOR_INDEX && receivedReadCount >= INDEXES_PER_STACK}
-				<div bind:this={top_anchor} class="anchor"></div>
-			{/if}
+		<div bind:this={topAnchor} class="anchor"></div>
+		{#each messages as { _id, from, plaintext, sendTime }, i (_id)}
 			<div
 				class="message"
 				class:sent={from === getCookie('userId')}
 				class:received={from !== getCookie('userId')}
-				class:sending
 				id={_id}
 			>
 				<p class="text">{plaintext}</p>
 				<p class="sendTime">{formatISODate(sendTime)}</p>
 			</div>
-			{#if _id === firstUnreadId && totalUnreadCount && i !== lastMessages.length - 1}
-				<div bind:this={unread_anchor} id="unread-anchor" class="anchor">Unread Messages</div>
+			{#if i === messages.length - unreadCount - newlyReadMessageCount - 1 && unreadCount}
+				<div bind:this={unreadAnchor} id="unread-anchor" class="anchor">Unread Messages</div>
 			{/if}
 		{/each}
-		<div bind:this={bottom_anchor} id="bottom-anchor" class="anchor"></div>
+		<div bind:this={bottomAnchor} id="bottom-anchor" class="anchor"></div>
 
-		<Loader promise={unreadMessagesPromise} />
+		<!-- <Loader promise={unreadMessagesPromise} /> -->
 	</section>
 	<MessageField {submitFn} />
 	{#if showScrollbar}

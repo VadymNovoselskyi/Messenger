@@ -16,7 +16,7 @@ export type ApiChat = {
   _id: string;
   users: ApiUser[];
   messages: ApiMessage[];
-  messageCounter: number;
+  lastSequence: number;
   lastModified: string; //ISO-Date
 };
 
@@ -178,7 +178,7 @@ export type signupResponse = {
 
 export type sendKeysResponse = Record<string, never>;
 
-export type sendEncMessageResponse = { tempMessageId: string };
+export type sendEncMessageResponse = { sentMessage: ApiMessage };
 
 export type errorResponse = {
   message: string;

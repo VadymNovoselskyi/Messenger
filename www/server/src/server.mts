@@ -262,6 +262,9 @@ wss.on("connection", ws => {
           }
 
           // Confirm message delivery to the sender.
+          if (ciphertext.type !== 3) {
+            sendResponse(ws, api, id, "SUCCESS", { sentMessage: toApiMessage(sentMessage) });
+          }
           break;
         }
 

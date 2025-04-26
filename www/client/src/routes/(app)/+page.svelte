@@ -6,12 +6,9 @@
 	import { loadAndSyncChats, sendPreKeys } from '$lib/api.svelte';
 	import { generateKeys, getCookie } from '$lib/utils';
 
-	import { memory } from '$lib/stores/memory.svelte';
 	import ChatList from '$lib/components/ChatList.svelte';
 	import { SignalProtocolStore } from '$lib/stores/SignalProtocolStore';
-	import { ChatsStore, chatsStore } from '$lib/stores/ChatsStore';
-	import { DbService } from '$lib/stores/DbService';
-	import { chats } from '$lib/chats.svelte';
+	import { chatsStore } from '$lib/stores/ChatsStore.svelte';
 
 	onMount(async () => {
 		if (!browser) return;
@@ -27,16 +24,7 @@
 			await sendPreKeys(keys);
 		}
 
-		if (!chatsStore.chats.length) await loadAndSyncChats();
-	});
-
-	$effect(() => {
-		chats;
-		console.log('Running of the chats.svelte.ts');
-	});
-	$effect(() => {
-		$chatsStore;
-		console.log('Runing of the ChatsStore internal instance');
+		if (!$chatsStore.length) await loadAndSyncChats();
 	});
 </script>
 

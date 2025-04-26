@@ -9,7 +9,7 @@ export async function toApiChat(chat: ChatDocument): Promise<ApiChat> {
     _id: chat._id.toString(),
     users: chat.users.map(user => toApiUser(user)),
     messages: messages.map(message => toApiMessage(message)),
-    messageCounter: chat.messageCounter,
+    lastSequence: chat.lastSequence,
     lastModified: chat.lastModified.toISOString(),
   };
 }
