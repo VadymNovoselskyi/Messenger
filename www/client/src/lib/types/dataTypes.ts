@@ -5,9 +5,9 @@ export type UsedChat = {
 	users: {
 		_id: string;
 		username: string;
+		lastReadSequence: number;
 	}[];
 	messages: StoredMessage[];
-	unreadCount: number;
 	lastSequence: number;
 	lastModified: string;
 };
@@ -17,6 +17,7 @@ export type StoredChat = {
 	users: {
 		_id: string;
 		username: string;
+		lastReadSequence: number;
 	}[];
 	lastSequence: number;
 	lastModified: string;
@@ -27,6 +28,7 @@ export type ApiChat = {
 	users: {
 		_id: string;
 		username: string;
+		lastReadSequence: number;
 	}[];
 	messages: ApiMessage[];
 	lastSequence: number;
@@ -41,11 +43,13 @@ export type StoredMessage = {
 	plaintext?: string;
 	sequence: number;
 	sendTime: string;
+	isPending?: boolean;
 };
 
 export type PendingMessage = StoredMessage & {
 	tempId: string;
 	plaintext: string;
+	isPending: true;
 };
 
 export type ApiMessage = {

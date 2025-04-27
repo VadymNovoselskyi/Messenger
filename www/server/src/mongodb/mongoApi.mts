@@ -30,13 +30,13 @@ export async function getChats(userId: ObjectId): Promise<ApiChat[]> {
     // Transform each document into a structured Chat.
     const chats: ApiChat[] = await Promise.all(
       chatDocuments.map(async (chatDocument: ChatDocument) => {
-        const { lastSeen } = chatDocument.users.find(user => user._id.equals(userId))!;
+        const { lastReadSequence } = chatDocument.users.find(user => user._id.equals(userId))!;
 
         // Count unread messages since last seen.
         const unreadCount = await messagesCollection.countDocuments({
           chatId: chatDocument._id.toString,
           from: { $ne: userId },
-          sendTime: { $gt: lastSeen },
+          sequence: { $gt: lastReadSequence },
         });
 
         const unreadSkip = Math.max(unreadCount - INIT_MESSAGES, 0);
@@ -53,7 +53,7 @@ export async function getChats(userId: ObjectId): Promise<ApiChat[]> {
           _id: chatDocument._id.toString(),
           users: chatDocument.users,
           messages: messages.reverse(),
-          lastSequence: chatDocument.lastSequence,
+          lastReadSequence,
           lastModified: chatDocument.lastModified,
         } as unknown as ApiChat; //CHANGE
       })
@@ -69,48 +69,43 @@ export async function getChats(userId: ObjectId): Promise<ApiChat[]> {
 /**
  * Inserts a new message into a chat and updates the chat's timestamp.
  */
-//NEW
 export async function sendEncMessage(
   userId: ObjectId,
   chatId: ObjectId,
   ciphertext: MessageType
 ): Promise<{ sentMessage: MessageDocument; receivingUserId: ObjectId }> {
   try {
-    const chat = await chatsCollection.findOne({ _id: chatId });
-    if (!chat) throw new Error(`Couldn't find chat with chatId ${chatId}`);
-
+    const result = await chatsCollection.findOneAndUpdate(
+      { _id: chatId },
+      {
+        $inc: { lastSequence: ciphertext.type === 1 ? 1 : 0 },
+        $set: { lastModified: new Date() },
+      },
+      { returnDocument: "after" }
+    );
+    if (!result) {
+      throw new Error(`Chat ${chatId} not found`);
+    }
+    const newSeq = result.lastSequence;
     const { acknowledged, insertedId } = await messagesCollection.insertOne({
       chatId,
       from: userId,
       ciphertext,
-      sequence: chat.lastSequence,
+      sequence: newSeq,
       sendTime: new Date(),
     });
-
-    const { modifiedCount } = await chatsCollection.updateOne(
-      { _id: chatId },
-      {
-        $set: { lastModified: new Date() },
-        $inc: { lastSequence: ciphertext.type === 1 ? 1 : 0 },
-      }
-    );
-
-    if (!acknowledged || !insertedId || modifiedCount !== 1) {
-      throw new Error(`Failed to send message in chat ID ${chatId}`);
+    if (!acknowledged || !insertedId) {
+      throw new Error(`Failed to insert message in chat ${chatId}`);
     }
 
-    const receivingUserId = chat.users.find(user => !user._id.equals(userId))!._id;
-    const sentMessage: MessageDocument | null = await messagesCollection.findOne({
-      _id: insertedId,
-    });
-    if (!sentMessage)
-      throw new Error(
-        `Couldn't find inserted message: ${JSON.stringify(ciphertext)} for chatId: ${chatId}`
-      );
-    return {
-      sentMessage,
-      receivingUserId,
-    };
+    const sentMessage = await messagesCollection.findOne({ _id: insertedId });
+    if (!sentMessage) {
+      throw new Error(`Inserted message ${insertedId} not found`);
+    }
+
+    const receivingUserId = result.users.find(user => !user._id.equals(userId))!._id;
+
+    return { sentMessage, receivingUserId };
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : "An unknown error occurred";
     throw new Error(`Error sending message in chat ID ${chatId}: ${errMsg}`);
@@ -123,16 +118,15 @@ export async function sendEncMessage(
 export async function readUpdate(
   userId: ObjectId,
   chatId: ObjectId,
-  messageId: ObjectId
-): Promise<{ sendTime: Date; receivingUserId: ObjectId }> {
+  sequence: number
+): Promise<{ receivingUserId: ObjectId }> {
   try {
-    const message = await messagesCollection.findOne({ _id: messageId });
-    if (!message) throw new Error(`Didn't find message ${messageId}`);
+    const message = await messagesCollection.findOne({ chatId, sequence });
+    if (!message) throw new Error(`Didn't find message ${sequence}`);
 
-    const { sendTime } = message;
     await chatsCollection.updateOne(
       { _id: chatId },
-      { $set: { "users.$[user].lastSeen": sendTime } },
+      { $set: { "users.$[user].lastReadSequence": sequence } },
       { arrayFilters: [{ "user._id": userId }] }
     );
 
@@ -140,7 +134,7 @@ export async function readUpdate(
     if (!chat) throw new Error(`Couldn't find chat for chatId ${chatId}`);
 
     const receivingUserId = chat.users.find(user => !user._id.equals(userId))!._id;
-    return { sendTime, receivingUserId };
+    return { receivingUserId };
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : "An unknown error occurred";
     throw new Error(`Error updating readTime in chat ID ${chatId}: ${errMsg}`);
@@ -231,6 +225,9 @@ export async function createChat(
     if (!creatingUser || !receivingUser) {
       throw new Error(`Receiving user "${receivingUsername}" not found.`);
     }
+    if (creatingUser._id.equals(receivingUser._id)) {
+      throw new Error(`You can't create a chat with yourself.`);
+    }
 
     // Ensure that a chat between the two users doesn't already exist.
     const presentChat = await chatsCollection.findOne({
@@ -250,8 +247,8 @@ export async function createChat(
 
     const result = await chatsCollection.insertOne({
       users: [
-        { _id: creatingUser._id, username: creatingUser.username, lastSeen: new Date() },
-        { _id: receivingUser._id, username: receivingUser.username, lastSeen: new Date() },
+        { _id: creatingUser._id, username: creatingUser.username, lastReadSequence: 0 },
+        { _id: receivingUser._id, username: receivingUser.username, lastReadSequence: 0 },
       ],
       lastSequence: 0,
       lastModified: new Date(),
@@ -361,4 +358,10 @@ export async function findUser(username: string): Promise<UserDocument> {
     const errMsg = error instanceof Error ? error.message : "An unknown error occurred";
     throw new Error(`Error finding user with username "${username}": ${errMsg}`);
   }
+}
+
+export async function findChat(chatId: ObjectId): Promise<ChatDocument> {
+  const chat = await chatsCollection.findOne({ _id: chatId });
+  if (!chat) throw new Error(`Chat with id ${chatId} not found`);
+  return chat;
 }

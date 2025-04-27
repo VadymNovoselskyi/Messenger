@@ -5,8 +5,8 @@ import type { ApiChat, ApiMessage } from './dataTypes';
 /** API endpoints enumeration */
 export enum API {
 	GET_CHATS = 'getChats',
-	SEND_ENC_MESSAGE = 'sendEncMessage',
 	RECEIVE_MESSAGE = 'receiveMessage',
+	RECEIVE_PRE_KEY_MESSAGE = 'receivePreKeyMessage',
 	READ_UPDATE = 'readUpdate',
 	EXTRA_MESSAGES = 'extraMessages',
 	EXTRA_NEW_MESSAGES = 'extraNewMessages',
@@ -14,7 +14,9 @@ export enum API {
 	CREATE_CHAT = 'createChat',
 	LOGIN = 'login',
 	SIGNUP = 'signup',
-	SEND_KEYS = 'sendKeys'
+	SEND_KEYS = 'sendKeys',
+	SEND_PRE_KEY_MESSAGE = 'sendPreKeyMessage',
+	SEND_ENC_MESSAGE = 'sendEncMessage'
 }
 
 /** Structure for API call messages */
@@ -44,12 +46,14 @@ export type messagePayload =
 	| loginPayload
 	| signupPayload
 	| sendKeysPayload
+	| sendPreKeyMessagePayload
 	| sendEncMessagePayload;
 
 /** Union type for response payloads */
 export type responsePayload =
 	| getChatsResponse
 	| receiveMessageResponse
+	| receivePreKeyMessageResponse
 	| readUpdateResponse
 	| getExtraMessagesResponse
 	| getExtraNewMessagesResponse
@@ -59,13 +63,14 @@ export type responsePayload =
 	| signupResponse
 	| errorResponse
 	| sendKeysResponse
+	| sendPreKeyMessageResponse
 	| sendEncMessageResponse;
 
 export type getChatsPayload = Record<string, never>;
 
 export type readUpdatePayload = {
 	chatId: string;
-	messageId: string;
+	sequence: number;
 };
 
 export type getExtraMessagesPayload = {
@@ -105,20 +110,29 @@ export type sendEncMessagePayload = {
 	ciphertext: MessageType;
 };
 
+export type sendPreKeyMessagePayload = {
+	chatId: string;
+	ciphertext: MessageType;
+};
+
 //Responses
 export type getChatsResponse = {
 	chats: ApiChat[];
 };
 
 export type receiveMessageResponse = {
-	chat?: ApiChat;
 	chatId: string;
 	message: ApiMessage;
 };
 
+export type receivePreKeyMessageResponse = {
+	chatId: string;
+	ciphertext: MessageType;
+};
+
 export type readUpdateResponse = {
 	chatId: string;
-	lastSeen: string; //ISO-time
+	sequence: number;
 };
 
 export type getExtraMessagesResponse = {
@@ -149,6 +163,8 @@ export type signupResponse = {
 };
 
 export type sendKeysResponse = Record<string, never>;
+
+export type sendPreKeyMessageResponse = Record<string, never>;
 
 export type sendEncMessageResponse = { sentMessage: ApiMessage };
 

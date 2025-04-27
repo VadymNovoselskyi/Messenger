@@ -24,7 +24,7 @@
 			await sendPreKeys(keys);
 		}
 
-		if (!$chatsStore.length) await loadAndSyncChats();
+		if (!chatsStore.chats.length) await loadAndSyncChats();
 	});
 </script>
 
@@ -34,7 +34,7 @@
 
 <div id="wrapper">
 	<section id="chats-list">
-		<ChatList chats={$chatsStore} />
+		<ChatList chats={chatsStore.chats} />
 	</section>
 
 	<section id="chat-display"></section>

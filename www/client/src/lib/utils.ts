@@ -45,39 +45,22 @@ export function getCookie(name: string): string | null {
 	return null;
 }
 
-// Overload signatures
-export function createObserver(
-	callback: () => Promise<void>,
-	threshold?: number
-): IntersectionObserver;
-export function createObserver(
-	callback: (entry: IntersectionObserverEntry) => void,
-	threshold?: number
-): IntersectionObserver;
+export function intersection(node: Element, options: IntersectionObserverInit = {}) {
+	// Create the observer, dispatching a custom "intersect" event on each entry
+	const observer = new IntersectionObserver((entries) => {
+		for (const entry of entries) {
+			node.dispatchEvent(
+				new CustomEvent<IntersectionObserverEntry>('intersect', { detail: entry })
+			);
+		}
+	}, options);
+	observer.observe(node);
 
-// Implementation
-export function createObserver(
-	callback: (() => Promise<void>) | ((entry: IntersectionObserverEntry) => void),
-	threshold: number = 0.5
-): IntersectionObserver {
-	const intersectionObserver = new IntersectionObserver(
-		(entries) => {
-			entries.forEach((entry) => {
-				if (entry.isIntersecting) {
-					// Check the callback type and invoke accordingly
-					if (callback.length === 0) {
-						// Callback expects no arguments
-						(callback as () => Promise<void>)();
-					} else {
-						// Callback expects an entry argument
-						(callback as (entry: IntersectionObserverEntry) => void)(entry);
-					}
-				}
-			});
-		},
-		{ threshold }
-	);
-	return intersectionObserver;
+	return {
+		destroy() {
+			observer.unobserve(node);
+		}
+	};
 }
 
 export async function generateKeys(): Promise<unorgonizedKeys> {
@@ -207,30 +190,38 @@ export function apiToUsedChat(chat: ApiChat): UsedChat {
 		_id: chat._id,
 		users: chat.users,
 		messages: chat.messages,
-		unreadCount: 0,
-		lastSequence: 0,
+		lastSequence: chat.lastSequence,
+		lastModified: chat.lastModified
+	};
+}
+
+export function apiToStoredChat(chat: ApiChat): StoredChat {
+	return {
+		_id: chat._id,
+		users: chat.users,
+		lastSequence: chat.lastSequence,
 		lastModified: chat.lastModified
 	};
 }
 
 export function storedToUsedChat(chat: StoredChat, messages: StoredMessage[]): UsedChat {
 	return {
-		_id: chat._id,
-		users: chat.users,
-		messages: messages,
-		unreadCount: 0,
-		lastSequence: 0,
-		lastModified: chat.lastModified
+		...chat,
+		messages
 	};
 }
 
+export function usedToStoredChat(chat: UsedChat): StoredChat {
+	return {
+		_id: chat._id,
+		users: chat.users,
+		lastSequence: chat.lastSequence,
+		lastModified: chat.lastModified
+	};
+}
 export function toStoredMessage(message: ApiMessage): StoredMessage {
 	return {
-		_id: message._id,
-		chatId: message.chatId,
-		from: message.from,
-		ciphertext: message.ciphertext,
-		sequence: message.sequence,
-		sendTime: message.sendTime
+		...message,
+		plaintext: ''
 	};
 }

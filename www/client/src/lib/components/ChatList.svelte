@@ -5,13 +5,10 @@
 	import Scrollbar from '$lib/components/Scrollbar.svelte';
 	import AddChatButton from '$lib/components/AddChatButton.svelte';
 
-	import { formatISODate, createObserver, getOtherUsername } from '$lib/utils';
+	import { formatISODate, getOtherUsername, getCookie } from '$lib/utils';
 	import type { UsedChat } from '$lib/types/dataTypes';
 
-	const {
-		chats,
-		onChatChange
-	}: { chats: UsedChat[]; onChatChange?: () => void } = $props();
+	const { chats, onChatChange }: { chats: UsedChat[]; onChatChange?: () => void } = $props();
 
 	let showAddChat = $state(false);
 	let bottomObserver = $state<IntersectionObserver>();
@@ -32,7 +29,7 @@
 	let lastChats = $derived(chats?.slice(0, indexesToShow));
 
 	onMount(async () => {
-		bottomObserver = createObserver(handleBottomIntersection);
+		// bottomObserver = createObserver(handleBottomIntersection);
 		await checkContentHeight();
 	});
 
@@ -104,24 +101,26 @@
 		bind:this={scrollableContent}
 		onscroll={showScrollbar ? scrollBar.updateThumbPosition : null}
 	>
-		{#each lastChats as chat, i (chat._id)}
+		{#each lastChats as { _id, users, messages, lastSequence, lastModified }, i (_id)}
 			<a
-				href="{page.url.origin}/chat/{chat._id}"
+				href="{page.url.origin}/chat/{_id}"
 				class="chat"
-				class:current={page.url.pathname === `/chat/${chat._id}`}
+				class:current={page.url.pathname === `/chat/${_id}`}
 				onclick={() => {
-					if (page.params.chatId !== chat._id && onChatChange) onChatChange();
+					if (page.params.chatId !== _id && onChatChange) onChatChange();
 				}}
 			>
-				<img src={''} alt={getOtherUsername(chat._id)} class="profile-picture" />
-				<p class="chat-name">{getOtherUsername(chat._id)}</p>
-				{#if chat.unreadCount}
-					<p class="unread-count">{chat.unreadCount}</p>
+				<img src={''} alt={getOtherUsername(_id)} class="profile-picture" />
+				<p class="chat-name">{getOtherUsername(_id)}</p>
+				{#if lastSequence - users.find((user) => user._id === getCookie('userId'))!.lastReadSequence}
+					<p class="unread-count">
+						{lastSequence - users.find((user) => user._id === getCookie('userId'))!.lastReadSequence}
+					</p>
 				{/if}
-				<p class="chat-message" class:system-message={!chat.messages.length}>
-					{chat.messages[chat.messages.length - 1]?.plaintext ?? 'No messages'}
+				<p class="chat-message" class:system-message={!messages.length}>
+					{messages[messages.length - 1]?.plaintext ?? 'No messages'}
 				</p>
-				<p class="send-date">{formatISODate(chat.lastModified)}</p>
+				<p class="send-date">{formatISODate(lastModified)}</p>
 			</a>
 		{/each}
 		<div bind:this={bottom_anchor} class="anchor"></div>

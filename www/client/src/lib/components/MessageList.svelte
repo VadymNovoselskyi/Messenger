@@ -7,21 +7,47 @@
 	import Loader from '$lib/components/Loader.svelte';
 	import Scrollbar from '$lib/components/Scrollbar.svelte';
 	import { getExtraMessages, getExtraNewMessages, sendReadUpdate } from '$lib/api.svelte';
-	import { formatISODate, getCookie, createObserver } from '$lib/utils';
+	import { formatISODate, getCookie, intersection } from '$lib/utils';
 	import type { UsedChat, StoredMessage } from '$lib/types/dataTypes';
+	import type { Action } from 'svelte/action';
+
+	onMount(async () => {
+		await setAnchors();
+	});
 
 	// ===============================================================
 	// Props & Derived values from chat
 	// ===============================================================
-	const {
-		chat = $bindable(),
-		submitFn
-	}: { chat: UsedChat; submitFn: (event: SubmitEvent) => void } = $props();
-	const { messages, lastSequence, unreadCount, lastModified } = $derived(chat);
-	let newlyReadMessageCount = $state(0);
+	const { chat, submitFn }: { chat: UsedChat; submitFn: (event: SubmitEvent) => void } = $props();
+	const { messages, users, lastSequence, lastModified } = $derived(chat);
+
+	let lastReadSequenceMe = $derived(
+		users.find((user) => user._id === getCookie('userId'))!.lastReadSequence
+	);
+	let lastReadSequenceOther = $derived(
+		users.find((user) => user._id !== getCookie('userId'))!.lastReadSequence
+	);
+	let unreadCount = $derived.by(() => {
+		return lastSequence - lastReadSequenceMe;
+	});
+
+	$effect(() => {
+		untrack(() => {
+			console.log(`unreadCount: ${unreadCount}`);
+		});
+	});
+	$effect(() => {
+		untrack(() => {
+			console.log(`lastReadSequenceMe: ${lastReadSequenceMe}`);
+		});
+	});
+	$effect(() => {
+		untrack(() => {
+			console.log(`lastReadSequenceOther: ${lastReadSequenceOther}`);
+		});
+	});
 
 	const SCROLL_ADJUSTMENT = 24;
-
 	let scrollableContent = $state() as HTMLElement;
 	let scrollBar = $state() as Scrollbar;
 	let showScrollbar = $state<boolean>();
@@ -30,21 +56,54 @@
 	let unreadAnchor = $state() as HTMLElement;
 	let bottomAnchor = $state() as HTMLElement;
 
+	const MAX_READ_TIMEOUT = 2000;
+	const MAX_STASHED_COUNT = 4;
+
+	let stashedReadCount = $state(0);
+	let lastTimeoutTime = $state(0);
+	let readTimeoutId = $state<number>();
+
 	// let topObserver = createObserver(handleTopIntersection);
 	// let bottomObserver = createObserver(handleBottomIntersection);
-	let readObserver = createObserver((entry: IntersectionObserverEntry) => {
-		readObserver.unobserve(entry.target);
-		handleMessageRead(entry.target);
-	}, 0.9);
+	// let readObserver = createObserver((entry: IntersectionObserverEntry) => {
+	// 	readObserver.unobserve(entry.target);
+	// 	handleMessageRead(entry.target);
+	// }, 0.9);
 
-	onMount(setAnchors);
+	const READ_OBSERVER_OPTIONS: IntersectionObserverInit = { threshold: 0.9 };
+	const readObserver = new IntersectionObserver((entries) => {
+		for (const entry of entries) {
+			if (!entry.isIntersecting) continue;
+			readObserver.unobserve(entry.target);
+			entry.target.dispatchEvent(
+				new CustomEvent<IntersectionObserverEntry>('intersect', { detail: entry })
+			);
+		}
+	}, READ_OBSERVER_OPTIONS);
+	const intersectionAction: Action<Element, boolean> = (element, enabled) => {
+		if (!enabled) return;
+
+		console.log('intersectionAction', element);
+		readObserver.observe(element);
+		return {
+			update(newEnabled: boolean) {
+				console.log(`update ${newEnabled}, ${element}`);
+				if (newEnabled) readObserver.observe(element);
+				else readObserver.unobserve(element);
+			},
+			destroy() {
+				console.log('destroy', element);
+				readObserver.unobserve(element);
+			}
+		};
+	};
 
 	// ===============================================================
 	// Anchor Setup for Scroll Position and Lazy-loading
 	// ===============================================================
 	async function setAnchors() {
 		await tick();
-		if (!topAnchor || !bottomAnchor) {
+		if (!topAnchor || !bottomAnchor || (!unreadAnchor && unreadCount)) {
 			requestAnimationFrame(setAnchors);
 			return;
 		}
@@ -55,59 +114,42 @@
 			top: scrollTop,
 			behavior: 'instant'
 		});
-
-		await tick();
-		updateUnreadObserver();
 	}
 
-	function handleMessageRead(target: Element) {
-		newlyReadMessageCount++;
-		chat.unreadCount--;
+	function handleMessageRead(event: CustomEvent<IntersectionObserverEntry>) {
+		const lastReadSequence = messages.find(
+			(message) => message._id === event.detail.target.id
+		)?.sequence;
+		if (!lastReadSequence) return;
 
-		const messageSequence = messages.findIndex((message) => message._id === target.id);
-		console.log(messageSequence);
-
-		// // Define a common computation for the last-read message index
-		// const computeLastReadIndex = () =>
-		// 	messages.length -
-		// 	receivedUnreadCount +
-		// 	totalUnreadCount -
-		// 	unreadCount +
-		// 	(totalUnreadCount - oldUnreadCount) -
-		// 	1;
-
-		// // Start timeout if no updates are stashed
-		// if (!stashedReadCount) {
-		// 	readTimeoutId = window.setTimeout(() => {
-		// 		const lastReadIndex = computeLastReadIndex();
-		// 		if (lastReadIndex <= messages.length) {
-		// 			sendReadUpdate(chat._id, messages[lastReadIndex]._id);
-		// 		} else {
-		// 			sendReadUpdate(chat._id, messages[messages.length - 1]._id);
-		// 		}
-		// 		stashedReadCount = 0;
-		// 	}, MAX_READ_TIMEOUT);
-		// }
-		// stashedReadCount++;
-
-		// // If stashed count exceeds limit, trigger update immediately
-		// if (stashedReadCount >= MAX_STASHED_COUNT) {
-		// 	const lastReadIndex = computeLastReadIndex();
-		// 	if (lastReadIndex <= messages.length) {
-		// 		sendReadUpdate(chat._id, messages[lastReadIndex]._id);
-		// 	} else {
-		// 		sendReadUpdate(chat._id, messages[messages.length - 1]._id);
-		// 	}
-		// 	clearTimeout(readTimeoutId);
-		// 	stashedReadCount = 0;
-		// }
-	}
-
-	function updateUnreadObserver() {
-		if (unreadCount && readObserver) {
-			const lastMessagesEls = Array.from(scrollableContent.querySelectorAll('.message'));
-			lastMessagesEls.slice(-unreadCount).forEach((message) => readObserver.observe(message));
+		if (stashedReadCount >= MAX_STASHED_COUNT || lastReadSequence === lastSequence) {
+			clearTimeout(readTimeoutId);
+			stashedReadCount = 0;
+			lastTimeoutTime = 0;
+			sendReadUpdate(chat._id, lastReadSequence);
+			return;
 		}
+		if (!lastTimeoutTime) {
+			setReadTimeout(lastReadSequence);
+			return;
+		}
+		clearTimeout(readTimeoutId);
+		setReadTimeout(lastReadSequence);
+		return;
+	}
+	function setReadTimeout(lastReadSequence: number) {
+		const timeoutOffset = lastTimeoutTime ? Date.now() - lastTimeoutTime : 0;
+		readTimeoutId = window.setTimeout(() => {
+			stashedReadCount = 0;
+			lastTimeoutTime = 0;
+			sendReadUpdate(chat._id, lastReadSequence);
+		}, MAX_READ_TIMEOUT - timeoutOffset);
+		stashedReadCount++;
+		lastTimeoutTime = Date.now();
+	}
+
+	function messageReadStatus(sequence: number) {
+		return lastReadSequenceOther >= sequence && sequence >= 0 ? '✓✓' : '✓';
 	}
 
 	$effect(() => {
@@ -116,11 +158,6 @@
 			// Update scrollbar visibility when messages are loaded
 			showScrollbar = scrollableContent.scrollHeight !== scrollableContent.clientHeight;
 		}
-	});
-
-	$effect(() => {
-		chat.unreadCount;
-		updateUnreadObserver();
 	});
 </script>
 
@@ -141,17 +178,24 @@
 		<!-- <Loader promise={extraMessagesPromise} /> -->
 
 		<div bind:this={topAnchor} class="anchor"></div>
-		{#each messages as { _id, from, plaintext, sendTime }, i (_id)}
+		{#each messages as { _id, from, plaintext, sequence, sendTime, isPending } (_id)}
+			<!-- Dont mind the error below, just a TypeScript issue (oninspect) -->
 			<div
 				class="message"
 				class:sent={from === getCookie('userId')}
 				class:received={from !== getCookie('userId')}
+				class:pending={isPending}
+				use:intersectionAction={sequence > lastReadSequenceMe && !!unreadCount}
+				onintersect={handleMessageRead}
 				id={_id}
 			>
 				<p class="text">{plaintext}</p>
-				<p class="sendTime">{formatISODate(sendTime)}</p>
+				<p class="sendTime">
+					{formatISODate(sendTime)}
+					{from === getCookie('userId') ? messageReadStatus(sequence) : ''}
+				</p>
 			</div>
-			{#if i === messages.length - unreadCount - newlyReadMessageCount - 1 && unreadCount}
+			{#if sequence === lastReadSequenceMe && sequence !== lastSequence}
 				<div bind:this={unreadAnchor} id="unread-anchor" class="anchor">Unread Messages</div>
 			{/if}
 		{/each}
@@ -203,8 +247,9 @@
 				background-color: #83c5be;
 			}
 
-			&.sending {
+			&.pending {
 				background-color: #83c5c08f;
+				opacity: 0.8;
 			}
 
 			.sendTime {

@@ -23,12 +23,13 @@ export type ApiChat = {
 export type ApiUser = {
   _id: string;
   username: string;
+  lastReadSequence: number;
 };
 
 export enum API {
   GET_CHATS = "getChats",
-  SEND_MESSAGE = "sendMessage",
   RECEIVE_MESSAGE = "receiveMessage",
+  RECEIVE_PRE_KEY_MESSAGE = "receivePreKeyMessage",
   READ_UPDATE = "readUpdate",
   EXTRA_MESSAGES = "extraMessages",
   EXTRA_NEW_MESSAGES = "extraNewMessages",
@@ -37,6 +38,7 @@ export enum API {
   LOGIN = "login",
   SIGNUP = "signup",
   SEND_KEYS = "sendKeys",
+  SEND_PRE_KEY_MESSAGE = "sendPreKeyMessage",
   SEND_ENC_MESSAGE = "sendEncMessage",
 }
 
@@ -59,6 +61,7 @@ export type messagePayload =
   | createChatPayload
   | loginPayload
   | sendKeysPayload
+  | sendPreKeyMessagePayload
   | sendEncMessagePayload;
 
 /** Union type for response payloads */
@@ -66,6 +69,7 @@ export type responsePayload =
   | getChatsResponse
   | sendMessageResponse
   | receiveMessageResponse
+  | receivePreKeyMessageResponse
   | readUpdateResponse
   | getExtraMessagesResponse
   | getExtraNewMessagesResponse
@@ -87,7 +91,7 @@ export type sendMessagePayload = {
 
 export type readUpdatePayload = {
   chatId: string;
-  messageId: string;
+  sequence: number;
 };
 
 export type getExtraMessagesPayload = {
@@ -123,6 +127,11 @@ export type sendKeysPayload = {
   preKeyBundle: StringifiedPreKeyBundle;
 };
 
+export type sendPreKeyMessagePayload = {
+  chatId: string;
+  ciphertext: MessageType;
+};
+
 export type sendEncMessagePayload = {
   chatId: string;
   ciphertext: MessageType;
@@ -144,9 +153,14 @@ export type receiveMessageResponse = {
   message: MessageDocument;
 };
 
+export type receivePreKeyMessageResponse = {
+  chatId: string;
+  ciphertext: MessageType;
+};
+
 export type readUpdateResponse = {
   chatId: string;
-  lastSeen: Date;
+  sequence: number;
 };
 
 export type getExtraMessagesResponse = {

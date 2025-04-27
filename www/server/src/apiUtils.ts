@@ -25,9 +25,10 @@ export function toApiMessage(message: MessageDocument): ApiMessage {
   };
 }
 
-export function toApiUser(user: { _id: ObjectId; username: string }): ApiUser {
+export function toApiUser(user: { _id: ObjectId; username: string; lastReadSequence: number }): ApiUser {
   return {
     _id: user._id.toString(),
     username: user.username,
+    lastReadSequence: user.lastReadSequence,
   };
 }

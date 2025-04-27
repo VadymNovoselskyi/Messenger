@@ -1,9 +1,8 @@
 <script lang="ts">
-	import { onMount, tick, untrack } from 'svelte';
+	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
-	import { memory } from '$lib/stores/memory.svelte';
 
 	import {
 		loadAndSyncChats,
@@ -12,16 +11,14 @@
 		sendEncMessage,
 		sendPreKeys
 	} from '$lib/api.svelte';
-	import { generateKeys, getCookie, getOtherUsername, storedToUsedChat } from '$lib/utils';
-	import type { UsedChat, StoredMessage } from '$lib/types/dataTypes';
+	import { generateKeys, getCookie, getOtherUsername } from '$lib/utils';
 
 	import ChatList from '$lib/components/ChatList.svelte';
 	import MessageList from '$lib/components/MessageList.svelte';
 	import { SignalProtocolStore } from '$lib/stores/SignalProtocolStore';
-	import { getDbService } from '$lib/dbService.svelte';
 	import { chatsStore } from '$lib/stores/ChatsStore.svelte';
 
-	let chat = $derived($chatsStore.find((chat) => chat._id === page.params.chatId));
+	let chat = $derived(chatsStore.chats.find((chat) => chat._id === page.params.chatId));
 	let messageList = $state() as MessageList;
 
 	// function onChatChange() {
@@ -35,7 +32,7 @@
 			goto('/login');
 			return;
 		}
-		if (!$chatsStore.length) await loadAndSyncChats();
+		if (!chatsStore.chats.length) await loadAndSyncChats();
 
 		const store = SignalProtocolStore.getInstance();
 		const isFilled = await store.check();
@@ -62,7 +59,7 @@
 
 		const { chatId } = page.params;
 
-		const chat = $chatsStore.find((chat) => chat._id === chatId);
+		const chat = chatsStore.chats.find((chat) => chat._id === chatId);
 		if (!chat) throw new Error(`Chat with id ${chatId} not found`);
 
 		// // Update UI immediately and reset unread if needed
@@ -83,12 +80,12 @@
 
 <div id="wrapper">
 	<section id="chats-list">
-		<ChatList chats={$chatsStore} />
+		<ChatList chats={chatsStore.chats} />
 	</section>
 
 	{#if chat}
 		{#key chat._id}
-			<MessageList bind:this={messageList} bind:chat submitFn={sendMessagePrep} />
+			<MessageList bind:this={messageList} chat={chat} submitFn={sendMessagePrep} />
 		{/key}
 	{/if}
 </div>

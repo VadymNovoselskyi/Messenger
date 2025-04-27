@@ -13,6 +13,7 @@ import {
   findUser,
   savePreKeys,
   sendEncMessage,
+  findChat,
 } from "./mongodb/mongoApi.mjs";
 import { base64ToBinary, generateToken, sendResponse } from "./utils.mjs";
 
@@ -163,16 +164,16 @@ wss.on("connection", ws => {
         }
 
         case apiTypes.API.READ_UPDATE: {
-          const { chatId, messageId } = payload as apiTypes.readUpdatePayload;
-          const { sendTime, receivingUserId } = await readUpdate(
+          const { chatId, sequence } = payload as apiTypes.readUpdatePayload;
+          const { receivingUserId } = await readUpdate(
             new ObjectId(userId),
             new ObjectId(chatId),
-            new ObjectId(messageId)
+            sequence
           );
           if (onlineUsers[receivingUserId.toString()]) {
             sendResponse(onlineUsers[receivingUserId.toString()], api, undefined, "SUCCESS", {
               chatId,
-              lastSeen: sendTime,
+              sequence,
             });
           }
           break;
@@ -243,6 +244,24 @@ wss.on("connection", ws => {
           await savePreKeys(new ObjectId(userId), preKeyBundleReconstructed);
           break;
         }
+        case apiTypes.API.SEND_PRE_KEY_MESSAGE: {
+          const { chatId, ciphertext } = payload as apiTypes.sendPreKeyMessagePayload;
+          const chat = await findChat(new ObjectId(chatId));
+          const receivingUserId = chat.users.find(user => user._id.toString() !== userId)?._id;
+          if (!receivingUserId) throw new Error(`User with id ${userId} not found in chat ${chatId}`);
+
+          if (onlineUsers[receivingUserId.toString()]) {
+            sendResponse(
+              onlineUsers[receivingUserId.toString()],
+              apiTypes.API.RECEIVE_PRE_KEY_MESSAGE,
+              undefined,
+              "SUCCESS",
+              { chatId, ciphertext }
+            );
+          }
+          break;
+        }
+
         case apiTypes.API.SEND_ENC_MESSAGE: {
           const { chatId, ciphertext } = payload as apiTypes.sendEncMessagePayload;
           const { sentMessage, receivingUserId } = await sendEncMessage(

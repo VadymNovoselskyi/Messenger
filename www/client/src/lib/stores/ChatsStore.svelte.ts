@@ -1,9 +1,11 @@
-import type { StoredChat, StoredMessage, UsedChat } from '$lib/types/dataTypes';
+import { getDbService } from './DbService.svelte';
+import type { PendingMessage, StoredChat, StoredMessage, UsedChat } from '$lib/types/dataTypes';
+import { getCookie, storedToUsedChat, usedToStoredChat } from '$lib/utils';
 
 export class ChatsStore {
 	private static instance: ChatsStore;
 	private _chats = $state<UsedChat[]>([]);
-	private listeners = new Set<(chats: UsedChat[]) => void>();
+	private getDb = getDbService;
 
 	private constructor() {}
 
@@ -19,70 +21,83 @@ export class ChatsStore {
 		return this._chats;
 	}
 
+	/* Retrieves a chat by its ID */
 	public getChat(chatId: string): UsedChat | undefined {
 		return this._chats.find((chat) => chat._id === chatId);
 	}
 
-	public addChat(chat: UsedChat): void {
+	/* Adds a new chat to the store */
+	public async addChat(chat: UsedChat): Promise<void> {
 		this._chats.push(chat);
+		await (await this.getDb()).putChat($state.snapshot(chat));
 	}
+
+	/* Adds multiple chats to the store */
 	public addChats(chats: UsedChat[]): void {
 		this._chats.push(...chats);
 	}
 
-	public updateChat(chatToUpdate: UsedChat): void {
+	/* Updates an existing chat in the store */
+	public async updateChat(chatToUpdate: UsedChat): Promise<void> {
 		const i = this._chats.findIndex((c) => c._id === chatToUpdate._id);
 		if (i === -1) return;
 		this._chats[i] = chatToUpdate;
+
+		const storedChat = usedToStoredChat(chatToUpdate);
+		await (await this.getDb()).putChat($state.snapshot(storedChat));
 	}
 
-	public forceUpdateChat(chat: UsedChat): void;
-	public forceUpdateChat(chatId: string): void;
-	public forceUpdateChat(chatOrId: UsedChat | string): void {
-		const chatId = typeof chatOrId === 'string' ? chatOrId : chatOrId._id;
-		const i = this._chats.findIndex((c) => c._id === chatId);
+	/* Adds a new message to a chat */
+	public async addMessage(message: StoredMessage): Promise<void> {
+		const i = this._chats.findIndex((c) => c._id === message.chatId);
 		if (i === -1) return;
-		this._chats[i] = typeof chatOrId === 'string' ? { ...this._chats[i] } : { ...chatOrId };
+		const chat = this._chats[i];
+		chat.messages.push(message);
+
+		await (await this.getDb()).putMessage($state.snapshot(message));
 	}
 
-	public addMessage(message: StoredMessage): void {
+	/* Updates an existing message in a chat */
+	public async updateMessage(message: StoredMessage): Promise<void> {
+		const i = this._chats.findIndex((c) => c._id === message.chatId);
+		if (i === -1) return;
+		const chat = this._chats[i];
+		const messageIndex = chat.messages.findIndex((m) => m._id === message._id);
+		if (messageIndex === -1) return;
+		chat.messages[messageIndex] = message;
+
+		await (await this.getDb()).putMessage($state.snapshot(message));
+	}
+
+	/* Adds a new pending message to a chat */
+	public async addPendingMessage(message: PendingMessage): Promise<void> {
 		const i = this._chats.findIndex((c) => c._id === message.chatId);
 		if (i === -1) return;
 		this._chats[i].messages.push(message);
+
+		await (await this.getDb()).putPendingMessage($state.snapshot(message));
 	}
-	public updateMessage(message: StoredMessage, tempId: string): void {
+
+	/* Promotes a pending message to a stored message */
+	public async promotePendingMessage(tempId: string, message: StoredMessage): Promise<void> {
 		const i = this._chats.findIndex((c) => c._id === message.chatId);
 		if (i === -1) return;
 		const chat = this._chats[i];
 		const messageIndex = chat.messages.findIndex((m) => m._id === tempId);
 		if (messageIndex === -1) return;
 		chat.messages[messageIndex] = message;
-	}
-	public forceUpdateMessages(chatId: string): void {
-		const i = this._chats.findIndex((c) => c._id === chatId);
-		if (i === -1) return;
-		this._chats[i].messages = [...this._chats[i].messages];
+
+		await (await this.getDb()).promotePendingMessage(tempId, $state.snapshot(message));
 	}
 
+	/* Sorts chats by last modified date */
 	public sortChats(): void {
 		this._chats = this._chats.sort((a, b) => b.lastModified.localeCompare(a.lastModified));
 	}
 
+	/* Returns the index of a chat in the store */
 	public indexOf(chat: UsedChat): number {
 		return this._chats.indexOf(chat);
-	}
-
-	//Svelte Store
-	public subscribe(callback: (value: UsedChat[]) => void): () => void {
-		// console.log(`New subscriber`);
-		callback(this._chats); // immediately send current data
-		this.listeners.add(callback); // register for future updates
-		return () => this.listeners.delete(callback); // unsubscribe
-	}
-
-	public notify() {
-		// console.log(`Notifying: ${this.listeners.size}`);
-		for (const callback of this.listeners) callback(this._chats);
 	}
 }
 

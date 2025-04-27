@@ -1,3 +1,4 @@
+import { browser } from '$app/environment';
 import type { UsedChat, StoredMessage, StoredChat, PendingMessage } from '$lib/types/dataTypes';
 
 export class DbService {
@@ -152,4 +153,15 @@ export class DbService {
 			req.onerror = () => reject(req.error);
 		});
 	}
+}
+
+let instancePromise: Promise<DbService> | null = null;
+export function getDbService(): Promise<DbService> {
+	if (!browser) {
+		return Promise.reject(new Error('DbService only available in the browser'));
+	}
+	if (!instancePromise) {
+		instancePromise = DbService.getInstance();
+	}
+	return instancePromise;
 }

@@ -7,9 +7,10 @@ import * as apiTypes from '$lib/types/apiTypes';
 import * as signalTypes from './types/signalTypes';
 import * as libsignal from '@privacyresearch/libsignal-protocol-typescript';
 import { SignalProtocolStore } from './stores/SignalProtocolStore';
-import { DbService } from './stores/DbService';
-import { getDbService } from './dbService.svelte';
+import { getDbService } from './stores/DbService.svelte';
 import { chatsStore } from './stores/ChatsStore.svelte';
+import { getCookie } from '$lib/utils';
+
 const pendingRequests = new Map<
 	string,
 	{ resolve: (value: apiTypes.responsePayload) => void; reject: (reason: any) => void }
@@ -62,7 +63,6 @@ export async function loadAndSyncChats(): Promise<void> {
 	);
 	chatsStore.addChats(convertedChats);
 	chatsStore.sortChats();
-	chatsStore.notify();
 
 	const call = createAPICall(apiTypes.API.GET_CHATS, {});
 	try {
@@ -76,8 +76,22 @@ export async function loadAndSyncChats(): Promise<void> {
 	}
 }
 
-export async function sendReadUpdate(chatId: string, messageId: string): Promise<void> {
-	const call = createAPICall(apiTypes.API.READ_UPDATE, { chatId, messageId });
+export async function sendReadUpdate(chatId: string, sequence: number): Promise<void> {
+	const chat = chatsStore.getChat(chatId);
+	if (!chat) throw new Error(`Chat with id ${chatId} not found`);
+
+	const chatToStore: dataTypes.UsedChat = {
+		...chat,
+		users: chat.users.map((user) => {
+			if (user._id !== utils.getCookie('userId')) {
+				return { ...user };
+			}
+			return { ...user, lastReadSequence: sequence };
+		})
+	};
+	await chatsStore.updateChat(chatToStore);
+
+	const call = createAPICall(apiTypes.API.READ_UPDATE, { chatId, sequence });
 	try {
 		sendRequest(call);
 	} catch (error) {
@@ -159,13 +173,12 @@ export async function createChat(event: SubmitEvent): Promise<void> {
 		const response = await sendRequest(call);
 		const { createdChat, preKeyBundle } = response as apiTypes.createChatResponse;
 		if (!preKeyBundle) throw new Error(`no preKeyBundle received`);
-		const convertedChat = utils.apiToUsedChat(createdChat);
 
-		(await getDbService()).putChat(createdChat);
-		chatsStore.addChat(convertedChat);
-		chatsStore.notify();
+		const createdUsedChat = utils.apiToUsedChat(createdChat);
+		await chatsStore.addChat(createdUsedChat);
+		chatsStore.sortChats();
 
-		await handleSessionBootstrap(username, convertedChat, preKeyBundle);
+		await handleSessionBootstrap(username, createdUsedChat, preKeyBundle);
 		return;
 	} catch (error) {
 		console.error('Error in createChat:', error);
@@ -255,7 +268,7 @@ export async function sendEncMessage(chatId: string, text: string) {
 		ciphertext.body = base64Body;
 
 		const tempId = utils.generateId();
-		const pendingMessage: dataTypes.PendingMessage = {
+		const pendingMessage: dataTypes.PendingMessage = $state({
 			_id: tempId,
 			sequence: -1,
 			tempId: tempId,
@@ -263,39 +276,39 @@ export async function sendEncMessage(chatId: string, text: string) {
 			from: utils.getCookie('userId') ?? '',
 			ciphertext,
 			plaintext: text,
-			sendTime: new Date().toISOString()
-		};
-		(await getDbService()).putPendingMessage(pendingMessage);
-		chatsStore.addMessage({ ...pendingMessage, _id: tempId, sequence: -1 });
-		chatsStore.forceUpdateChat(chatId);
+			sendTime: new Date().toISOString(),
+			isPending: true
+		});
+		await chatsStore.addPendingMessage(pendingMessage);
 		chatsStore.sortChats();
-		chatsStore.notify();
 
 		const call = createAPICall(apiTypes.API.SEND_ENC_MESSAGE, { chatId, ciphertext });
-		console.log(chatsStore.chats);
-		const response = await sendRequest(call);
+		const { sentMessage } = (await sendRequest(call)) as apiTypes.sendEncMessageResponse;
 
-		const { sentMessage } = response as apiTypes.sendEncMessageResponse;
-		const messageToStore: dataTypes.StoredMessage = {
+		const lastModified =
+			chat.lastModified.localeCompare(sentMessage.sendTime) > 0
+				? chat.lastModified
+				: sentMessage.sendTime;
+		const lastSequence = Math.max(chat.lastSequence, sentMessage.sequence);
+		const messageToStore: dataTypes.StoredMessage = $state({
 			...sentMessage,
 			plaintext: text
-		};
-		const chatToStore = $state.snapshot({
-			...chat,
-			lastSequence: Math.max(chat.lastSequence, sentMessage.sequence),
-			lastModified:
-				chat.lastModified.localeCompare(sentMessage.sendTime) > 0
-					? chat.lastModified
-					: sentMessage.sendTime
 		});
-
-		(await getDbService()).promotePendingMessage(tempId, messageToStore);
-		(await getDbService()).putChat(chatToStore);
-		chatsStore.updateMessage(messageToStore, tempId);
-		// chatsStore.forceUpdateMessages(chatId);
-		chatsStore.forceUpdateChat(chatToStore);
+		const updatedChat: dataTypes.UsedChat = {
+			_id: chat._id,
+			users: chat.users.map((user) => {
+				if (user._id === getCookie('userId')) {
+					return { ...user, lastReadSequence: lastSequence };
+				}
+				return user;
+			}),
+			messages: [...chat.messages, messageToStore],
+			lastSequence,
+			lastModified
+		};
+		await chatsStore.promotePendingMessage(tempId, messageToStore);
+		await chatsStore.updateChat(updatedChat);
 		chatsStore.sortChats();
-		chatsStore.notify();
 		return;
 	} catch (error) {
 		console.error('Error in sendEncMessage:', error);
@@ -303,7 +316,7 @@ export async function sendEncMessage(chatId: string, text: string) {
 	}
 }
 
-async function sendPreKeyMessage(chatId: string) {
+async function sendPreKeyMessage(chatId: string, text: string = 'ESTABLISH_SESSION_SENDER') {
 	const chat = chatsStore.getChat(chatId);
 	if (!chat) throw new Error(`Chat with id ${chatId} not found`);
 
@@ -311,12 +324,10 @@ async function sendPreKeyMessage(chatId: string) {
 	const store = SignalProtocolStore.getInstance();
 	const sessionCipher = new libsignal.SessionCipher(store, address);
 
-	const ciphertext = await sessionCipher.encrypt(
-		utils.textToArrayBuffer('ESTABLISH_SESSION_SENDER')
-	);
+	const ciphertext = await sessionCipher.encrypt(utils.textToArrayBuffer(text));
 	const base64Body = btoa(ciphertext.body!);
 	ciphertext.body = base64Body;
-	const call = createAPICall(apiTypes.API.SEND_ENC_MESSAGE, { chatId, ciphertext });
+	const call = createAPICall(apiTypes.API.SEND_PRE_KEY_MESSAGE, { chatId, ciphertext });
 	await sendRequest(call);
 }
 
@@ -417,7 +428,7 @@ async function handleServerMessage(event: MessageEvent): Promise<void> {
 			try {
 				console.log('decryptPreKeyWhisperMessage');
 				await sessionCipher.decryptPreKeyWhisperMessage(cipherBinary!, 'binary');
-				sendEncMessage(chatId, '');
+				sendPreKeyMessage(chatId, '');
 				return;
 			} catch (e) {
 				console.error(e);
@@ -425,8 +436,7 @@ async function handleServerMessage(event: MessageEvent): Promise<void> {
 		}
 		if (cipherMessage.type !== 1) throw new Error(`Unknown message type: ${cipherMessage.type}`);
 
-		let bufferText: ArrayBuffer;
-		bufferText = await sessionCipher.decryptWhisperMessage(cipherBinary!, 'binary');
+		const bufferText = await sessionCipher.decryptWhisperMessage(cipherBinary!, 'binary');
 
 		const plaintext = new TextDecoder().decode(new Uint8Array(bufferText!));
 		if (!plaintext) return;
@@ -443,43 +453,78 @@ async function handleServerMessage(event: MessageEvent): Promise<void> {
 			sequence: message.sequence,
 			sendTime: message.sendTime
 		};
-		const chatToStore: dataTypes.StoredChat = $state.snapshot({
+		const updatedChat: dataTypes.UsedChat = {
 			_id: chat._id,
-			users: chat.users,
-			lastSequence,
-			lastModified
-		});
-		(await getDbService()).putMessage(messageToStore);
-		(await getDbService()).putChat(chatToStore);
-
-		const chatToUpdate: dataTypes.UsedChat = {
-			_id: chat._id,
-			users: chat.users,
-			messages: chat.messages,
-			unreadCount: chat.unreadCount + 1,
+			users: chat.users.map((user) => {
+				if (user._id !== getCookie('userId')) {
+					return { ...user, lastReadSequence: lastSequence };
+				}
+				return user;
+			}),
+			messages: [...chat.messages, messageToStore],
 			lastSequence,
 			lastModified
 		};
-		chatsStore.addMessage(messageToStore);
-		chatsStore.forceUpdateChat(chatToUpdate);
+		await chatsStore.addMessage(messageToStore);
+		await chatsStore.updateChat(updatedChat);
 		chatsStore.sortChats();
-		chatsStore.notify();
+	} else if (api === apiTypes.API.RECEIVE_PRE_KEY_MESSAGE) {
+		const { chatId, ciphertext } = payload as apiTypes.receivePreKeyMessageResponse;
+
+		const chat = chatsStore.getChat(chatId);
+		if (!chat) throw new Error(`Chat with id ${chatId} not found`);
+
+		const senderAddress: libsignal.SignalProtocolAddress = new libsignal.SignalProtocolAddress(
+			utils.getOtherUsername(chatId),
+			1
+		);
+
+		const store = SignalProtocolStore.getInstance();
+		const sessionCipher = new libsignal.SessionCipher(store, senderAddress);
+		const cipherBinary = atob(ciphertext.body!);
+
+		if (ciphertext.type === 3) {
+			try {
+				console.log('decryptPreKeyWhisperMessage');
+				await sessionCipher.decryptPreKeyWhisperMessage(cipherBinary!, 'binary');
+				sendPreKeyMessage(chatId, '');
+				return;
+			} catch (e) {
+				console.error(e);
+			}
+		}
+		if (ciphertext.type !== 1) throw new Error(`Unknown message type: ${ciphertext.type}`);
+
+		const bufferText = await sessionCipher.decryptWhisperMessage(cipherBinary!, 'binary');
 	} else if (api === apiTypes.API.READ_UPDATE) {
-		const { chatId, lastSeen } = payload as apiTypes.readUpdateResponse;
-		console.log(chatId, lastSeen);
+		const { chatId, sequence } = payload as apiTypes.readUpdateResponse;
+		const chat = chatsStore.getChat(chatId);
+		if (!chat) throw new Error(`Chat with id ${chatId} not found`);
+
+		const lastSequence = Math.max(
+			chat.users.find((user) => user._id !== utils.getCookie('userId'))!.lastReadSequence,
+			sequence
+		);
+
+		const updatedChat: dataTypes.UsedChat = {
+			_id: chat._id,
+			users: chat.users.map((user) => {
+				if (user._id !== utils.getCookie('userId')) {
+					return { ...user, lastReadSequence: lastSequence };
+				}
+				return user;
+			}),
+			messages: chat.messages,
+			lastSequence: chat.lastSequence,
+			lastModified: chat.lastModified
+		};
+		await chatsStore.updateChat(updatedChat);
+		chatsStore.sortChats();
 	} else if (api === apiTypes.API.CREATE_CHAT) {
 		const { createdChat } = payload as apiTypes.createChatResponse;
-		const chatToStore: dataTypes.StoredChat = {
-			_id: createdChat._id,
-			users: createdChat.users,
-			lastSequence: createdChat.lastSequence,
-			lastModified: createdChat.lastModified
-		};
-
-		(await getDbService()).putChat(chatToStore);
-		chatsStore.addChat(utils.apiToUsedChat(createdChat));
+		const createdUsedChat = utils.apiToUsedChat(createdChat);
+		await chatsStore.addChat(createdUsedChat);
 		chatsStore.sortChats();
-		chatsStore.notify();
 		return;
 	} else {
 		console.warn('Received response for unknown request ID:', id);

@@ -8,7 +8,7 @@ export type ChatDocument = {
   users: {
     _id: ObjectId;
     username: string;
-    lastSeen: Date;
+    lastReadSequence: number;
   }[];
   lastSequence: number;
   lastModified: Date;
