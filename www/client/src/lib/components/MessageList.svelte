@@ -34,19 +34,6 @@
 		return lastSequence - lastReadSequenceMe;
 	});
 
-	$effect(() => {
-		console.log(`unreadCount: ${unreadCount}`);
-	});
-	$effect(() => {
-		console.log(`lastReadSequenceMe: ${lastReadSequenceMe}`);
-	});
-	$effect(() => {
-		console.log(`lastReadSequenceOther: ${lastReadSequenceOther}`);
-	});
-	$effect(() => {
-		console.log(`startingLastReadSequenceMe: ${startingLastReadSequenceMe}`);
-	});
-
 	const SCROLL_ADJUSTMENT = 24;
 	let scrollableContent = $state() as HTMLElement;
 	let scrollBar = $state() as Scrollbar;
@@ -65,10 +52,6 @@
 
 	// let topObserver = createObserver(handleTopIntersection);
 	// let bottomObserver = createObserver(handleBottomIntersection);
-	// let readObserver = createObserver((entry: IntersectionObserverEntry) => {
-	// 	readObserver.unobserve(entry.target);
-	// 	handleMessageRead(entry.target);
-	// }, 0.9);
 
 	const READ_OBSERVER_OPTIONS: IntersectionObserverInit = { threshold: 0.9 };
 	const readObserver = new IntersectionObserver((entries) => {
@@ -82,17 +65,13 @@
 	}, READ_OBSERVER_OPTIONS);
 	const intersectionAction: Action<Element, boolean> = (element, enabled) => {
 		if (!enabled) return;
-
-		console.log('intersectionAction', element);
 		readObserver.observe(element);
 		return {
 			update(newEnabled: boolean) {
-				console.log(`update ${newEnabled}, ${element}`);
 				if (newEnabled) readObserver.observe(element);
 				else readObserver.unobserve(element);
 			},
 			destroy() {
-				console.log('destroy', element);
 				readObserver.unobserve(element);
 			}
 		};

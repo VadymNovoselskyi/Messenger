@@ -4,6 +4,7 @@ import type { ApiChat, ApiMessage } from './dataTypes';
 
 /** API endpoints enumeration */
 export enum API {
+	AUTHENTICATE = 'authenticate',
 	GET_CHATS = 'getChats',
 	RECEIVE_MESSAGE = 'receiveMessage',
 	RECEIVE_PRE_KEY_MESSAGE = 'receivePreKeyMessage',
@@ -16,7 +17,9 @@ export enum API {
 	SIGNUP = 'signup',
 	SEND_KEYS = 'sendKeys',
 	SEND_PRE_KEY_MESSAGE = 'sendPreKeyMessage',
-	SEND_ENC_MESSAGE = 'sendEncMessage'
+	SEND_ENC_MESSAGE = 'sendEncMessage',
+	PING = 'ping',
+	PONG = 'pong',
 }
 
 /** Structure for API call messages */

@@ -1,9 +1,8 @@
 import * as libsignal from '@privacyresearch/libsignal-protocol-typescript';
-import { memory } from './stores/memory.svelte';
-import { SignalProtocolStore } from './stores/SignalProtocolStore';
+import { SignalProtocolStore } from './SignalProtocolStore';
 import type { unorgonizedKeys } from './types/signalTypes';
 import type { ApiChat, ApiMessage, UsedChat, StoredMessage, StoredChat } from './types/dataTypes';
-import { chatsStore } from './stores/ChatsStore.svelte';
+import { chatsStore } from './ChatsStore.svelte';
 import { browser } from '$app/environment';
 
 export function formatISODate(isoDate: string): string {

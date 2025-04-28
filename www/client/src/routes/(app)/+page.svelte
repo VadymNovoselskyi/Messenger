@@ -7,8 +7,8 @@
 	import { generateKeys, getCookie } from '$lib/utils.svelte';
 
 	import ChatList from '$lib/components/ChatList.svelte';
-	import { SignalProtocolStore } from '$lib/stores/SignalProtocolStore';
-	import { chatsStore } from '$lib/stores/ChatsStore.svelte';
+	import { SignalProtocolStore } from '$lib/SignalProtocolStore';
+	import { chatsStore } from '$lib/ChatsStore.svelte';
 
 	onMount(async () => {
 		if (!browser) return;

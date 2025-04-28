@@ -1,56 +1,13 @@
-import { page } from '$app/state';
 import { goto } from '$app/navigation';
-import { memory } from '$lib/stores/memory.svelte';
 import * as utils from '$lib/utils.svelte';
 import * as dataTypes from '$lib/types/dataTypes';
 import * as apiTypes from '$lib/types/apiTypes';
 import * as signalTypes from './types/signalTypes';
 import * as libsignal from '@privacyresearch/libsignal-protocol-typescript';
-import { SignalProtocolStore } from './stores/SignalProtocolStore';
-import { getDbService } from './stores/DbService.svelte';
-import { chatsStore } from './stores/ChatsStore.svelte';
-
-const pendingRequests = new Map<
-	string,
-	{ resolve: (value: apiTypes.responsePayload) => void; reject: (reason: any) => void }
->();
-
-// Helper: constructs an API message
-function createAPICall(api: apiTypes.API, payload: apiTypes.messagePayload): apiTypes.APIMessage {
-	return {
-		api,
-		id: utils.generateId(),
-		token: utils.getCookie('token'),
-		payload
-	};
-}
-
-export async function getWS(): Promise<WebSocket> {
-	if (
-		!memory.ws ||
-		memory.ws.readyState === WebSocket.CLOSING ||
-		memory.ws.readyState === WebSocket.CLOSED
-	) {
-		memory.ws = new WebSocket(`${page.url.origin}/api/`);
-		memory.ws.addEventListener('message', handleServerMessage);
-	}
-
-	return new Promise((resolve, reject) => {
-		if (memory.ws!.readyState === WebSocket.OPEN) {
-			resolve(memory.ws!);
-		} else {
-			memory.ws!.addEventListener('open', () => resolve(memory.ws!), { once: true });
-			memory.ws!.addEventListener(
-				'error',
-				(event) => {
-					console.error('WebSocket connection error:', event);
-					reject(new Error('Failed to connect to WebSocket'));
-				},
-				{ once: true }
-			);
-		}
-	});
-}
+import { SignalProtocolStore } from './SignalProtocolStore';
+import { getDbService } from './DbService.svelte';
+import { chatsStore } from './ChatsStore.svelte';
+import { WsService, wsService } from './WsService.svelte';
 
 export async function loadAndSyncChats(): Promise<void> {
 	const latestChats = await (await getDbService()).getLatestChats();
@@ -63,12 +20,10 @@ export async function loadAndSyncChats(): Promise<void> {
 	chatsStore.addChats(convertedChats);
 	chatsStore.sortChats();
 
-	const call = createAPICall(apiTypes.API.GET_CHATS, {});
+	const call = WsService.createAPICall(apiTypes.API.GET_CHATS, {});
 	try {
-		const response = await sendRequest(call);
+		const response = await wsService.sendRequest(call);
 		// const { chats } = response as apiTypes.getChatsResponse;
-		// memory.chats = chats.map((chat) => utils.apiToUsedChat(chat));
-		// chatsStore.sortChats();
 	} catch (error) {
 		console.error('Error in getChats:', error);
 		throw error;
@@ -80,9 +35,9 @@ export async function sendReadUpdate(chatId: string, sequence: number): Promise<
 	if (!chat) throw new Error(`Chat with id ${chatId} not found`);
 	await chatsStore.updateChat(chat);
 
-	const call = createAPICall(apiTypes.API.READ_UPDATE, { chatId, sequence });
+	const call = WsService.createAPICall(apiTypes.API.READ_UPDATE, { chatId, sequence });
 	try {
-		sendRequest(call);
+		wsService.sendRequest(call);
 	} catch (error) {
 		console.error('Error in sendReadUpdate:', error);
 		throw error;
@@ -90,9 +45,9 @@ export async function sendReadUpdate(chatId: string, sequence: number): Promise<
 }
 
 export async function getExtraMessages(chatId: string, currentIndex: number): Promise<void> {
-	const call = createAPICall(apiTypes.API.EXTRA_MESSAGES, { chatId, currentIndex });
+	const call = WsService.createAPICall(apiTypes.API.EXTRA_MESSAGES, { chatId, currentIndex });
 	try {
-		const response = await sendRequest(call);
+		const response = await wsService.sendRequest(call);
 		const { extraMessages } = response as apiTypes.getExtraMessagesResponse;
 
 		const chat = chatsStore.getChat(chatId);
@@ -111,9 +66,9 @@ export async function getExtraMessages(chatId: string, currentIndex: number): Pr
 }
 
 export async function getExtraNewMessages(chatId: string, unreadCount: number): Promise<void> {
-	const call = createAPICall(apiTypes.API.EXTRA_NEW_MESSAGES, { chatId, unreadCount });
+	const call = WsService.createAPICall(apiTypes.API.EXTRA_NEW_MESSAGES, { chatId, unreadCount });
 	try {
-		const response = await sendRequest(call);
+		const response = await wsService.sendRequest(call);
 		const { extraNewMessages } = response as apiTypes.getExtraNewMessagesResponse;
 
 		const chat = chatsStore.getChat(chatId);
@@ -132,9 +87,9 @@ export async function getExtraNewMessages(chatId: string, unreadCount: number): 
 }
 
 export async function readAllUpdate(chatId: string): Promise<void> {
-	const call = createAPICall(apiTypes.API.READ_ALL, { chatId });
+	const call = WsService.createAPICall(apiTypes.API.READ_ALL, { chatId });
 	try {
-		await sendRequest(call);
+		await wsService.sendRequest(call);
 
 		const chat = chatsStore.getChat(chatId);
 		if (!chat) {
@@ -157,9 +112,9 @@ export async function createChat(event: SubmitEvent): Promise<void> {
 	if (!username) return;
 	usernameInput.value = '';
 
-	const call = createAPICall(apiTypes.API.CREATE_CHAT, { username });
+	const call = WsService.createAPICall(apiTypes.API.CREATE_CHAT, { username });
 	try {
-		const response = await sendRequest(call);
+		const response = await wsService.sendRequest(call);
 		const { createdChat, preKeyBundle } = response as apiTypes.createChatResponse;
 		if (!preKeyBundle) throw new Error(`no preKeyBundle received`);
 
@@ -182,9 +137,9 @@ export async function login(event: SubmitEvent): Promise<void> {
 	usernameLogin.value = '';
 	passwordLogin.value = '';
 
-	const call = createAPICall(apiTypes.API.LOGIN, { username, password });
+	const call = WsService.createAPICall(apiTypes.API.LOGIN, { username, password });
 	try {
-		const response = await sendRequest(call);
+		const response = await wsService.sendRequest(call);
 		const { userId, token } = response as apiTypes.loginResponse;
 		utils.setCookie('userId', userId, 28);
 		utils.setCookie('token', token, 28);
@@ -202,9 +157,9 @@ export async function signup(event: SubmitEvent): Promise<void> {
 	usernameSignup.value = '';
 	passwordSignup.value = '';
 
-	const call = createAPICall(apiTypes.API.SIGNUP, { username, password });
+	const call = WsService.createAPICall(apiTypes.API.SIGNUP, { username, password });
 	try {
-		const response = await sendRequest(call);
+		const response = await wsService.sendRequest(call);
 		const { userId, token } = response as apiTypes.signupResponse;
 		utils.setCookie('userId', userId, 28);
 		utils.setCookie('token', token, 28);
@@ -234,9 +189,9 @@ export async function sendPreKeys(keys: signalTypes.unorgonizedKeys): Promise<vo
 		});
 	}
 
-	const call = createAPICall(apiTypes.API.SEND_KEYS, { preKeyBundle });
+	const call = WsService.createAPICall(apiTypes.API.SEND_KEYS, { preKeyBundle });
 	try {
-		await sendRequest(call);
+		await wsService.sendRequest(call);
 	} catch (error) {
 		console.error('Error in signup:', error);
 		throw error;
@@ -271,8 +226,8 @@ export async function sendEncMessage(chatId: string, text: string) {
 		await chatsStore.addPendingMessage(pendingMessage);
 		chatsStore.sortChats();
 
-		const call = createAPICall(apiTypes.API.SEND_ENC_MESSAGE, { chatId, ciphertext });
-		const { sentMessage } = (await sendRequest(call)) as apiTypes.sendEncMessageResponse;
+		const call = WsService.createAPICall(apiTypes.API.SEND_ENC_MESSAGE, { chatId, ciphertext });
+		const { sentMessage } = (await wsService.sendRequest(call)) as apiTypes.sendEncMessageResponse;
 		const messageToStore: dataTypes.StoredMessage = {
 			...sentMessage,
 			plaintext: text
@@ -285,7 +240,7 @@ export async function sendEncMessage(chatId: string, text: string) {
 	}
 }
 
-async function sendPreKeyMessage(chatId: string, text: string = 'ESTABLISH_SESSION_SENDER') {
+export async function sendPreKeyMessage(chatId: string, text: string = 'ESTABLISH_SESSION_SENDER') {
 	const chat = chatsStore.getChat(chatId);
 	if (!chat) throw new Error(`Chat with id ${chatId} not found`);
 
@@ -296,8 +251,8 @@ async function sendPreKeyMessage(chatId: string, text: string = 'ESTABLISH_SESSI
 	const ciphertext = await sessionCipher.encrypt(utils.textToArrayBuffer(text));
 	const base64Body = btoa(ciphertext.body!);
 	ciphertext.body = base64Body;
-	const call = createAPICall(apiTypes.API.SEND_PRE_KEY_MESSAGE, { chatId, ciphertext });
-	await sendRequest(call);
+	const call = WsService.createAPICall(apiTypes.API.SEND_PRE_KEY_MESSAGE, { chatId, ciphertext });
+	await wsService.sendRequest(call);
 }
 
 async function handleSessionBootstrap(
@@ -337,127 +292,4 @@ async function handleSessionBootstrap(
 	await sessionBuilder.processPreKey(receiverDevice);
 
 	sendPreKeyMessage(_id);
-}
-
-async function sendRequest(
-	message: apiTypes.APIMessage,
-	timeout?: number
-): Promise<apiTypes.responsePayload> {
-	const ws = await getWS();
-	return new Promise((resolve, reject) => {
-		pendingRequests.set(message.id, { resolve, reject });
-		ws.send(JSON.stringify(message));
-
-		if (timeout) {
-			setTimeout(() => {
-				if (pendingRequests.has(message.id)) {
-					pendingRequests.delete(message.id);
-					reject(new Error('Request timed out'));
-				}
-			}, timeout);
-		}
-	});
-}
-
-async function handleServerMessage(event: MessageEvent): Promise<void> {
-	const data: apiTypes.APIResponse = JSON.parse(event.data);
-	console.log(data);
-	const { api, id, status, payload } = data;
-	if (pendingRequests.has(id)) {
-		const { resolve, reject } = pendingRequests.get(id)!;
-		if (status === 'ERROR') {
-			const { message } = payload as apiTypes.errorResponse;
-			if (message === 'Invalid Token. Login again' || message === 'invalid signature') {
-				goto('/login');
-			} else {
-				alert(message);
-			}
-			reject(`Error from server: ${message}`);
-		} else {
-			resolve(payload);
-		}
-		pendingRequests.delete(id);
-	} else if (api === apiTypes.API.RECEIVE_MESSAGE) {
-		const { chatId, message } = payload as apiTypes.receiveMessageResponse;
-
-		const chat = chatsStore.getChat(chatId);
-		if (!chat) throw new Error(`Chat with id ${chatId} not found`);
-
-		const senderAddress: libsignal.SignalProtocolAddress = new libsignal.SignalProtocolAddress(
-			utils.getOtherUsername(chatId),
-			1
-		);
-
-		const store = SignalProtocolStore.getInstance();
-		const sessionCipher = new libsignal.SessionCipher(store, senderAddress);
-		const cipherMessage = message.ciphertext;
-		const cipherBinary = atob(cipherMessage.body!);
-
-		if (cipherMessage.type === 3) {
-			try {
-				console.log('decryptPreKeyWhisperMessage');
-				await sessionCipher.decryptPreKeyWhisperMessage(cipherBinary!, 'binary');
-				sendPreKeyMessage(chatId, '');
-				return;
-			} catch (e) {
-				console.error(e);
-			}
-		}
-		if (cipherMessage.type !== 1) throw new Error(`Unknown message type: ${cipherMessage.type}`);
-
-		const bufferText = await sessionCipher.decryptWhisperMessage(cipherBinary!, 'binary');
-
-		const plaintext = new TextDecoder().decode(new Uint8Array(bufferText!));
-		if (!plaintext) return;
-
-		const messageToStore: dataTypes.StoredMessage = {
-			...message,
-			plaintext
-		};
-
-		await chatsStore.handleIncomingMessage(messageToStore);
-		chatsStore.sortChats();
-	} else if (api === apiTypes.API.RECEIVE_PRE_KEY_MESSAGE) {
-		const { chatId, ciphertext } = payload as apiTypes.receivePreKeyMessageResponse;
-
-		const chat = chatsStore.getChat(chatId);
-		if (!chat) throw new Error(`Chat with id ${chatId} not found`);
-
-		const senderAddress: libsignal.SignalProtocolAddress = new libsignal.SignalProtocolAddress(
-			utils.getOtherUsername(chatId),
-			1
-		);
-
-		const store = SignalProtocolStore.getInstance();
-		const sessionCipher = new libsignal.SessionCipher(store, senderAddress);
-		const cipherBinary = atob(ciphertext.body!);
-
-		if (ciphertext.type === 3) {
-			try {
-				console.log('decryptPreKeyWhisperMessage');
-				await sessionCipher.decryptPreKeyWhisperMessage(cipherBinary!, 'binary');
-				sendPreKeyMessage(chatId, '');
-				return;
-			} catch (e) {
-				console.error(e);
-			}
-		}
-		if (ciphertext.type !== 1) throw new Error(`Unknown message type: ${ciphertext.type}`);
-
-		await sessionCipher.decryptWhisperMessage(cipherBinary!, 'binary');
-	} else if (api === apiTypes.API.READ_UPDATE) {
-		const { chatId, sequence } = payload as apiTypes.readUpdateResponse;
-		const chat = chatsStore.getChat(chatId);
-		if (!chat) throw new Error(`Chat with id ${chatId} not found`);
-
-		await chatsStore.handleIncomingReadUpdate(chatId, sequence);
-	} else if (api === apiTypes.API.CREATE_CHAT) {
-		const { createdChat } = payload as apiTypes.createChatResponse;
-		const createdUsedChat = utils.apiToUsedChat(createdChat);
-		await chatsStore.addChat(createdUsedChat);
-		chatsStore.sortChats();
-		return;
-	} else {
-		console.warn('Received response for unknown request ID:', id);
-	}
 }

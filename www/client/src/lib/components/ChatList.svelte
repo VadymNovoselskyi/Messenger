@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { onMount, tick } from 'svelte';
 	import { page } from '$app/state';
-	import { memory } from '$lib/stores/memory.svelte';
 	import Scrollbar from '$lib/components/Scrollbar.svelte';
 	import AddChatButton from '$lib/components/AddChatButton.svelte';
 
@@ -130,7 +129,6 @@
 			bind:this={scrollBar}
 			{scrollableContent}
 			width={0.4}
-			bind:lastScroll={memory.chatsScroll}
 		/>
 	{/if}
 

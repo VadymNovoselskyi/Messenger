@@ -15,8 +15,8 @@
 
 	import ChatList from '$lib/components/ChatList.svelte';
 	import MessageList from '$lib/components/MessageList.svelte';
-	import { SignalProtocolStore } from '$lib/stores/SignalProtocolStore';
-	import { chatsStore } from '$lib/stores/ChatsStore.svelte';
+	import { SignalProtocolStore } from '$lib/SignalProtocolStore';
+	import { chatsStore } from '$lib/ChatsStore.svelte';
 
 	let chat = $derived(chatsStore.chats.find((chat) => chat._id === page.params.chatId));
 	let messageList = $state() as MessageList;
@@ -63,11 +63,6 @@
 		if (!chat) throw new Error(`Chat with id ${chatId} not found`);
 
 		// // Update UI immediately and reset unread if needed
-		// if (chat.lastSequence) {
-		// 	await readAllUpdate(chatId);
-		// 	await getExtraMessages(chatId, 0);
-		// 	memory.chats = [...memory.chats];
-		// }
 		sendEncMessage(chatId, input);
 	}
 </script>
