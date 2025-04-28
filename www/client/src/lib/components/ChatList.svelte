@@ -5,7 +5,7 @@
 	import Scrollbar from '$lib/components/Scrollbar.svelte';
 	import AddChatButton from '$lib/components/AddChatButton.svelte';
 
-	import { formatISODate, getOtherUsername, getCookie } from '$lib/utils';
+	import { formatISODate, getOtherUsername, getCookie } from '$lib/utils.svelte';
 	import type { UsedChat } from '$lib/types/dataTypes';
 
 	const { chats, onChatChange }: { chats: UsedChat[]; onChatChange?: () => void } = $props();
@@ -59,14 +59,14 @@
 		// Set flag if content overflows container height
 		showScrollbar = scrollableContent.scrollHeight !== scrollableContent.clientHeight;
 
-		// Reset scroll position to stored value
-		scrollableContent.scrollTop = 0;
-		requestAnimationFrame(() => {
-			scrollableContent.scrollTo({
-				top: memory.chatsScroll,
-				behavior: 'instant'
-			});
-		});
+		// // Reset scroll position to stored value
+		// scrollableContent.scrollTop = 0;
+		// requestAnimationFrame(() => {
+		// 	scrollableContent.scrollTo({
+		// 		top: memory.chatsScroll,
+		// 		behavior: 'instant'
+		// 	});
+		// });
 	}
 
 	/**

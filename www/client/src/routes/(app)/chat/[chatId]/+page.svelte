@@ -11,7 +11,7 @@
 		sendEncMessage,
 		sendPreKeys
 	} from '$lib/api.svelte';
-	import { generateKeys, getCookie, getOtherUsername } from '$lib/utils';
+	import { generateKeys, getCookie, getOtherUsername } from '$lib/utils.svelte';
 
 	import ChatList from '$lib/components/ChatList.svelte';
 	import MessageList from '$lib/components/MessageList.svelte';
@@ -86,7 +86,7 @@
 	{#if chat}
 		{#key chat._id}
 			<MessageList bind:this={messageList} chat={chat} submitFn={sendMessagePrep} />
-		{/key}
+ 		{/key}
 	{/if}
 </div>
 

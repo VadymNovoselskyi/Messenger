@@ -4,7 +4,7 @@
 	import { browser } from '$app/environment';
 
 	import { loadAndSyncChats, sendPreKeys } from '$lib/api.svelte';
-	import { generateKeys, getCookie } from '$lib/utils';
+	import { generateKeys, getCookie } from '$lib/utils.svelte';
 
 	import ChatList from '$lib/components/ChatList.svelte';
 	import { SignalProtocolStore } from '$lib/stores/SignalProtocolStore';

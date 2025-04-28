@@ -7,7 +7,7 @@
 	import Loader from '$lib/components/Loader.svelte';
 	import Scrollbar from '$lib/components/Scrollbar.svelte';
 	import { getExtraMessages, getExtraNewMessages, sendReadUpdate } from '$lib/api.svelte';
-	import { formatISODate, getCookie, intersection } from '$lib/utils';
+	import { formatISODate, getCookie } from '$lib/utils.svelte';
 	import type { UsedChat, StoredMessage } from '$lib/types/dataTypes';
 	import type { Action } from 'svelte/action';
 
@@ -21,6 +21,9 @@
 	const { chat, submitFn }: { chat: UsedChat; submitFn: (event: SubmitEvent) => void } = $props();
 	const { messages, users, lastSequence, lastModified } = $derived(chat);
 
+	let startingLastReadSequenceMe = $state(
+		users.find((user) => user._id === getCookie('userId'))!.lastReadSequence
+	);
 	let lastReadSequenceMe = $derived(
 		users.find((user) => user._id === getCookie('userId'))!.lastReadSequence
 	);
@@ -32,19 +35,16 @@
 	});
 
 	$effect(() => {
-		untrack(() => {
-			console.log(`unreadCount: ${unreadCount}`);
-		});
+		console.log(`unreadCount: ${unreadCount}`);
 	});
 	$effect(() => {
-		untrack(() => {
-			console.log(`lastReadSequenceMe: ${lastReadSequenceMe}`);
-		});
+		console.log(`lastReadSequenceMe: ${lastReadSequenceMe}`);
 	});
 	$effect(() => {
-		untrack(() => {
-			console.log(`lastReadSequenceOther: ${lastReadSequenceOther}`);
-		});
+		console.log(`lastReadSequenceOther: ${lastReadSequenceOther}`);
+	});
+	$effect(() => {
+		console.log(`startingLastReadSequenceMe: ${startingLastReadSequenceMe}`);
 	});
 
 	const SCROLL_ADJUSTMENT = 24;
@@ -56,8 +56,8 @@
 	let unreadAnchor = $state() as HTMLElement;
 	let bottomAnchor = $state() as HTMLElement;
 
-	const MAX_READ_TIMEOUT = 2000;
-	const MAX_STASHED_COUNT = 4;
+	const MAX_READ_TIMEOUT = 1000;
+	const MAX_STASHED_COUNT = 3;
 
 	let stashedReadCount = $state(0);
 	let lastTimeoutTime = $state(0);
@@ -121,6 +121,7 @@
 			(message) => message._id === event.detail.target.id
 		)?.sequence;
 		if (!lastReadSequence) return;
+		users.find((user) => user._id === getCookie('userId'))!.lastReadSequence = lastReadSequence;
 
 		if (stashedReadCount >= MAX_STASHED_COUNT || lastReadSequence === lastSequence) {
 			clearTimeout(readTimeoutId);
@@ -148,7 +149,7 @@
 		lastTimeoutTime = Date.now();
 	}
 
-	function messageReadStatus(sequence: number) {
+	function getMessageReadStatus(sequence: number) {
 		return lastReadSequenceOther >= sequence && sequence >= 0 ? '✓✓' : '✓';
 	}
 
@@ -158,6 +159,9 @@
 			// Update scrollbar visibility when messages are loaded
 			showScrollbar = scrollableContent.scrollHeight !== scrollableContent.clientHeight;
 		}
+	});
+	$effect(() => {
+		if (!unreadCount && lastSequence) startingLastReadSequenceMe = lastSequence;
 	});
 </script>
 
@@ -192,10 +196,10 @@
 				<p class="text">{plaintext}</p>
 				<p class="sendTime">
 					{formatISODate(sendTime)}
-					{from === getCookie('userId') ? messageReadStatus(sequence) : ''}
+					{from === getCookie('userId') ? getMessageReadStatus(sequence) : ''}
 				</p>
 			</div>
-			{#if sequence === lastReadSequenceMe && sequence !== lastSequence}
+			{#if sequence === startingLastReadSequenceMe && sequence !== lastSequence}
 				<div bind:this={unreadAnchor} id="unread-anchor" class="anchor">Unread Messages</div>
 			{/if}
 		{/each}

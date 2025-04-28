@@ -1,6 +1,6 @@
 import { getDbService } from './DbService.svelte';
 import type { PendingMessage, StoredChat, StoredMessage, UsedChat } from '$lib/types/dataTypes';
-import { getCookie, storedToUsedChat, usedToStoredChat } from '$lib/utils';
+import { getCookie, usedToStoredChat } from '$lib/utils.svelte';
 
 export class ChatsStore {
 	private static instance: ChatsStore;
@@ -29,7 +29,9 @@ export class ChatsStore {
 	/* Adds a new chat to the store */
 	public async addChat(chat: UsedChat): Promise<void> {
 		this._chats.push(chat);
-		await (await this.getDb()).putChat($state.snapshot(chat));
+
+		const storedChat = usedToStoredChat(chat);
+		await (await this.getDb()).putChat($state.snapshot(storedChat));
 	}
 
 	/* Adds multiple chats to the store */
@@ -69,17 +71,69 @@ export class ChatsStore {
 		await (await this.getDb()).putMessage($state.snapshot(message));
 	}
 
-	/* Adds a new pending message to a chat */
-	public async addPendingMessage(message: PendingMessage): Promise<void> {
+	public async handleIncomingMessage(message: StoredMessage): Promise<void> {
 		const i = this._chats.findIndex((c) => c._id === message.chatId);
 		if (i === -1) return;
-		this._chats[i].messages.push(message);
+		const chat = this._chats[i];
 
-		await (await this.getDb()).putPendingMessage($state.snapshot(message));
+		const lastModified =
+			chat.lastModified.localeCompare(message.sendTime) > 0 ? chat.lastModified : message.sendTime;
+		const lastSequence = Math.max(chat.lastSequence, message.sequence);
+		const updatedChat: UsedChat = {
+			_id: chat._id,
+			users: chat.users.map((user) => {
+				if (user._id !== getCookie('userId')) {
+					return { ...user, lastReadSequence: lastSequence };
+				}
+				return user;
+			}),
+			messages: [...chat.messages, message],
+			lastSequence,
+			lastModified
+		};
+
+		await this.updateChat(updatedChat);
+		await (await this.getDb()).putMessage($state.snapshot(message));
 	}
 
-	/* Promotes a pending message to a stored message */
-	public async promotePendingMessage(tempId: string, message: StoredMessage): Promise<void> {
+	public async handleIncomingReadUpdate(chatId: string, sequence: number): Promise<void> {
+		const i = this._chats.findIndex((c) => c._id === chatId);
+		if (i === -1) return;
+		const chat = this._chats[i];
+
+		const lastSequence = Math.max(
+			chat.users.find((user) => user._id !== getCookie('userId'))!.lastReadSequence,
+			sequence
+		);
+		const updatedChat = {
+			_id: chat._id,
+			users: chat.users.map((user) => {
+				if (user._id !== getCookie('userId')) {
+					return { ...user, lastReadSequence: lastSequence };
+				}
+				return user;
+			}),
+			messages: chat.messages,
+			lastSequence: chat.lastSequence,
+			lastModified: chat.lastModified
+		};
+		await this.updateChat(updatedChat);
+	}
+
+	/* Adds a new pending message to a chat */
+	public async addPendingMessage(pendingMessage: PendingMessage): Promise<void> {
+		const i = this._chats.findIndex((c) => c._id === pendingMessage.chatId);
+		if (i === -1) return;
+		this._chats[i].messages.push(pendingMessage);
+
+		await (await this.getDb()).putPendingMessage($state.snapshot(pendingMessage));
+	}
+
+	/* Handles a pending message promotion */
+	public async handlePendingMessagePromotion(
+		tempId: string,
+		message: StoredMessage
+	): Promise<void> {
 		const i = this._chats.findIndex((c) => c._id === message.chatId);
 		if (i === -1) return;
 		const chat = this._chats[i];
@@ -87,6 +141,23 @@ export class ChatsStore {
 		if (messageIndex === -1) return;
 		chat.messages[messageIndex] = message;
 
+		const lastModified =
+			chat.lastModified.localeCompare(message.sendTime) > 0 ? chat.lastModified : message.sendTime;
+		const lastSequence = Math.max(chat.lastSequence, message.sequence);
+		const updatedChat: UsedChat = {
+			_id: chat._id,
+			users: chat.users.map((user) => {
+				if (user._id === getCookie('userId')) {
+					return { ...user, lastReadSequence: lastSequence };
+				}
+				return user;
+			}),
+			messages: chat.messages,
+			lastSequence,
+			lastModified
+		};
+
+		await this.updateChat(updatedChat);
 		await (await this.getDb()).promotePendingMessage(tempId, $state.snapshot(message));
 	}
 

@@ -56,9 +56,7 @@ export class DbService {
 		});
 	}
 
-	/**
-	 * Fetch the latest `limit` messages for a chat, by bounding the sequence.
-	 */
+	/** Fetch the latest `limit` messages for a chat, by bounding the sequence. */
 	public async getLatestMessages(chatId: string, limit: number = 20): Promise<StoredMessage[]> {
 		const chat = await this.getChat(chatId);
 		if (!chat || chat.lastSequence <= 0) {

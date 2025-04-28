@@ -1,7 +1,7 @@
 import { page } from '$app/state';
 import { goto } from '$app/navigation';
 import { memory } from '$lib/stores/memory.svelte';
-import * as utils from '$lib/utils';
+import * as utils from '$lib/utils.svelte';
 import * as dataTypes from '$lib/types/dataTypes';
 import * as apiTypes from '$lib/types/apiTypes';
 import * as signalTypes from './types/signalTypes';
@@ -9,7 +9,6 @@ import * as libsignal from '@privacyresearch/libsignal-protocol-typescript';
 import { SignalProtocolStore } from './stores/SignalProtocolStore';
 import { getDbService } from './stores/DbService.svelte';
 import { chatsStore } from './stores/ChatsStore.svelte';
-import { getCookie } from '$lib/utils';
 
 const pendingRequests = new Map<
 	string,
@@ -79,17 +78,7 @@ export async function loadAndSyncChats(): Promise<void> {
 export async function sendReadUpdate(chatId: string, sequence: number): Promise<void> {
 	const chat = chatsStore.getChat(chatId);
 	if (!chat) throw new Error(`Chat with id ${chatId} not found`);
-
-	const chatToStore: dataTypes.UsedChat = {
-		...chat,
-		users: chat.users.map((user) => {
-			if (user._id !== utils.getCookie('userId')) {
-				return { ...user };
-			}
-			return { ...user, lastReadSequence: sequence };
-		})
-	};
-	await chatsStore.updateChat(chatToStore);
+	await chatsStore.updateChat(chat);
 
 	const call = createAPICall(apiTypes.API.READ_UPDATE, { chatId, sequence });
 	try {
@@ -268,7 +257,7 @@ export async function sendEncMessage(chatId: string, text: string) {
 		ciphertext.body = base64Body;
 
 		const tempId = utils.generateId();
-		const pendingMessage: dataTypes.PendingMessage = $state({
+		const pendingMessage: dataTypes.PendingMessage = {
 			_id: tempId,
 			sequence: -1,
 			tempId: tempId,
@@ -278,37 +267,17 @@ export async function sendEncMessage(chatId: string, text: string) {
 			plaintext: text,
 			sendTime: new Date().toISOString(),
 			isPending: true
-		});
+		};
 		await chatsStore.addPendingMessage(pendingMessage);
 		chatsStore.sortChats();
 
 		const call = createAPICall(apiTypes.API.SEND_ENC_MESSAGE, { chatId, ciphertext });
 		const { sentMessage } = (await sendRequest(call)) as apiTypes.sendEncMessageResponse;
-
-		const lastModified =
-			chat.lastModified.localeCompare(sentMessage.sendTime) > 0
-				? chat.lastModified
-				: sentMessage.sendTime;
-		const lastSequence = Math.max(chat.lastSequence, sentMessage.sequence);
-		const messageToStore: dataTypes.StoredMessage = $state({
+		const messageToStore: dataTypes.StoredMessage = {
 			...sentMessage,
 			plaintext: text
-		});
-		const updatedChat: dataTypes.UsedChat = {
-			_id: chat._id,
-			users: chat.users.map((user) => {
-				if (user._id === getCookie('userId')) {
-					return { ...user, lastReadSequence: lastSequence };
-				}
-				return user;
-			}),
-			messages: [...chat.messages, messageToStore],
-			lastSequence,
-			lastModified
 		};
-		await chatsStore.promotePendingMessage(tempId, messageToStore);
-		await chatsStore.updateChat(updatedChat);
-		chatsStore.sortChats();
+		await chatsStore.handlePendingMessagePromotion(tempId, messageToStore);
 		return;
 	} catch (error) {
 		console.error('Error in sendEncMessage:', error);
@@ -441,32 +410,12 @@ async function handleServerMessage(event: MessageEvent): Promise<void> {
 		const plaintext = new TextDecoder().decode(new Uint8Array(bufferText!));
 		if (!plaintext) return;
 
-		const lastModified =
-			chat.lastModified.localeCompare(message.sendTime) > 0 ? chat.lastModified : message.sendTime;
-		const lastSequence = Math.max(chat.lastSequence, message.sequence);
 		const messageToStore: dataTypes.StoredMessage = {
-			_id: message._id,
-			chatId,
-			from: message.from,
-			ciphertext: message.ciphertext,
-			plaintext,
-			sequence: message.sequence,
-			sendTime: message.sendTime
+			...message,
+			plaintext
 		};
-		const updatedChat: dataTypes.UsedChat = {
-			_id: chat._id,
-			users: chat.users.map((user) => {
-				if (user._id !== getCookie('userId')) {
-					return { ...user, lastReadSequence: lastSequence };
-				}
-				return user;
-			}),
-			messages: [...chat.messages, messageToStore],
-			lastSequence,
-			lastModified
-		};
-		await chatsStore.addMessage(messageToStore);
-		await chatsStore.updateChat(updatedChat);
+
+		await chatsStore.handleIncomingMessage(messageToStore);
 		chatsStore.sortChats();
 	} else if (api === apiTypes.API.RECEIVE_PRE_KEY_MESSAGE) {
 		const { chatId, ciphertext } = payload as apiTypes.receivePreKeyMessageResponse;
@@ -495,31 +444,13 @@ async function handleServerMessage(event: MessageEvent): Promise<void> {
 		}
 		if (ciphertext.type !== 1) throw new Error(`Unknown message type: ${ciphertext.type}`);
 
-		const bufferText = await sessionCipher.decryptWhisperMessage(cipherBinary!, 'binary');
+		await sessionCipher.decryptWhisperMessage(cipherBinary!, 'binary');
 	} else if (api === apiTypes.API.READ_UPDATE) {
 		const { chatId, sequence } = payload as apiTypes.readUpdateResponse;
 		const chat = chatsStore.getChat(chatId);
 		if (!chat) throw new Error(`Chat with id ${chatId} not found`);
 
-		const lastSequence = Math.max(
-			chat.users.find((user) => user._id !== utils.getCookie('userId'))!.lastReadSequence,
-			sequence
-		);
-
-		const updatedChat: dataTypes.UsedChat = {
-			_id: chat._id,
-			users: chat.users.map((user) => {
-				if (user._id !== utils.getCookie('userId')) {
-					return { ...user, lastReadSequence: lastSequence };
-				}
-				return user;
-			}),
-			messages: chat.messages,
-			lastSequence: chat.lastSequence,
-			lastModified: chat.lastModified
-		};
-		await chatsStore.updateChat(updatedChat);
-		chatsStore.sortChats();
+		await chatsStore.handleIncomingReadUpdate(chatId, sequence);
 	} else if (api === apiTypes.API.CREATE_CHAT) {
 		const { createdChat } = payload as apiTypes.createChatResponse;
 		const createdUsedChat = utils.apiToUsedChat(createdChat);

@@ -4,6 +4,7 @@ import { SignalProtocolStore } from './stores/SignalProtocolStore';
 import type { unorgonizedKeys } from './types/signalTypes';
 import type { ApiChat, ApiMessage, UsedChat, StoredMessage, StoredChat } from './types/dataTypes';
 import { chatsStore } from './stores/ChatsStore.svelte';
+import { browser } from '$app/environment';
 
 export function formatISODate(isoDate: string): string {
 	const date = new Date(isoDate);
@@ -43,24 +44,6 @@ export function getCookie(name: string): string | null {
 		if (key === name) return value;
 	}
 	return null;
-}
-
-export function intersection(node: Element, options: IntersectionObserverInit = {}) {
-	// Create the observer, dispatching a custom "intersect" event on each entry
-	const observer = new IntersectionObserver((entries) => {
-		for (const entry of entries) {
-			node.dispatchEvent(
-				new CustomEvent<IntersectionObserverEntry>('intersect', { detail: entry })
-			);
-		}
-	}, options);
-	observer.observe(node);
-
-	return {
-		destroy() {
-			observer.unobserve(node);
-		}
-	};
 }
 
 export async function generateKeys(): Promise<unorgonizedKeys> {
@@ -107,23 +90,6 @@ export function arrayBufferToBase64(ab: ArrayBuffer): string {
 	return btoa(binary);
 }
 
-export function convertBuffersToBase64(obj: any): any {
-	if (obj instanceof ArrayBuffer) {
-		return arrayBufferToBase64(obj);
-	} else if (Array.isArray(obj)) {
-		return obj.map(convertBuffersToBase64);
-	} else if (obj && typeof obj === 'object') {
-		const newObj: any = {};
-		for (const key in obj) {
-			if (Object.prototype.hasOwnProperty.call(obj, key)) {
-				newObj[key] = convertBuffersToBase64(obj[key]);
-			}
-		}
-		return newObj;
-	}
-	return obj;
-}
-
 /**
  * Converts a Base64 encoded string back to an ArrayBuffer.
  * @param base64 The Base64 encoded string.
@@ -150,30 +116,8 @@ export function textToArrayBuffer(text: string): ArrayBuffer {
 	return buf;
 }
 
-export function convertBase64ToBuffers(obj: any): any {
-	// Check if the object is a string that is a valid base64 (you might need a more robust check)
-	if (typeof obj === 'string' && /^[A-Za-z0-9+/]+={0,2}$/.test(obj)) {
-		try {
-			// Attempt conversion; if it fails, leave it as string.
-			return base64ToArrayBuffer(obj);
-		} catch (e) {
-			return obj;
-		}
-	} else if (Array.isArray(obj)) {
-		return obj.map(convertBase64ToBuffers);
-	} else if (obj && typeof obj === 'object') {
-		const newObj: any = {};
-		for (const key in obj) {
-			if (Object.prototype.hasOwnProperty.call(obj, key)) {
-				newObj[key] = convertBase64ToBuffers(obj[key]);
-			}
-		}
-		return newObj;
-	}
-	return obj;
-}
-
 export function getOtherUsername(chatId: string): string {
+	if (!browser) return '';
 	const chat = chatsStore.getChat(chatId);
 	if (!chat) {
 		console.warn(`No chat found for chatId: ${chatId}`);
@@ -181,7 +125,6 @@ export function getOtherUsername(chatId: string): string {
 	}
 
 	const otherUser = chat.users.find((user) => user._id !== getCookie('userId'));
-
 	return otherUser?.username ?? '';
 }
 

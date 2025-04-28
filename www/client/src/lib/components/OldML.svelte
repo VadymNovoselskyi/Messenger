@@ -7,7 +7,7 @@
 	import Loader from '$lib/components/Loader.svelte';
 	import Scrollbar from '$lib/components/Scrollbar.svelte';
 	import { getExtraMessages, getExtraNewMessages, sendReadUpdate } from '$lib/api.svelte';
-	import { formatISODate, getCookie, createObserver } from '$lib/utils';
+	import { formatISODate, getCookie, createObserver } from '$lib/utils.svelte';
 	import type { UsedChat, StoredMessage } from '$lib/types/dataTypes';
 
 	// ===============================================================
