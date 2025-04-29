@@ -1,7 +1,33 @@
 import { ObjectId } from "mongodb";
-import { ApiChat, ApiMessage, ApiUser } from "./types/apiTypes.mjs";
+import { WebSocket } from "ws";
+import { API, ApiChat, ApiMessage, ApiUser, responsePayload } from "./types/apiTypes.mjs";
 import { ChatDocument, MessageDocument, UserDocument } from "./types/mongoTypes.mjs";
 import { messagesCollection } from "./mongodb/connect.mjs";
+import { unackService } from "./UnackService.js";
+
+/**
+ * Sends a standardized JSON response over the WebSocket.
+ *
+ * @param {WebSocket} ws - The WebSocket connection to send the response through.
+ * @param {types.API} [api] - (Optional) The API endpoint identifier for the response.
+ * @param {string} [id] - (Optional) The unique identifier of the API call.
+ * @param {"SUCCESS" | "ERROR"} [status] - (Optional) The status of the response.
+ * @param {types.response} [payload] - (Optional) The response payload data.
+ * @returns {void}
+ */
+export function sendResponse(
+  ws: WebSocket,
+  id: string,
+  api?: API,
+  status?: "SUCCESS" | "ERROR",
+  payload?: responsePayload
+): void {
+  // console.log(JSON.stringify({ id, api, status, payload }));
+  ws.send(JSON.stringify({ id, api, status, payload }));
+  if (ws.userId && status === "SUCCESS" && api !== API.PONG) {
+    unackService.addRequest(ws.userId!, { id, api, status, payload });
+  }
+}
 
 export async function toApiChat(chat: ChatDocument): Promise<ApiChat> {
   const messages = await messagesCollection.find({ chatId: chat._id }).toArray();
@@ -25,7 +51,11 @@ export function toApiMessage(message: MessageDocument): ApiMessage {
   };
 }
 
-export function toApiUser(user: { _id: ObjectId; username: string; lastReadSequence: number }): ApiUser {
+export function toApiUser(user: {
+  _id: ObjectId;
+  username: string;
+  lastReadSequence: number;
+}): ApiUser {
   return {
     _id: user._id.toString(),
     username: user.username,

@@ -18,8 +18,9 @@ export enum API {
 	SEND_KEYS = 'sendKeys',
 	SEND_PRE_KEY_MESSAGE = 'sendPreKeyMessage',
 	SEND_ENC_MESSAGE = 'sendEncMessage',
+	ACK = 'ack',
 	PING = 'ping',
-	PONG = 'pong',
+	PONG = 'pong'
 }
 
 /** Structure for API call messages */

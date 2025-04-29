@@ -43,6 +43,7 @@ export enum API {
   SEND_ENC_MESSAGE = "sendEncMessage",
   PING = "ping",
   PONG = "pong",
+  ACK = "ack",
 }
 
 /** Structure for API call messages */

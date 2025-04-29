@@ -43,7 +43,6 @@ export class WsService {
 	}
 
 	public async getWs(): Promise<WebSocket> {
-		console.log(`getting ws: ${this.ws?.readyState}`);
 		if (
 			!this.ws ||
 			this.ws.readyState === WebSocket.CLOSING ||
@@ -54,11 +53,10 @@ export class WsService {
 		} else if (this.ws?.readyState === WebSocket.OPEN) return this.ws;
 
 		return new Promise((resolve, reject) => {
-			console.log('waiting for ws to open');
 			this.ws!.addEventListener(
 				'open',
 				() => {
-					this.ws!.send(JSON.stringify(WsService.createAPICall(API.AUTHENTICATE, {})));
+					this.sendRequest(WsService.createAPICall(API.AUTHENTICATE, {}));
 					this.resetPingTimeout();
 					resolve(this.ws!);
 				},
@@ -68,6 +66,7 @@ export class WsService {
 				'close',
 				() => {
 					this.ws!.removeEventListener('message', this.messageHandler);
+					this.ws!.close();
 					this.ws = null;
 					reject(new Error('WebSocket connection closed'));
 				},
@@ -77,6 +76,8 @@ export class WsService {
 				'error',
 				(event) => {
 					console.error('WebSocket connection error:', event);
+					this.ws!.close();
+					this.ws = null;
 					reject(new Error('Failed to connect to WebSocket'));
 				},
 				{ once: true }
@@ -106,14 +107,20 @@ export class WsService {
 		console.log(data);
 		const { api, id, status, payload } = data;
 
+		if (api === API.PING) {
+			this.handlePing();
+			return;
+		}
+
 		if (status === 'ERROR') {
 			const { message } = payload as errorResponse;
 			if (message === 'Invalid Token. Login again' || message === 'invalid signature') {
 				goto('/login');
 			} else {
 				alert(message);
-				return;
 			}
+		} else {
+			this.sendRequest(WsService.createAPICall(API.ACK, {}, id));
 		}
 
 		if (this.pendingRequests.has(id)) {
@@ -202,8 +209,6 @@ export class WsService {
 			await chatsStore.addChat(createdUsedChat);
 			chatsStore.sortChats();
 			return;
-		} else if (api === API.PING) {
-			this.handlePing();
 		} else {
 			console.warn('Received response for unknown request ID:', id);
 		}
@@ -211,7 +216,10 @@ export class WsService {
 
 	private resetPingTimeout() {
 		if (this.pingTimeoutId) clearTimeout(this.pingTimeoutId);
-		this.pingTimeoutId = window.setTimeout(() => this.getWs(), WsService.KEEP_ALIVE_INTERVAL + 10_000);
+		this.pingTimeoutId = window.setTimeout(
+			() => this.getWs(),
+			WsService.KEEP_ALIVE_INTERVAL + 10_000
+		);
 	}
 
 	private async handlePing() {
@@ -220,10 +228,10 @@ export class WsService {
 		this.resetPingTimeout();
 	}
 
-	public static createAPICall(api: API, payload: messagePayload): APIMessage {
+	public static createAPICall(api: API, payload: messagePayload, id?: string): APIMessage {
 		return {
 			api,
-			id: generateId(),
+			id: id ?? generateId(),
 			token: getCookie('token'),
 			payload
 		};

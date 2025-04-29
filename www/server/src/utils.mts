@@ -18,27 +18,6 @@ export function generateToken(userId: string): string {
 }
 
 /**
- * Sends a standardized JSON response over the WebSocket.
- *
- * @param {WebSocket} ws - The WebSocket connection to send the response through.
- * @param {types.API} [api] - (Optional) The API endpoint identifier for the response.
- * @param {string} [id] - (Optional) The unique identifier of the API call.
- * @param {"SUCCESS" | "ERROR"} [status] - (Optional) The status of the response.
- * @param {types.response} [payload] - (Optional) The response payload data.
- * @returns {void}
- */
-export function sendResponse(
-  ws: WebSocket,
-  api?: API,
-  id?: string,
-  status?: "SUCCESS" | "ERROR",
-  payload?: responsePayload
-): void {
-  // console.log(JSON.stringify({ api, id, status, payload }));
-  ws.send(JSON.stringify({ api, id, status, payload }));
-}
-
-/**
  * Converts a Base64 encoded string to Binary.
  * @param base64 The Base64 encoded string.
  */
