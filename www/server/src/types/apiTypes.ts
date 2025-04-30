@@ -1,7 +1,7 @@
 import { ObjectId } from "mongodb";
-import { StringifiedPreKeyBundle } from "./signalTypes.mjs";
+import { StringifiedPreKeyBundle } from "./signalTypes.js";
 import { MessageType } from "@privacyresearch/libsignal-protocol-typescript";
-import { MessageDocument } from "./mongoTypes.mjs";
+import { MessageDocument } from "./mongoTypes.js";
 
 export type ApiMessage = {
   _id: string;
@@ -28,7 +28,8 @@ export type ApiUser = {
 
 export enum API {
   AUTHENTICATE = "authenticate",
-  GET_CHATS = "getChats",
+  FETCH_UPDATES = "fetchUpdates",
+  FETCH_CHATS_UPDATES = "fetchChatsUpdates",  
   RECEIVE_MESSAGE = "receiveMessage",
   RECEIVE_PRE_KEY_MESSAGE = "receivePreKeyMessage",
   READ_UPDATE = "readUpdate",
@@ -56,7 +57,8 @@ export interface APIMessage {
 
 /** Union type for request payloads */
 export type messagePayload =
-  | getChatsPayload
+  | fetchUpdatesPayload
+  | fetchChatsUpdatesPayload
   | sendMessagePayload
   | readUpdatePayload
   | getExtraMessagesPayload
@@ -70,7 +72,8 @@ export type messagePayload =
 
 /** Union type for response payloads */
 export type responsePayload =
-  | getChatsResponse
+  | fetchUpdatesResponse
+  | fetchChatsUpdatesResponse
   | sendMessageResponse
   | receiveMessageResponse
   | receivePreKeyMessageResponse
@@ -85,7 +88,11 @@ export type responsePayload =
   | sendKeysResponse
   | sendEncMessageResponse;
 
-export type getChatsPayload = Record<string, never>;
+export type fetchUpdatesPayload = Record<string, never>;
+
+export type fetchChatsUpdatesPayload = {
+  chatIds: string[];
+};
 
 export type sendMessagePayload = {
   chatId: string;
@@ -142,7 +149,11 @@ export type sendEncMessagePayload = {
 };
 
 //Responses
-export type getChatsResponse = {
+export type fetchUpdatesResponse = {
+  chats: ApiChat[];
+};
+
+export type fetchChatsUpdatesResponse = {
   chats: ApiChat[];
 };
 

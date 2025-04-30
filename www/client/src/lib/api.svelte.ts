@@ -20,10 +20,33 @@ export async function loadAndSyncChats(): Promise<void> {
 	chatsStore.addChats(convertedChats);
 	chatsStore.sortChats();
 
-	const call = WsService.createAPICall(apiTypes.API.GET_CHATS, {});
+	const call = WsService.createAPICall(apiTypes.API.FETCH_CHATS_UPDATES, {
+		chatIds: latestChats.map((chat) => chat._id)
+	});
 	try {
 		const response = await wsService.sendRequest(call);
-		// const { chats } = response as apiTypes.getChatsResponse;
+		const { chats } = response as apiTypes.fetchChatsUpdatesResponse;
+
+		const store = SignalProtocolStore.getInstance();
+		for (const chat of chats) {
+			const usedChat = utils.apiToUsedChat(chat);
+			const address = new libsignal.SignalProtocolAddress(utils.getOtherUsername(chat._id), 1);
+			const sessionCipher = new libsignal.SessionCipher(store, address);
+
+			for (const message of usedChat.messages) {
+				const ciphertext = message.ciphertext;
+				const cipherBinary = atob(ciphertext.body!);
+				const plaintext = await sessionCipher.decryptWhisperMessage(cipherBinary!, 'binary');
+				message.plaintext = new TextDecoder().decode(new Uint8Array(plaintext!));
+				await chatsStore.addMessage(message);
+			}
+			await chatsStore.updateChatMetadata(chat._id, {
+				users: chat.users,
+				lastSequence: chat.lastSequence,
+				lastModified: chat.lastModified
+			});
+		}
+		chatsStore.sortChats();
 	} catch (error) {
 		console.error('Error in getChats:', error);
 		throw error;

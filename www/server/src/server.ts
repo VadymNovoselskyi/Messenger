@@ -3,7 +3,6 @@ import dotenv from "dotenv";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
 import {
-  getChats,
   readUpdate,
   getExtraMessages,
   getExtraNewMessages,
@@ -14,24 +13,27 @@ import {
   savePreKeys,
   sendEncMessage,
   findChat,
-} from "./mongodb/mongoApi.mjs";
-import { base64ToBinary, generateToken } from "./utils.mjs";
-import { sendResponse } from "./apiUtils.js";
+  updateLastAckSequence,
+  updateLastAckReadSequence,
+  deleteMessages,
+  fetchChatsUpdates,
+} from "./mongodb/mongoApi.js";
+import { base64ToBinary, generateToken } from "./utils.js";
 
-import * as apiTypes from "./types/apiTypes.mjs";
+import * as apiTypes from "./types/apiTypes.js";
 import { ObjectId } from "mongodb";
-import { BinaryPreKeyBundle } from "./types/signalTypes.mjs";
+import { BinaryPreKeyBundle } from "./types/signalTypes.js";
 import { toApiChat, toApiMessage } from "./apiUtils.js";
-import { UnackService } from "./UnackService.js";
+import { DeliveryService } from "./DeliveryService.js";
 
 dotenv.config(); // Load .env variables into process.env
 const JWT_KEY = process.env.JWT_KEY || "";
 const PORT = process.env.PORT || 5000;
 const wss = new WebSocketServer({ port: Number(PORT) });
-const unackService = UnackService.getInstance();
+const deliveryService = DeliveryService.getInstance();
 
 const PING_INTERVAL = 30_000;
-const onlineUsers: Record<string, WebSocket> = {};
+const onlineUsers: Map<string, WebSocket> = new Map();
 
 setInterval(() => {
   wss.clients.forEach(ws => {
@@ -55,7 +57,11 @@ wss.on("connection", ws => {
     try {
       parsedMessage = JSON.parse(message.toString());
     } catch {
-      sendResponse(ws, "", undefined, "ERROR", { message: "Invalid JSON format" });
+      deliveryService.sendMessage(ws, {
+        id: "",
+        status: "ERROR",
+        payload: { message: "Invalid JSON format" },
+      });
       return;
     }
 
@@ -67,9 +73,10 @@ wss.on("connection", ws => {
 
     if (api === apiTypes.API.PONG) return;
     if (api === apiTypes.API.ACK) {
-      unackService.handleAck(ws, id);
+      deliveryService.handleAck(ws, id);
       return;
     }
+
     if (api === apiTypes.API.AUTHENTICATE) {
       console.log("Authenticating");
       try {
@@ -84,11 +91,21 @@ wss.on("connection", ws => {
         const { userId } = decoded;
         ws.isAuthenticated = true;
         ws.userId = userId;
-        onlineUsers[ws.userId ?? ""] = ws;
-        sendResponse(ws, id, api, "SUCCESS", {});
+        onlineUsers.set(userId ?? "", ws);
+        deliveryService.sendMessage(ws, {
+          id,
+          api,
+          status: "SUCCESS",
+          payload: {},
+        });
       } catch (error) {
         const errMsg = error instanceof Error ? error.message : "An unknown error occurred";
-        sendResponse(ws, id, api, "ERROR", { message: errMsg });
+        deliveryService.sendMessage(ws, {
+          id,
+          api,
+          status: "ERROR",
+          payload: { message: errMsg },
+        });
       }
       return;
     }
@@ -102,16 +119,31 @@ wss.on("connection", ws => {
         const user = await findUser(username);
         const isPasswordValid = await bcrypt.compare(password, user.password);
         if (!isPasswordValid) {
-          return sendResponse(ws, id, api, "ERROR", { message: "Invalid password" });
+          return deliveryService.sendMessage(ws, {
+            id,
+            api,
+            status: "ERROR",
+            payload: { message: "Invalid password" },
+          });
         }
         const token = generateToken(user._id.toString());
-        sendResponse(ws, id, api, "SUCCESS", { userId: user._id, token });
         ws.isAuthenticated = true;
         ws.userId = user._id.toString();
-        onlineUsers[ws.userId] = ws;
+        onlineUsers.set(ws.userId, ws);
+        deliveryService.sendMessage(ws, {
+          id,
+          api,
+          status: "SUCCESS",
+          payload: { userId: user._id, token },
+        });
       } catch (error) {
         const errMsg = error instanceof Error ? error.message : "An unknown error occurred";
-        sendResponse(ws, id, api, "ERROR", { message: errMsg });
+        deliveryService.sendMessage(ws, {
+          id,
+          api,
+          status: "ERROR",
+          payload: { message: errMsg },
+        });
       }
       return;
     }
@@ -138,13 +170,23 @@ wss.on("connection", ws => {
       try {
         const userId = await createUser(username, password, preKeyBundleReconstructed);
         const token = generateToken(userId.toString());
-        sendResponse(ws, id, api, "SUCCESS", { userId, token });
         ws.isAuthenticated = true;
         ws.userId = userId.toString();
-        onlineUsers[ws.userId] = ws;
+        onlineUsers.set(ws.userId, ws);
+        deliveryService.sendMessage(ws, {
+          id,
+          api,
+          status: "SUCCESS",
+          payload: { userId, token },
+        });
       } catch (error) {
         const errMsg = error instanceof Error ? error.message : "An unknown error occurred";
-        sendResponse(ws, id, api, "ERROR", { message: errMsg });
+        deliveryService.sendMessage(ws, {
+          id,
+          api,
+          status: "ERROR",
+          payload: { message: errMsg },
+        });
       }
       return;
     }
@@ -155,13 +197,22 @@ wss.on("connection", ws => {
         await handleAuthenticatedCall(ws, id, api, payload, ws.userId ?? "");
       } catch (error) {
         const errMsg = error instanceof Error ? error.message : "An unknown error occurred";
-        sendResponse(ws, id, api, "ERROR", { message: errMsg });
+        deliveryService.sendMessage(ws, {
+          id,
+          status: "ERROR",
+          payload: { message: errMsg },
+        });
       }
       return;
     }
 
     // For unverified connections return an error.
-    else sendResponse(ws, id, api, "ERROR", { message: "Unauthenticated" });
+    else
+      deliveryService.sendMessage(ws, {
+        id,
+        status: "ERROR",
+        payload: { message: "Unauthenticated" },
+      });
   });
 
   ws.on("pong", () => {
@@ -169,18 +220,18 @@ wss.on("connection", ws => {
   });
   ws.on("close", () => {
     ws.isAlive = false;
-    if (ws.userId && onlineUsers[ws.userId]) {
+    if (ws.userId && onlineUsers.has(ws.userId)) {
       console.log(`${ws.userId} deleted from onlineUsers`);
-      delete onlineUsers[ws.userId];
-      unackService.deleteUser(ws);
+      onlineUsers.delete(ws.userId);
+      deliveryService.deleteUser(ws.userId);
     }
     console.log(`${ws.userId} closed`);
   });
   ws.on("error", error => {
     ws.isAlive = false;
-    if (ws.userId && onlineUsers[ws.userId]) {
-      delete onlineUsers[ws.userId];
-      unackService.deleteUser(ws);
+    if (ws.userId && onlineUsers.has(ws.userId)) {
+      onlineUsers.delete(ws.userId);
+      deliveryService.deleteUser(ws.userId);
     }
     console.error(`WebSocket error: ${error}`);
   });
@@ -198,12 +249,24 @@ async function handleAuthenticatedCall(
 ): Promise<void> {
   try {
     switch (api) {
-      case apiTypes.API.GET_CHATS: {
-        const chats = await getChats(new ObjectId(userId));
-        sendResponse(ws, id, api, "SUCCESS", { chats });
+      case apiTypes.API.FETCH_CHATS_UPDATES: {
+        const { chatIds } = payload as apiTypes.fetchChatsUpdatesPayload;
+        const chats = await fetchChatsUpdates(
+          new ObjectId(userId),
+          chatIds.map(id => new ObjectId(id))
+        );
+
+        deliveryService.sendMessage(ws, {
+          id,
+          api,
+          status: "SUCCESS",
+          payload: { chats },
+          // callback: () => {
+          //   console.log("Chats sent ACK");
+          // },
+        });
         break;
       }
-
       case apiTypes.API.READ_UPDATE: {
         const { chatId, sequence } = payload as apiTypes.readUpdatePayload;
         const { receivingUserId } = await readUpdate(
@@ -212,11 +275,20 @@ async function handleAuthenticatedCall(
           sequence
         );
 
-        const receivingUserWs = onlineUsers[receivingUserId.toString()];
+        const receivingUserWs = onlineUsers.get(receivingUserId.toString());
         if (receivingUserWs) {
-          sendResponse(receivingUserWs, id, api, "SUCCESS", {
-            chatId,
-            sequence,
+          deliveryService.sendMessage(receivingUserWs, {
+            id,
+            api,
+            status: "SUCCESS",
+            payload: { chatId, sequence },
+            callback: () => {
+              updateLastAckReadSequence(
+                new ObjectId(chatId),
+                new ObjectId(receivingUserId),
+                sequence
+              );
+            },
           });
         }
         break;
@@ -224,25 +296,37 @@ async function handleAuthenticatedCall(
       case apiTypes.API.EXTRA_MESSAGES: {
         const { chatId, currentIndex } = payload as apiTypes.getExtraMessagesPayload;
         const extraMessages = await getExtraMessages(new ObjectId(chatId), currentIndex);
-        sendResponse(ws, id, api, "SUCCESS", {
-          chatId,
-          extraMessages: extraMessages.map(message => toApiMessage(message)),
+        deliveryService.sendMessage(ws, {
+          id,
+          api,
+          status: "SUCCESS",
+          payload: { chatId, extraMessages: extraMessages.map(message => toApiMessage(message)) },
         });
         break;
       }
       case apiTypes.API.EXTRA_NEW_MESSAGES: {
         const { chatId, unreadCount } = payload as apiTypes.getExtraNewMessagesPayload;
         const extraNewMessages = await getExtraNewMessages(new ObjectId(chatId), unreadCount);
-        sendResponse(ws, id, api, "SUCCESS", {
-          chatId,
-          extraNewMessages: extraNewMessages.map(message => toApiMessage(message)),
+        deliveryService.sendMessage(ws, {
+          id,
+          api,
+          status: "SUCCESS",
+          payload: {
+            chatId,
+            extraNewMessages: extraNewMessages.map(message => toApiMessage(message)),
+          },
         });
         break;
       }
       case apiTypes.API.READ_ALL: {
         const { chatId } = payload as apiTypes.readAllPayload;
         await readAll(new ObjectId(chatId), new ObjectId(ws.userId));
-        sendResponse(ws, id, api, "SUCCESS", {});
+        deliveryService.sendMessage(ws, {
+          id,
+          api,
+          status: "SUCCESS",
+          payload: {},
+        });
         break;
       }
       case apiTypes.API.CREATE_CHAT: {
@@ -251,16 +335,21 @@ async function handleAuthenticatedCall(
           new ObjectId(userId),
           username
         );
-        const createdApiChat = await toApiChat(createdChat);
-        sendResponse(ws, id, api, "SUCCESS", {
-          createdChat: createdApiChat,
-          preKeyBundle,
+        const createdApiChat = await toApiChat(createdChat, []);
+        deliveryService.sendMessage(ws, {
+          id,
+          api,
+          status: "SUCCESS",
+          payload: { createdChat: createdApiChat, preKeyBundle },
         });
 
-        const receivingUserWs = onlineUsers[receivingUserId.toString()];
+        const receivingUserWs = onlineUsers.get(receivingUserId.toString());
         if (receivingUserWs) {
-          sendResponse(receivingUserWs, id, api, "SUCCESS", {
-            createdChat: createdApiChat,
+          deliveryService.sendMessage(receivingUserWs, {
+            id,
+            api,
+            status: "SUCCESS",
+            payload: { createdChat: createdApiChat },
           });
         }
         break;
@@ -293,15 +382,14 @@ async function handleAuthenticatedCall(
         const receivingUserId = chat.users.find(user => user._id.toString() !== userId)?._id;
         if (!receivingUserId) throw new Error(`User with id ${userId} not found in chat ${chatId}`);
 
-        const receivingUserWs = onlineUsers[receivingUserId.toString()];
+        const receivingUserWs = onlineUsers.get(receivingUserId.toString());
         if (receivingUserWs) {
-          sendResponse(
-            receivingUserWs,
+          deliveryService.sendMessage(receivingUserWs, {
             id,
-            apiTypes.API.RECEIVE_PRE_KEY_MESSAGE,
-            "SUCCESS",
-            { chatId, ciphertext }
-          );
+            api: apiTypes.API.RECEIVE_PRE_KEY_MESSAGE,
+            status: "SUCCESS",
+            payload: { chatId, ciphertext },
+          });
         }
         break;
       }
@@ -314,27 +402,44 @@ async function handleAuthenticatedCall(
           ciphertext
         );
 
-        const receivingUserWs = onlineUsers[receivingUserId.toString()];
+        const receivingUserWs = onlineUsers.get(receivingUserId.toString());
         if (receivingUserWs) {
-          sendResponse(
-            receivingUserWs,
+          deliveryService.sendMessage(receivingUserWs, {
             id,
-            apiTypes.API.RECEIVE_MESSAGE,
-            "SUCCESS",
-            { chatId, message: sentMessage }
-          );
+            api: apiTypes.API.RECEIVE_MESSAGE,
+            status: "SUCCESS",
+            payload: { chatId, message: sentMessage },
+            callback: () => {
+              deleteMessages(new ObjectId(chatId), sentMessage.sequence);
+              updateLastAckSequence(
+                new ObjectId(chatId),
+                new ObjectId(receivingUserId),
+                sentMessage.sequence
+              );
+            },
+          });
         }
 
         // Confirm message delivery to the sender.
         if (ciphertext.type !== 3) {
-          sendResponse(ws, id, api, "SUCCESS", { sentMessage: toApiMessage(sentMessage) });
+          deliveryService.sendMessage(ws, {
+            id,
+            api,
+            status: "SUCCESS",
+            payload: { sentMessage: toApiMessage(sentMessage) },
+          });
         }
         break;
       }
 
       default: {
         console.error(`Unknown api call: ${api}`);
-        sendResponse(ws, id, api, "ERROR", { message: "Invalid api call" });
+        deliveryService.sendMessage(ws, {
+          id,
+          api,
+          status: "ERROR",
+          payload: { message: "Invalid api call" },
+        });
         break;
       }
     }

@@ -104,17 +104,21 @@ export class WsService {
 
 	public async handleServerMessage(event: MessageEvent): Promise<void> {
 		const data: APIResponse = JSON.parse(event.data);
-		console.log(data);
 		const { api, id, status, payload } = data;
 
 		if (api === API.PING) {
 			this.handlePing();
 			return;
 		}
+		console.log(data);
 
 		if (status === 'ERROR') {
 			const { message } = payload as errorResponse;
-			if (message === 'Invalid Token. Login again' || message === 'invalid signature') {
+			if (
+				message === 'jwt expired' ||
+				message === 'No token provided' ||
+				message === 'Unauthenticated'
+			) {
 				goto('/login');
 			} else {
 				alert(message);

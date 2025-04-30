@@ -2,11 +2,11 @@
   "name": "server",
   "version": "1.0.0",
   "type": "module",
-  "main": "dist/index.mjs",
+  "main": "src/server.ts",
   "scripts": {
     "build": "tsc",
-    "dev": "tsx watch src/server.mts",
-    "start": "node dist/server.mjs"
+    "dev": "tsx watch src/server.ts",
+    "start": "node dist/server.js"
   },
   "license": "ISC",
   "dependencies": {

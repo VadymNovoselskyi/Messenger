@@ -1,61 +1,48 @@
 import bcrypt from "bcrypt";
 
-import { chatsCollection, usersCollection, messagesCollection } from "./connect.mjs";
-import { binaryToBase64 } from "../utils.mjs";
+import { chatsCollection, usersCollection, messagesCollection } from "./connect.js";
+import { binaryToBase64 } from "../utils.js";
 
 import { ObjectId } from "mongodb";
 import { MessageType } from "@privacyresearch/libsignal-protocol-typescript";
 
-import { ChatDocument, MessageDocument, UserDocument } from "../types/mongoTypes.mjs";
-import { BinaryPreKeyBundle, StringifiedPreKeyBundle } from "../types/signalTypes.mjs";
-import { ApiChat, ApiMessage, ApiUser } from "../types/apiTypes.mjs";
+import { ChatDocument, MessageDocument, UserDocument } from "../types/mongoTypes.js";
+import { BinaryPreKeyBundle, StringifiedPreKeyBundle } from "../types/signalTypes.js";
+import { ApiChat, ApiMessage, ApiUser } from "../types/apiTypes.js";
+import { toApiChat } from "../apiUtils.js";
 
 // Constants to manage pagination limits.
-const INIT_CHATS = 10;
-const INIT_MESSAGES = 40;
+const MAX_CHATS = 50;
+const MAX_MESSAGES = 100;
 const EXTRA_MESSAGES = 60;
 
 /**
  * Retrieves the list of chats for a given user.
  */
-export async function getChats(userId: ObjectId): Promise<ApiChat[]> {
+export async function fetchChatsUpdates(userId: ObjectId, chatIds: ObjectId[]): Promise<ApiChat[]> {
   try {
     // Fetch recent chat documents where the user is a participant.
     const chatDocuments: ChatDocument[] = await chatsCollection
-      .find({ "users._id": userId })
-      .sort({ lastModified: -1 })
-      .limit(INIT_CHATS)
+      .find({ "users._id": userId, _id: { $in: chatIds } })
+      .limit(MAX_CHATS)
       .toArray();
 
     // Transform each document into a structured Chat.
     const chats: ApiChat[] = await Promise.all(
-      chatDocuments.map(async (chatDocument: ChatDocument) => {
-        const { lastReadSequence } = chatDocument.users.find(user => user._id.equals(userId))!;
+      chatDocuments.map(async chatDocument => {
+        const { lastAckSequence } = chatDocument.users.find(user => user._id.equals(userId))!;
 
-        // Count unread messages since last seen.
-        const unreadCount = await messagesCollection.countDocuments({
-          chatId: chatDocument._id.toString,
-          from: { $ne: userId },
-          sequence: { $gt: lastReadSequence },
-        });
-
-        const unreadSkip = Math.max(unreadCount - INIT_MESSAGES, 0);
-
-        // Retrieve the recent messages while accounting for unread count.
         const messages = await messagesCollection
-          .find({ chatId: chatDocument._id })
+          .find({
+            chatId: chatDocument._id,
+            from: { $ne: userId },
+            sequence: { $gt: lastAckSequence },
+          })
           .sort({ sendTime: -1 })
-          .skip(unreadSkip)
-          .limit(INIT_MESSAGES + Math.min(unreadCount, INIT_MESSAGES))
+          .limit(MAX_MESSAGES)
           .toArray();
 
-        return {
-          _id: chatDocument._id.toString(),
-          users: chatDocument.users,
-          messages: messages.reverse(),
-          lastReadSequence,
-          lastModified: chatDocument.lastModified,
-        } as unknown as ApiChat; //CHANGE
+        return toApiChat(chatDocument, messages.reverse());
       })
     );
 
@@ -121,16 +108,14 @@ export async function readUpdate(
   sequence: number
 ): Promise<{ receivingUserId: ObjectId }> {
   try {
-    const message = await messagesCollection.findOne({ chatId, sequence });
-    if (!message) throw new Error(`Didn't find message ${sequence}`);
-
-    await chatsCollection.updateOne(
-      { _id: chatId },
-      { $set: { "users.$[user].lastReadSequence": sequence } },
-      { arrayFilters: [{ "user._id": userId }] }
+    const chat = await chatsCollection.findOneAndUpdate(
+      {
+        _id: chatId,
+        lastSequence: { $gte: sequence },
+        "users._id": userId,
+      },
+      { $set: { "users.$.lastReadSequence": sequence } }
     );
-
-    const chat = await chatsCollection.findOne({ _id: chatId });
     if (!chat) throw new Error(`Couldn't find chat for chatId ${chatId}`);
 
     const receivingUserId = chat.users.find(user => !user._id.equals(userId))!._id;
@@ -247,8 +232,20 @@ export async function createChat(
 
     const result = await chatsCollection.insertOne({
       users: [
-        { _id: creatingUser._id, username: creatingUser.username, lastReadSequence: 0 },
-        { _id: receivingUser._id, username: receivingUser.username, lastReadSequence: 0 },
+        {
+          _id: creatingUser._id,
+          username: creatingUser.username,
+          lastReadSequence: 0,
+          lastAckSequence: 0,
+          lastAckReadSequence: 0,
+        },
+        {
+          _id: receivingUser._id,
+          username: receivingUser.username,
+          lastReadSequence: 0,
+          lastAckSequence: 0,
+          lastAckReadSequence: 0,
+        },
       ],
       lastSequence: 0,
       lastModified: new Date(),
@@ -341,6 +338,49 @@ export async function savePreKeys(userId: ObjectId, preKeyBundle: BinaryPreKeyBu
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : "An unknown error occurred";
     throw new Error(`Error adding preKeyBundle: ${errMsg}`);
+  }
+}
+
+export async function updateLastAckSequence(chatId: ObjectId, userId: ObjectId, sequence: number) {
+  try {
+    await chatsCollection.updateOne(
+      {
+        _id: chatId,
+        users: { $elemMatch: { _id: userId, lastAckSequence: { $lt: sequence } } },
+      },
+      { $set: { "users.$.lastAckSequence": sequence } }
+    );
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : "An unknown error occurred";
+    throw new Error(`Error updating lastAckSequence: ${errMsg}`);
+  }
+}
+
+export async function updateLastAckReadSequence(
+  chatId: ObjectId,
+  userId: ObjectId,
+  sequence: number
+) {
+  try {
+    await chatsCollection.updateOne(
+      {
+        _id: chatId,
+        users: { $elemMatch: { _id: userId, lastAckReadSequence: { $lt: sequence } } },
+      },
+      { $set: { "users.$.lastAckReadSequence": sequence } }
+    );
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : "An unknown error occurred";
+    throw new Error(`Error updating lastAckReadSequence: ${errMsg}`);
+  }
+}
+
+export async function deleteMessages(chatId: ObjectId, sequence: number) {
+  try {
+    await messagesCollection.deleteMany({ chatId, sequence: { $lte: sequence } });
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : "An unknown error occurred";
+    throw new Error(`Error deleting messages: ${errMsg}`);
   }
 }
 

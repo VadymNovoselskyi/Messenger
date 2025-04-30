@@ -28,15 +28,22 @@ export class ChatsStore {
 
 	/* Adds a new chat to the store */
 	public async addChat(chat: UsedChat): Promise<void> {
-		this._chats.push(chat);
+		const i = this._chats.findIndex((c) => c._id === chat._id);
+		if (i !== -1) this._chats[i] = chat;
+		else this._chats.push(chat);
 
 		const storedChat = usedToStoredChat(chat);
 		await (await this.getDb()).putChat($state.snapshot(storedChat));
+		for (const message of chat.messages) {
+			await (await this.getDb()).putMessage($state.snapshot(message));
+		}
 	}
 
 	/* Adds multiple chats to the store */
-	public addChats(chats: UsedChat[]): void {
-		this._chats.push(...chats);
+	public async addChats(chats: UsedChat[]): Promise<void> {
+		for (const chat of chats) {
+			await this.addChat(chat);
+		}
 	}
 
 	/* Updates an existing chat in the store */
@@ -47,6 +54,13 @@ export class ChatsStore {
 
 		const storedChat = usedToStoredChat(chatToUpdate);
 		await (await this.getDb()).putChat($state.snapshot(storedChat));
+	}
+
+	public async updateChatMetadata(chatId: string, metadata: Partial<StoredChat>): Promise<void> {
+		const i = this._chats.findIndex((c) => c._id === chatId);
+		if (i === -1) return;
+		this._chats[i] = { ...this._chats[i], ...metadata };
+		await this.updateChat(this._chats[i]);
 	}
 
 	/* Adds a new message to a chat */

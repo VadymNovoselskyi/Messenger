@@ -1,6 +1,6 @@
 import { ObjectId, Binary } from "mongodb";
-import { ApiUser } from "./apiTypes.mjs";
-import { BinarySignedPreKey, BinaryPreKey } from "./signalTypes.mjs";
+import { ApiUser } from "./apiTypes.js";
+import { BinarySignedPreKey, BinaryPreKey } from "./signalTypes.js";
 import { MessageType } from "@privacyresearch/libsignal-protocol-typescript";
 
 export type ChatDocument = {
@@ -9,6 +9,8 @@ export type ChatDocument = {
     _id: ObjectId;
     username: string;
     lastReadSequence: number;
+    lastAckSequence: number;
+    lastAckReadSequence: number;
   }[];
   lastSequence: number;
   lastModified: Date;

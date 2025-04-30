@@ -5,7 +5,8 @@ import type { ApiChat, ApiMessage } from './dataTypes';
 /** API endpoints enumeration */
 export enum API {
 	AUTHENTICATE = 'authenticate',
-	GET_CHATS = 'getChats',
+	FETCH_UPDATES = 'fetchUpdates',
+	FETCH_CHATS_UPDATES = 'fetchChatsUpdates',
 	RECEIVE_MESSAGE = 'receiveMessage',
 	RECEIVE_PRE_KEY_MESSAGE = 'receivePreKeyMessage',
 	READ_UPDATE = 'readUpdate',
@@ -41,7 +42,8 @@ export interface APIResponse {
 
 /** Union type for request payloads */
 export type messagePayload =
-	| getChatsPayload
+	| fetchUpdatesPayload
+	| fetchChatsUpdatesPayload
 	| readUpdatePayload
 	| getExtraMessagesPayload
 	| getExtraNewMessagesPayload
@@ -55,7 +57,8 @@ export type messagePayload =
 
 /** Union type for response payloads */
 export type responsePayload =
-	| getChatsResponse
+	| fetchUpdatesResponse
+	| fetchChatsUpdatesResponse
 	| receiveMessageResponse
 	| receivePreKeyMessageResponse
 	| readUpdateResponse
@@ -70,7 +73,11 @@ export type responsePayload =
 	| sendPreKeyMessageResponse
 	| sendEncMessageResponse;
 
-export type getChatsPayload = Record<string, never>;
+export type fetchUpdatesPayload = Record<string, never>;
+
+export type fetchChatsUpdatesPayload = {
+	chatIds: string[];
+};
 
 export type readUpdatePayload = {
 	chatId: string;
@@ -120,7 +127,11 @@ export type sendPreKeyMessagePayload = {
 };
 
 //Responses
-export type getChatsResponse = {
+export type fetchUpdatesResponse = {
+	chats: ApiChat[];
+};
+
+export type fetchChatsUpdatesResponse = {
 	chats: ApiChat[];
 };
 
