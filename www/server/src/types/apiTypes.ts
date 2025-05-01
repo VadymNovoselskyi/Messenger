@@ -41,7 +41,7 @@ export enum API {
   SIGNUP = "signup",
   SEND_KEYS = "sendKeys",
   SEND_PRE_KEY_MESSAGE = "sendPreKeyMessage",
-  SEND_ENC_MESSAGE = "sendEncMessage",
+  SEND_MESSAGE = "sendMessage",
   PING = "ping",
   PONG = "pong",
   ACK = "ack",
@@ -68,7 +68,6 @@ export type messagePayload =
   | loginPayload
   | sendKeysPayload
   | sendPreKeyMessagePayload
-  | sendEncMessagePayload;
 
 /** Union type for response payloads */
 export type responsePayload =
@@ -86,7 +85,6 @@ export type responsePayload =
   | signupResponse
   | errorResponse
   | sendKeysResponse
-  | sendEncMessageResponse;
 
 export type fetchUpdatesPayload = Record<string, never>;
 
@@ -96,8 +94,7 @@ export type fetchChatsUpdatesPayload = {
 
 export type sendMessagePayload = {
   chatId: string;
-  text: string;
-  tempMessageId: string;
+  ciphertext: MessageType;
 };
 
 export type readUpdatePayload = {
@@ -143,11 +140,6 @@ export type sendPreKeyMessagePayload = {
   ciphertext: MessageType;
 };
 
-export type sendEncMessagePayload = {
-  chatId: string;
-  ciphertext: MessageType;
-};
-
 //Responses
 export type fetchUpdatesResponse = {
   chats: ApiChat[];
@@ -157,11 +149,7 @@ export type fetchChatsUpdatesResponse = {
   chats: ApiChat[];
 };
 
-export type sendMessageResponse = {
-  chatId: string;
-  message: ApiMessage;
-  tempMessageId: string;
-};
+export type sendMessageResponse = { sentMessage: ApiMessage };
 
 export type receiveMessageResponse = {
   chatId: string;
@@ -206,8 +194,6 @@ export type signupResponse = {
 };
 
 export type sendKeysResponse = Record<string, never>;
-
-export type sendEncMessageResponse = { sentMessage: ApiMessage };
 
 export type errorResponse = {
   message: string;

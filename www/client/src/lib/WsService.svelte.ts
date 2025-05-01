@@ -17,8 +17,9 @@ import {
 	type receivePreKeyMessageResponse,
 	type responsePayload
 } from './types/apiTypes';
-import { apiToUsedChat, generateId, getCookie, getOtherUsername } from './utils.svelte';
-import type { StoredMessage } from './types/dataTypes';
+import { toStoredChat, generateId, getCookie, getOtherUsername } from './utils.svelte';
+import type { StoredChat, StoredMessage } from './types/dataTypes';
+import { messagesStore } from './MessagesStore.svelte';
 
 export class WsService {
 	private static instance: WsService;
@@ -172,7 +173,25 @@ export class WsService {
 				...message,
 				plaintext
 			};
-			await chatsStore.handleIncomingMessage(messageToStore);
+			const lastModified =
+				chat.lastModified.localeCompare(message.sendTime) > 0
+					? chat.lastModified
+					: message.sendTime;
+			const lastSequence = Math.max(chat.lastSequence, message.sequence);
+			const updatedChat: StoredChat = {
+				_id: chat._id,
+				users: chat.users.map((user) => {
+					if (user._id !== getCookie('userId')) {
+						return { ...user, lastReadSequence: lastSequence };
+					}
+					return user;
+				}),
+				lastSequence,
+				lastModified
+			};
+
+			await chatsStore.updateChat(updatedChat);
+			await messagesStore.addMessage(messageToStore);
 			chatsStore.sortChats();
 		} else if (api === API.RECEIVE_PRE_KEY_MESSAGE) {
 			const { chatId, ciphertext } = payload as receivePreKeyMessageResponse;
@@ -206,11 +225,24 @@ export class WsService {
 			const chat = chatsStore.getChat(chatId);
 			if (!chat) throw new Error(`Chat with id ${chatId} not found`);
 
-			await chatsStore.handleIncomingReadUpdate(chatId, sequence);
+            const lastSequence = Math.max(
+                chat.users.find((user) => user._id !== getCookie('userId'))!.lastReadSequence,
+                sequence
+            );
+            const updatedChat = {
+                ...chat,
+                users: chat.users.map((user) => {
+                    if (user._id !== getCookie('userId')) {
+                        return { ...user, lastReadSequence: lastSequence };
+                    }
+                    return user;
+				})
+			};
+			await chatsStore.updateChat(updatedChat);
 		} else if (api === API.CREATE_CHAT) {
 			const { createdChat } = payload as createChatResponse;
-			const createdUsedChat = apiToUsedChat(createdChat);
-			await chatsStore.addChat(createdUsedChat);
+			const createdStoredChat = toStoredChat(createdChat);
+			await chatsStore.addChat(createdStoredChat);
 			chatsStore.sortChats();
 			return;
 		} else {

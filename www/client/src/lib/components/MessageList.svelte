@@ -6,10 +6,12 @@
 	import MessageField from '$lib/components/MessageField.svelte';
 	import Loader from '$lib/components/Loader.svelte';
 	import Scrollbar from '$lib/components/Scrollbar.svelte';
-	import { getExtraMessages, getExtraNewMessages, sendReadUpdate } from '$lib/api.svelte';
+	import { sendReadUpdate } from '$lib/api.svelte';
 	import { formatISODate, getCookie } from '$lib/utils.svelte';
-	import type { UsedChat, StoredMessage } from '$lib/types/dataTypes';
+	import type { StoredMessage, StoredChat } from '$lib/types/dataTypes';
 	import type { Action } from 'svelte/action';
+	import { PaginationService } from '$lib/PaginationService.svelte';
+	import { getDbService } from '$lib/DbService.svelte';
 
 	onMount(async () => {
 		await setAnchors();
@@ -18,9 +20,39 @@
 	// ===============================================================
 	// Props & Derived values from chat
 	// ===============================================================
-	const { chat, submitFn }: { chat: UsedChat; submitFn: (event: SubmitEvent) => void } = $props();
-	const { messages, users, lastSequence, lastModified } = $derived(chat);
+	const {
+		chat,
+		messages,
+		submitFn
+	}: { chat: StoredChat; messages: StoredMessage[]; submitFn: (event: SubmitEvent) => void } =
+		$props();
+	const { users, lastSequence } = $derived(chat);
 
+	const MAX_PAGES = 5;
+	const PAGE_SIZE = 20;
+	// svelte-ignore state_referenced_locally
+	const paginationService = new PaginationService<StoredMessage>(
+		messages,
+		MAX_PAGES,
+		PAGE_SIZE,
+		async (direction, elements) => {
+			if (direction === 'UP') {
+				const low = elements[elements.length - 1].sequence + 1;
+				const high = Math.min(lastSequence, low + PAGE_SIZE);
+				return (await getDbService()).getMessagesByIndex(chat._id, low, high);
+			} else {
+				const high = elements[0].sequence - 1;
+				const low = Math.max(1, high - PAGE_SIZE);
+				return (await getDbService()).getMessagesByIndex(chat._id, low, high);
+			}
+		}
+	);
+	// setInterval(() => {
+	// 	console.log(paginationService.currentPage);
+	// 	paginationService.changePage('DOWN');
+	// }, 4000);
+
+	// svelte-ignore state_referenced_locally
 	let startingLastReadSequenceMe = $state(
 		users.find((user) => user._id === getCookie('userId'))!.lastReadSequence
 	);
@@ -30,9 +62,7 @@
 	let lastReadSequenceOther = $derived(
 		users.find((user) => user._id !== getCookie('userId'))!.lastReadSequence
 	);
-	let unreadCount = $derived.by(() => {
-		return lastSequence - lastReadSequenceMe;
-	});
+	let unreadCount = $derived(lastSequence - lastReadSequenceMe);
 
 	const SCROLL_ADJUSTMENT = 24;
 	let scrollableContent = $state() as HTMLElement;
@@ -45,7 +75,6 @@
 
 	const MAX_READ_TIMEOUT = 1000;
 	const MAX_STASHED_COUNT = 3;
-
 	let stashedReadCount = $state(0);
 	let lastTimeoutTime = $state(0);
 	let readTimeoutId = $state<number>();
@@ -63,7 +92,7 @@
 			);
 		}
 	}, READ_OBSERVER_OPTIONS);
-	const intersectionAction: Action<Element, boolean> = (element, enabled) => {
+	const readIntersectionAction: Action<Element, boolean> = (element, enabled) => {
 		if (!enabled) return;
 		readObserver.observe(element);
 		return {
@@ -77,9 +106,6 @@
 		};
 	};
 
-	// ===============================================================
-	// Anchor Setup for Scroll Position and Lazy-loading
-	// ===============================================================
 	async function setAnchors() {
 		await tick();
 		if (!topAnchor || !bottomAnchor || (!unreadAnchor && unreadCount)) {
@@ -133,9 +159,7 @@
 	}
 
 	$effect(() => {
-		messages.length;
 		if (!showScrollbar && messages.length) {
-			// Update scrollbar visibility when messages are loaded
 			showScrollbar = scrollableContent.scrollHeight !== scrollableContent.clientHeight;
 		}
 	});
@@ -161,14 +185,14 @@
 		<!-- <Loader promise={extraMessagesPromise} /> -->
 
 		<div bind:this={topAnchor} class="anchor"></div>
-		{#each messages as { _id, from, plaintext, sequence, sendTime, isPending } (_id)}
+		{#each paginationService.paginatedElements as { _id, from, plaintext, sequence, sendTime, isPending } (_id)}
 			<!-- Dont mind the error below, just a TypeScript issue (oninspect) -->
 			<div
 				class="message"
 				class:sent={from === getCookie('userId')}
 				class:received={from !== getCookie('userId')}
 				class:pending={isPending}
-				use:intersectionAction={sequence > lastReadSequenceMe && !!unreadCount}
+				use:readIntersectionAction={sequence > lastReadSequenceMe && !!unreadCount}
 				onintersect={handleMessageRead}
 				id={_id}
 			>

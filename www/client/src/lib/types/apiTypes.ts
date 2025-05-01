@@ -18,7 +18,7 @@ export enum API {
 	SIGNUP = 'signup',
 	SEND_KEYS = 'sendKeys',
 	SEND_PRE_KEY_MESSAGE = 'sendPreKeyMessage',
-	SEND_ENC_MESSAGE = 'sendEncMessage',
+	SEND_MESSAGE = 'sendMessage',
 	ACK = 'ack',
 	PING = 'ping',
 	PONG = 'pong'
@@ -53,7 +53,7 @@ export type messagePayload =
 	| signupPayload
 	| sendKeysPayload
 	| sendPreKeyMessagePayload
-	| sendEncMessagePayload;
+	| sendMessagePayload;
 
 /** Union type for response payloads */
 export type responsePayload =
@@ -71,7 +71,7 @@ export type responsePayload =
 	| errorResponse
 	| sendKeysResponse
 	| sendPreKeyMessageResponse
-	| sendEncMessageResponse;
+	| sendMessageResponse;
 
 export type fetchUpdatesPayload = Record<string, never>;
 
@@ -116,7 +116,7 @@ export type sendKeysPayload = {
 	preKeyBundle: StringifiedPreKeyBundle;
 };
 
-export type sendEncMessagePayload = {
+export type sendMessagePayload = {
 	chatId: string;
 	ciphertext: MessageType;
 };
@@ -181,7 +181,7 @@ export type sendKeysResponse = Record<string, never>;
 
 export type sendPreKeyMessageResponse = Record<string, never>;
 
-export type sendEncMessageResponse = { sentMessage: ApiMessage };
+export type sendMessageResponse = { sentMessage: ApiMessage };
 
 export type errorResponse = {
 	message: string;

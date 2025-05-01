@@ -1,10 +1,11 @@
 import { getDbService } from './DbService.svelte';
-import type { PendingMessage, StoredChat, StoredMessage, UsedChat } from '$lib/types/dataTypes';
-import { getCookie, usedToStoredChat } from '$lib/utils.svelte';
+import type { PendingMessage, StoredChat, StoredMessage } from '$lib/types/dataTypes';
+import { getCookie } from '$lib/utils.svelte';
 
 export class ChatsStore {
 	private static instance: ChatsStore;
-	private _chats = $state<UsedChat[]>([]);
+	private _chats = $state<StoredChat[]>([]);
+	private _hasLoaded = $state(false);
 	private getDb = getDbService;
 
 	private constructor() {}
@@ -17,162 +18,39 @@ export class ChatsStore {
 		return this.instance;
 	}
 
-	public get chats(): UsedChat[] {
+	/* Loads multiple chats from the database */
+	public async loadLatestChats(): Promise<string[]> {
+		const chats = await (await this.getDb()).getLatestChats();
+		this._chats.push(...chats);
+		this._hasLoaded = true;
+		return chats.map((chat) => chat._id);
+	}
+
+	public get chats(): StoredChat[] {
 		return this._chats;
 	}
 
 	/* Retrieves a chat by its ID */
-	public getChat(chatId: string): UsedChat | undefined {
+	public getChat(chatId: string): StoredChat | undefined {
 		return this._chats.find((chat) => chat._id === chatId);
 	}
 
 	/* Adds a new chat to the store */
-	public async addChat(chat: UsedChat): Promise<void> {
+	public async addChat(chat: StoredChat): Promise<void> {
 		const i = this._chats.findIndex((c) => c._id === chat._id);
 		if (i !== -1) this._chats[i] = chat;
 		else this._chats.push(chat);
 
-		const storedChat = usedToStoredChat(chat);
-		await (await this.getDb()).putChat($state.snapshot(storedChat));
-		for (const message of chat.messages) {
-			await (await this.getDb()).putMessage($state.snapshot(message));
-		}
-	}
-
-	/* Adds multiple chats to the store */
-	public async addChats(chats: UsedChat[]): Promise<void> {
-		for (const chat of chats) {
-			await this.addChat(chat);
-		}
+		await (await this.getDb()).putChat($state.snapshot(chat));
 	}
 
 	/* Updates an existing chat in the store */
-	public async updateChat(chatToUpdate: UsedChat): Promise<void> {
+	public async updateChat(chatToUpdate: StoredChat): Promise<void> {
 		const i = this._chats.findIndex((c) => c._id === chatToUpdate._id);
 		if (i === -1) return;
 		this._chats[i] = chatToUpdate;
 
-		const storedChat = usedToStoredChat(chatToUpdate);
-		await (await this.getDb()).putChat($state.snapshot(storedChat));
-	}
-
-	public async updateChatMetadata(chatId: string, metadata: Partial<StoredChat>): Promise<void> {
-		const i = this._chats.findIndex((c) => c._id === chatId);
-		if (i === -1) return;
-		this._chats[i] = { ...this._chats[i], ...metadata };
-		await this.updateChat(this._chats[i]);
-	}
-
-	/* Adds a new message to a chat */
-	public async addMessage(message: StoredMessage): Promise<void> {
-		const i = this._chats.findIndex((c) => c._id === message.chatId);
-		if (i === -1) return;
-		const chat = this._chats[i];
-		chat.messages.push(message);
-
-		await (await this.getDb()).putMessage($state.snapshot(message));
-	}
-
-	/* Updates an existing message in a chat */
-	public async updateMessage(message: StoredMessage): Promise<void> {
-		const i = this._chats.findIndex((c) => c._id === message.chatId);
-		if (i === -1) return;
-		const chat = this._chats[i];
-		const messageIndex = chat.messages.findIndex((m) => m._id === message._id);
-		if (messageIndex === -1) return;
-		chat.messages[messageIndex] = message;
-
-		await (await this.getDb()).putMessage($state.snapshot(message));
-	}
-
-	public async handleIncomingMessage(message: StoredMessage): Promise<void> {
-		const i = this._chats.findIndex((c) => c._id === message.chatId);
-		if (i === -1) return;
-		const chat = this._chats[i];
-
-		const lastModified =
-			chat.lastModified.localeCompare(message.sendTime) > 0 ? chat.lastModified : message.sendTime;
-		const lastSequence = Math.max(chat.lastSequence, message.sequence);
-		const updatedChat: UsedChat = {
-			_id: chat._id,
-			users: chat.users.map((user) => {
-				if (user._id !== getCookie('userId')) {
-					return { ...user, lastReadSequence: lastSequence };
-				}
-				return user;
-			}),
-			messages: [...chat.messages, message],
-			lastSequence,
-			lastModified
-		};
-
-		await this.updateChat(updatedChat);
-		await (await this.getDb()).putMessage($state.snapshot(message));
-	}
-
-	public async handleIncomingReadUpdate(chatId: string, sequence: number): Promise<void> {
-		const i = this._chats.findIndex((c) => c._id === chatId);
-		if (i === -1) return;
-		const chat = this._chats[i];
-
-		const lastSequence = Math.max(
-			chat.users.find((user) => user._id !== getCookie('userId'))!.lastReadSequence,
-			sequence
-		);
-		const updatedChat = {
-			_id: chat._id,
-			users: chat.users.map((user) => {
-				if (user._id !== getCookie('userId')) {
-					return { ...user, lastReadSequence: lastSequence };
-				}
-				return user;
-			}),
-			messages: chat.messages,
-			lastSequence: chat.lastSequence,
-			lastModified: chat.lastModified
-		};
-		await this.updateChat(updatedChat);
-	}
-
-	/* Adds a new pending message to a chat */
-	public async addPendingMessage(pendingMessage: PendingMessage): Promise<void> {
-		const i = this._chats.findIndex((c) => c._id === pendingMessage.chatId);
-		if (i === -1) return;
-		this._chats[i].messages.push(pendingMessage);
-
-		await (await this.getDb()).putPendingMessage($state.snapshot(pendingMessage));
-	}
-
-	/* Handles a pending message promotion */
-	public async handlePendingMessagePromotion(
-		tempId: string,
-		message: StoredMessage
-	): Promise<void> {
-		const i = this._chats.findIndex((c) => c._id === message.chatId);
-		if (i === -1) return;
-		const chat = this._chats[i];
-		const messageIndex = chat.messages.findIndex((m) => m._id === tempId);
-		if (messageIndex === -1) return;
-		chat.messages[messageIndex] = message;
-
-		const lastModified =
-			chat.lastModified.localeCompare(message.sendTime) > 0 ? chat.lastModified : message.sendTime;
-		const lastSequence = Math.max(chat.lastSequence, message.sequence);
-		const updatedChat: UsedChat = {
-			_id: chat._id,
-			users: chat.users.map((user) => {
-				if (user._id === getCookie('userId')) {
-					return { ...user, lastReadSequence: lastSequence };
-				}
-				return user;
-			}),
-			messages: chat.messages,
-			lastSequence,
-			lastModified
-		};
-
-		await this.updateChat(updatedChat);
-		await (await this.getDb()).promotePendingMessage(tempId, $state.snapshot(message));
+		await (await this.getDb()).putChat($state.snapshot(chatToUpdate));
 	}
 
 	/* Sorts chats by last modified date */
@@ -181,8 +59,12 @@ export class ChatsStore {
 	}
 
 	/* Returns the index of a chat in the store */
-	public indexOf(chat: UsedChat): number {
+	public indexOf(chat: StoredChat): number {
 		return this._chats.indexOf(chat);
+	}
+
+	public get hasLoaded(): boolean {
+		return this._hasLoaded;
 	}
 }
 

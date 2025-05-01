@@ -5,9 +5,17 @@
 	import AddChatButton from '$lib/components/AddChatButton.svelte';
 
 	import { formatISODate, getOtherUsername, getCookie } from '$lib/utils.svelte';
-	import type { UsedChat } from '$lib/types/dataTypes';
+	import type { StoredChat, StoredMessage } from '$lib/types/dataTypes';
 
-	const { chats, onChatChange }: { chats: UsedChat[]; onChatChange?: () => void } = $props();
+	const {
+		chats,
+		lastMessages,
+		onChatChange
+	}: {
+		chats: StoredChat[];
+		lastMessages: Record<string, StoredMessage | undefined>;
+		onChatChange?: () => void;
+	} = $props();
 
 	let showAddChat = $state(false);
 	let bottomObserver = $state<IntersectionObserver>();
@@ -100,7 +108,7 @@
 		bind:this={scrollableContent}
 		onscroll={showScrollbar ? scrollBar.updateThumbPosition : null}
 	>
-		{#each lastChats as { _id, users, messages, lastSequence, lastModified }, i (_id)}
+		{#each lastChats as { _id, users, lastSequence, lastModified }, i (_id)}
 			<a
 				href="{page.url.origin}/chat/{_id}"
 				class="chat"
@@ -113,11 +121,12 @@
 				<p class="chat-name">{getOtherUsername(_id)}</p>
 				{#if lastSequence - users.find((user) => user._id === getCookie('userId'))!.lastReadSequence}
 					<p class="unread-count">
-						{lastSequence - users.find((user) => user._id === getCookie('userId'))!.lastReadSequence}
+						{lastSequence -
+							users.find((user) => user._id === getCookie('userId'))!.lastReadSequence}
 					</p>
 				{/if}
-				<p class="chat-message" class:system-message={!messages.length}>
-					{messages[messages.length - 1]?.plaintext ?? 'No messages'}
+				<p class="chat-message" class:system-message={!lastMessages[_id]}>
+					{lastMessages[_id]?.plaintext ?? 'No messages'}
 				</p>
 				<p class="send-date">{formatISODate(lastModified)}</p>
 			</a>
@@ -125,11 +134,7 @@
 		<div bind:this={bottom_anchor} class="anchor"></div>
 	</div>
 	{#if showScrollbar}
-		<Scrollbar
-			bind:this={scrollBar}
-			{scrollableContent}
-			width={0.4}
-		/>
+		<Scrollbar bind:this={scrollBar} {scrollableContent} width={0.4} />
 	{/if}
 
 	<button id="add-chat" onclick={() => (showAddChat = !showAddChat)}>

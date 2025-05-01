@@ -56,18 +56,37 @@ export async function fetchChatsUpdates(userId: ObjectId, chatIds: ObjectId[]): 
 /**
  * Inserts a new message into a chat and updates the chat's timestamp.
  */
-export async function sendEncMessage(
+export async function sendMessage(
   userId: ObjectId,
   chatId: ObjectId,
   ciphertext: MessageType
 ): Promise<{ sentMessage: MessageDocument; receivingUserId: ObjectId }> {
   try {
+    const now = new Date();
+    const bump = ciphertext.type === 1 ? 1 : 0;
     const result = await chatsCollection.findOneAndUpdate(
-      { _id: chatId },
-      {
-        $inc: { lastSequence: ciphertext.type === 1 ? 1 : 0 },
-        $set: { lastModified: new Date() },
-      },
+      { _id: chatId, "users._id": userId },
+      [
+        { $set: { lastSequence: { $add: ["$lastSequence", bump] } } },
+        {
+          $set: {
+            users: {
+              $map: {
+                input: "$users",
+                as: "user",
+                in: {
+                  $cond: [
+                    { $eq: ["$$user._id", userId] },
+                    { $mergeObjects: ["$$user", { lastReadSequence: "$lastSequence" }] },
+                    "$$user",
+                  ],
+                },
+              },
+            },
+            lastModified: now,
+          },
+        },
+      ],
       { returnDocument: "after" }
     );
     if (!result) {
@@ -79,7 +98,7 @@ export async function sendEncMessage(
       from: userId,
       ciphertext,
       sequence: newSeq,
-      sendTime: new Date(),
+      sendTime: now,
     });
     if (!acknowledged || !insertedId) {
       throw new Error(`Failed to insert message in chat ${chatId}`);

@@ -1,7 +1,7 @@
 import * as libsignal from '@privacyresearch/libsignal-protocol-typescript';
 import { SignalProtocolStore } from './SignalProtocolStore';
 import type { unorgonizedKeys } from './types/signalTypes';
-import type { ApiChat, ApiMessage, UsedChat, StoredMessage, StoredChat } from './types/dataTypes';
+import type { ApiChat, ApiMessage, StoredChat, StoredMessage } from './types/dataTypes';
 import { chatsStore } from './ChatsStore.svelte';
 import { browser } from '$app/environment';
 
@@ -127,17 +127,7 @@ export function getOtherUsername(chatId: string): string {
 	return otherUser?.username ?? '';
 }
 
-export function apiToUsedChat(chat: ApiChat): UsedChat {
-	return {
-		_id: chat._id,
-		users: chat.users,
-		messages: chat.messages,
-		lastSequence: chat.lastSequence,
-		lastModified: chat.lastModified
-	};
-}
-
-export function apiToStoredChat(chat: ApiChat): StoredChat {
+export function toStoredChat(chat: ApiChat): StoredChat {
 	return {
 		_id: chat._id,
 		users: chat.users,
@@ -146,21 +136,6 @@ export function apiToStoredChat(chat: ApiChat): StoredChat {
 	};
 }
 
-export function storedToUsedChat(chat: StoredChat, messages: StoredMessage[]): UsedChat {
-	return {
-		...chat,
-		messages
-	};
-}
-
-export function usedToStoredChat(chat: UsedChat): StoredChat {
-	return {
-		_id: chat._id,
-		users: chat.users,
-		lastSequence: chat.lastSequence,
-		lastModified: chat.lastModified
-	};
-}
 export function toStoredMessage(message: ApiMessage): StoredMessage {
 	return {
 		...message,

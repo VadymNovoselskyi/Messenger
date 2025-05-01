@@ -8,43 +8,35 @@ import { SignalProtocolStore } from './SignalProtocolStore';
 import { getDbService } from './DbService.svelte';
 import { chatsStore } from './ChatsStore.svelte';
 import { WsService, wsService } from './WsService.svelte';
+import { messagesStore } from './MessagesStore.svelte';
+import { getCookie } from '$lib/utils.svelte';
+import type { StoredChat } from '$lib/types/dataTypes';
 
-export async function loadAndSyncChats(): Promise<void> {
-	const latestChats = await (await getDbService()).getLatestChats();
-	const convertedChats = await Promise.all(
-		latestChats.map(async (chat) => {
-			const messages = await (await getDbService()).getLatestMessages(chat._id);
-			return utils.storedToUsedChat(chat, messages);
-		})
-	);
-	chatsStore.addChats(convertedChats);
-	chatsStore.sortChats();
-
-	const call = WsService.createAPICall(apiTypes.API.FETCH_CHATS_UPDATES, {
-		chatIds: latestChats.map((chat) => chat._id)
-	});
+export async function syncChats(chatIds: string[]): Promise<void> {
 	try {
+		const call = WsService.createAPICall(apiTypes.API.FETCH_CHATS_UPDATES, {
+			chatIds
+		});
 		const response = await wsService.sendRequest(call);
 		const { chats } = response as apiTypes.fetchChatsUpdatesResponse;
 
 		const store = SignalProtocolStore.getInstance();
 		for (const chat of chats) {
-			const usedChat = utils.apiToUsedChat(chat);
+			const usedChat = utils.toStoredChat(chat);
+			const missedMessages = chat.messages;
 			const address = new libsignal.SignalProtocolAddress(utils.getOtherUsername(chat._id), 1);
 			const sessionCipher = new libsignal.SessionCipher(store, address);
 
-			for (const message of usedChat.messages) {
+			for (const message of missedMessages) {
+				const decryptedMessage: dataTypes.StoredMessage = message;
+
 				const ciphertext = message.ciphertext;
 				const cipherBinary = atob(ciphertext.body!);
 				const plaintext = await sessionCipher.decryptWhisperMessage(cipherBinary!, 'binary');
-				message.plaintext = new TextDecoder().decode(new Uint8Array(plaintext!));
-				await chatsStore.addMessage(message);
+				decryptedMessage.plaintext = new TextDecoder().decode(new Uint8Array(plaintext!));
+				await messagesStore.addMessage(decryptedMessage);
 			}
-			await chatsStore.updateChatMetadata(chat._id, {
-				users: chat.users,
-				lastSequence: chat.lastSequence,
-				lastModified: chat.lastModified
-			});
+			await chatsStore.updateChat(chat);
 		}
 		chatsStore.sortChats();
 	} catch (error) {
@@ -67,67 +59,6 @@ export async function sendReadUpdate(chatId: string, sequence: number): Promise<
 	}
 }
 
-export async function getExtraMessages(chatId: string, currentIndex: number): Promise<void> {
-	const call = WsService.createAPICall(apiTypes.API.EXTRA_MESSAGES, { chatId, currentIndex });
-	try {
-		const response = await wsService.sendRequest(call);
-		const { extraMessages } = response as apiTypes.getExtraMessagesResponse;
-
-		const chat = chatsStore.getChat(chatId);
-		if (!chat) {
-			alert(`No chat to add extra messages ${chatId}`);
-			return;
-		}
-		chat.messages = [
-			...extraMessages.map((message) => utils.toStoredMessage(message)),
-			...chat.messages
-		];
-	} catch (error) {
-		console.error('Error in getExtraMessages:', error);
-		throw error;
-	}
-}
-
-export async function getExtraNewMessages(chatId: string, unreadCount: number): Promise<void> {
-	const call = WsService.createAPICall(apiTypes.API.EXTRA_NEW_MESSAGES, { chatId, unreadCount });
-	try {
-		const response = await wsService.sendRequest(call);
-		const { extraNewMessages } = response as apiTypes.getExtraNewMessagesResponse;
-
-		const chat = chatsStore.getChat(chatId);
-		if (!chat) {
-			alert(`No chat to add extra messages ${chatId}`);
-			return;
-		}
-		chat.messages = [
-			...chat.messages,
-			...extraNewMessages.map((message) => utils.toStoredMessage(message))
-		];
-	} catch (error) {
-		console.error('Error in getExtraNewMessages:', error);
-		throw error;
-	}
-}
-
-export async function readAllUpdate(chatId: string): Promise<void> {
-	const call = WsService.createAPICall(apiTypes.API.READ_ALL, { chatId });
-	try {
-		await wsService.sendRequest(call);
-
-		const chat = chatsStore.getChat(chatId);
-		if (!chat) {
-			alert(`No chat to read all ${chatId}`);
-			return;
-		}
-		// Reset messages and unread counts in UI
-		chat.messages = [];
-		chat.lastSequence = 0;
-	} catch (error) {
-		console.error('Error in readAllUpdate:', error);
-		throw error;
-	}
-}
-
 export async function createChat(event: SubmitEvent): Promise<void> {
 	event.preventDefault();
 	const usernameInput = (event.currentTarget as HTMLFormElement).username as HTMLInputElement;
@@ -141,11 +72,11 @@ export async function createChat(event: SubmitEvent): Promise<void> {
 		const { createdChat, preKeyBundle } = response as apiTypes.createChatResponse;
 		if (!preKeyBundle) throw new Error(`no preKeyBundle received`);
 
-		const createdUsedChat = utils.apiToUsedChat(createdChat);
-		await chatsStore.addChat(createdUsedChat);
+		const createdStoredChat = utils.toStoredChat(createdChat);
+		await chatsStore.addChat(createdStoredChat);
 		chatsStore.sortChats();
 
-		await handleSessionBootstrap(username, createdUsedChat, preKeyBundle);
+		await handleSessionBootstrap(username, createdStoredChat, preKeyBundle);
 		return;
 	} catch (error) {
 		console.error('Error in createChat:', error);
@@ -221,7 +152,7 @@ export async function sendPreKeys(keys: signalTypes.unorgonizedKeys): Promise<vo
 	}
 }
 
-export async function sendEncMessage(chatId: string, text: string) {
+export async function sendMessage(chatId: string, text: string) {
 	try {
 		const chat = chatsStore.getChat(chatId);
 		if (!chat) throw new Error(`Chat with id ${chatId} not found`);
@@ -246,16 +177,36 @@ export async function sendEncMessage(chatId: string, text: string) {
 			sendTime: new Date().toISOString(),
 			isPending: true
 		};
-		await chatsStore.addPendingMessage(pendingMessage);
+		await messagesStore.addPendingMessage(pendingMessage);
 		chatsStore.sortChats();
 
-		const call = WsService.createAPICall(apiTypes.API.SEND_ENC_MESSAGE, { chatId, ciphertext });
-		const { sentMessage } = (await wsService.sendRequest(call)) as apiTypes.sendEncMessageResponse;
+		const call = WsService.createAPICall(apiTypes.API.SEND_MESSAGE, { chatId, ciphertext });
+		const { sentMessage } = (await wsService.sendRequest(call)) as apiTypes.sendMessageResponse;
+		const lastModified =
+			chat.lastModified.localeCompare(sentMessage.sendTime) > 0
+				? chat.lastModified
+				: sentMessage.sendTime;
+		const lastSequence = Math.max(chat.lastSequence, sentMessage.sequence);
+
 		const messageToStore: dataTypes.StoredMessage = {
 			...sentMessage,
 			plaintext: text
 		};
-		await chatsStore.handlePendingMessagePromotion(tempId, messageToStore);
+		const updatedChat: StoredChat = {
+			_id: chat._id,
+			users: chat.users.map((user) => {
+				if (user._id === getCookie('userId')) {
+					return { ...user, lastReadSequence: lastSequence };
+				}
+				return user;
+			}),
+			lastSequence,
+			lastModified
+		};
+
+		await messagesStore.handlePendingMessagePromotion(tempId, messageToStore);
+		await chatsStore.updateChat(updatedChat);
+		chatsStore.sortChats();
 		return;
 	} catch (error) {
 		console.error('Error in sendEncMessage:', error);
@@ -280,7 +231,7 @@ export async function sendPreKeyMessage(chatId: string, text: string = 'ESTABLIS
 
 async function handleSessionBootstrap(
 	username: string,
-	createdChat: dataTypes.UsedChat,
+	createdChat: dataTypes.StoredChat,
 	preKeyBundle: signalTypes.StringifiedPreKeyBundle
 ) {
 	const { _id } = createdChat;

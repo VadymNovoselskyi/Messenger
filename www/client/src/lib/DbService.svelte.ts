@@ -1,5 +1,5 @@
 import { browser } from '$app/environment';
-import type { UsedChat, StoredMessage, StoredChat, PendingMessage } from '$lib/types/dataTypes';
+import type { StoredMessage, StoredChat, PendingMessage } from '$lib/types/dataTypes';
 
 export class DbService {
 	private static instance: DbService;
@@ -64,6 +64,35 @@ export class DbService {
 		}
 		const high = chat.lastSequence;
 		const low = Math.max(1, high - limit + 1);
+
+		const tx = this.db.transaction(this.messagesStoreName, 'readonly');
+		const idx = tx.objectStore(this.messagesStoreName).index('by-chat-seq');
+		const range = IDBKeyRange.bound([chatId, low], [chatId, high]);
+		const req = idx.openCursor(range, 'prev');
+
+		const result: StoredMessage[] = [];
+		return new Promise((resolve, reject) => {
+			req.onsuccess = () => {
+				const cursor = req.result;
+				if (!cursor) {
+					return resolve(result.reverse());
+				}
+				result.push(cursor.value);
+				cursor.continue();
+			};
+			req.onerror = () => reject(req.error);
+		});
+	}
+
+	public async getMessagesByIndex(
+		chatId: string,
+		low: number,
+		high: number
+	): Promise<StoredMessage[]> {
+		const chat = await this.getChat(chatId);
+		if (!chat || chat.lastSequence <= 0) {
+			return [];
+		}
 
 		const tx = this.db.transaction(this.messagesStoreName, 'readonly');
 		const idx = tx.objectStore(this.messagesStoreName).index('by-chat-seq');

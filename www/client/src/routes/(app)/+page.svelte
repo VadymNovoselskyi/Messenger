@@ -3,12 +3,13 @@
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
 
-	import { loadAndSyncChats, sendPreKeys } from '$lib/api.svelte';
+	import { syncChats, sendPreKeys } from '$lib/api.svelte';
 	import { generateKeys, getCookie } from '$lib/utils.svelte';
 
 	import ChatList from '$lib/components/ChatList.svelte';
 	import { SignalProtocolStore } from '$lib/SignalProtocolStore';
 	import { chatsStore } from '$lib/ChatsStore.svelte';
+	import { messagesStore } from '$lib/MessagesStore.svelte';
 
 	onMount(async () => {
 		if (!browser) return;
@@ -24,7 +25,12 @@
 			await sendPreKeys(keys);
 		}
 
-		if (!chatsStore.chats.length) await loadAndSyncChats();
+		if (!chatsStore.hasLoaded || !messagesStore.hasLoaded) {
+			const chatIds = await chatsStore.loadLatestChats();
+			await messagesStore.loadLatestMessages(chatIds);
+			chatsStore.sortChats();
+			syncChats(chatIds);
+		}
 	});
 </script>
 
@@ -34,7 +40,7 @@
 
 <div id="wrapper">
 	<section id="chats-list">
-		<ChatList chats={chatsStore.chats} />
+		<ChatList chats={chatsStore.chats} lastMessages={messagesStore.getLatestMessages()} />
 	</section>
 
 	<section id="chat-display"></section>

@@ -1,29 +1,22 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
 
-	import {
-		loadAndSyncChats,
-		getExtraMessages,
-		readAllUpdate,
-		sendEncMessage,
-		sendPreKeys
-	} from '$lib/api.svelte';
+	import { syncChats, sendMessage, sendPreKeys } from '$lib/api.svelte';
 	import { generateKeys, getCookie, getOtherUsername } from '$lib/utils.svelte';
 
 	import ChatList from '$lib/components/ChatList.svelte';
 	import MessageList from '$lib/components/MessageList.svelte';
 	import { SignalProtocolStore } from '$lib/SignalProtocolStore';
 	import { chatsStore } from '$lib/ChatsStore.svelte';
+	import { messagesStore } from '$lib/MessagesStore.svelte';
+	import type { StoredChat, StoredMessage } from '$lib/types/dataTypes';
 
-	let chat = $derived(chatsStore.chats.find((chat) => chat._id === page.params.chatId));
+	let chat = $state<StoredChat | undefined>();
+	let messages = $state<StoredMessage[] | undefined>();
 	let messageList = $state() as MessageList;
-
-	// function onChatChange() {
-	// 	if (messageList) messageList.destroy();
-	// }
 
 	onMount(async () => {
 		if (!browser) return;
@@ -32,7 +25,6 @@
 			goto('/login');
 			return;
 		}
-		if (!chatsStore.chats.length) await loadAndSyncChats();
 
 		const store = SignalProtocolStore.getInstance();
 		const isFilled = await store.check();
@@ -40,14 +32,24 @@
 			const keys = await generateKeys();
 			await sendPreKeys(keys);
 		}
+
+		if (!chatsStore.hasLoaded || !messagesStore.hasLoaded) {
+			const chatIds = await chatsStore.loadLatestChats();
+			await messagesStore.loadLatestMessages(chatIds);
+			chatsStore.sortChats();
+			syncChats(chatIds);
+		}
 	});
 
 	$effect(() => {
 		const { chatId } = page.params;
+		if (!chatsStore.hasLoaded && !messagesStore.hasLoaded) return;
+		chat = chatsStore.getChat(chatId);
 		if (!chat) {
 			goto('/');
 			return;
 		}
+		messages = messagesStore.getChatMessages(chat._id);
 	});
 
 	async function sendMessagePrep(event: SubmitEvent) {
@@ -63,7 +65,7 @@
 		if (!chat) throw new Error(`Chat with id ${chatId} not found`);
 
 		// // Update UI immediately and reset unread if needed
-		sendEncMessage(chatId, input);
+		sendMessage(chatId, input);
 	}
 </script>
 
@@ -75,13 +77,18 @@
 
 <div id="wrapper">
 	<section id="chats-list">
-		<ChatList chats={chatsStore.chats} />
+		<ChatList chats={chatsStore.chats} lastMessages={messagesStore.getLatestMessages()} />
 	</section>
 
-	{#if chat}
-		{#key chat._id}
-			<MessageList bind:this={messageList} chat={chat} submitFn={sendMessagePrep} />
- 		{/key}
+	{#if chatsStore.hasLoaded && messagesStore.hasLoaded && chat}
+		{#key chat!._id}
+			<MessageList
+				bind:this={messageList}
+				{chat}
+				submitFn={sendMessagePrep}
+				messages={messages ?? []}
+			/>
+		{/key}
 	{/if}
 </div>
 

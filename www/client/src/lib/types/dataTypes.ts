@@ -1,17 +1,5 @@
 import type { MessageType } from '@privacyresearch/libsignal-protocol-typescript';
 
-export type UsedChat = {
-	_id: string;
-	users: {
-		_id: string;
-		username: string;
-		lastReadSequence: number;
-	}[];
-	messages: StoredMessage[];
-	lastSequence: number;
-	lastModified: string;
-};
-
 export type StoredChat = {
 	_id: string;
 	users: {
