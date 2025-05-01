@@ -21,6 +21,7 @@ export class MessagesStore {
 	public async loadLatestMessages(chatIds: string[]): Promise<void> {
 		for (const chatId of chatIds) {
 			const messages = await (await this.getDb()).getLatestMessages(chatId);
+            console.log(`loadLatestMessages: ${chatId}, ${messages.length}`);
 			this._messages[chatId] = messages;
 		}
 		this._hasLoaded = true;

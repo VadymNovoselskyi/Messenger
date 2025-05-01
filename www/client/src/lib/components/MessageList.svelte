@@ -36,21 +36,21 @@
 		MAX_PAGES,
 		PAGE_SIZE,
 		async (direction, elements) => {
+			let low: number;
 			if (direction === 'UP') {
-				const low = elements[elements.length - 1].sequence + 1;
-				const high = Math.min(lastSequence, low + PAGE_SIZE);
-				return (await getDbService()).getMessagesByIndex(chat._id, low, high);
-			} else {
-				const high = elements[0].sequence - 1;
-				const low = Math.max(1, high - PAGE_SIZE);
-				return (await getDbService()).getMessagesByIndex(chat._id, low, high);
-			}
-		}
+				low = Math.max(elements[0].sequence - PAGE_SIZE, 0);
+			} else if (direction === 'DOWN') {
+				low = Math.max(elements[elements.length - 1].sequence + 1, 0);
+			} else return [];
+
+			const high = Math.min(low + PAGE_SIZE - 1, lastSequence, elements[0].sequence - 1);
+			console.log(`low: ${low}, high: ${high}`);
+			if (low >= high) return [];
+
+			return (await getDbService()).getMessagesByIndex(chat._id, low, high);
+		},
+		lastSequence
 	);
-	// setInterval(() => {
-	// 	console.log(paginationService.currentPage);
-	// 	paginationService.changePage('DOWN');
-	// }, 4000);
 
 	// svelte-ignore state_referenced_locally
 	let startingLastReadSequenceMe = $state(
@@ -207,6 +207,8 @@
 			{/if}
 		{/each}
 		<div bind:this={bottomAnchor} id="bottom-anchor" class="anchor"></div>
+		<button onclick={() => paginationService.changePage('UP')}>UP⬆️</button>
+		<button onclick={() => paginationService.changePage('DOWN')}>DOWN⬇️</button>
 
 		<!-- <Loader promise={unreadMessagesPromise} /> -->
 	</section>

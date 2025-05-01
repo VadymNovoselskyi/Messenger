@@ -14,8 +14,9 @@
 	import { messagesStore } from '$lib/MessagesStore.svelte';
 	import type { StoredChat, StoredMessage } from '$lib/types/dataTypes';
 
-	let chat = $state<StoredChat | undefined>();
-	let messages = $state<StoredMessage[] | undefined>();
+	let { chatId } = $derived(page.params);
+	let chat = $derived(chatsStore.getChat(chatId));
+	let messages = $derived(messagesStore.getChatMessages(chatId));
 	let messageList = $state() as MessageList;
 
 	onMount(async () => {
@@ -42,14 +43,14 @@
 	});
 
 	$effect(() => {
-		const { chatId } = page.params;
-		if (!chatsStore.hasLoaded && !messagesStore.hasLoaded) return;
-		chat = chatsStore.getChat(chatId);
-		if (!chat) {
-			goto('/');
-			return;
-		}
-		messages = messagesStore.getChatMessages(chat._id);
+		chatId;
+		if (!chatsStore.hasLoaded || !messagesStore.hasLoaded) return;
+		untrack(() => {
+			if (!chat) {
+				goto('/');
+				return;
+			}
+		});
 	});
 
 	async function sendMessagePrep(event: SubmitEvent) {

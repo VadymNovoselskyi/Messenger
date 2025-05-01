@@ -13,20 +13,17 @@
     "@js-sdsl/ordered-map": "^4.4.2",
     "@privacyresearch/libsignal-protocol-typescript": "^0.0.16",
     "bcrypt": "^5.1.1",
-    "cors": "^2.8.5",
-    "dotenv": "^16.4.7",
-    "express": "^4.21.1",
-    "fs": "^0.0.1-security",
+    "dotenv": "^16.5.0",
     "jsonwebtoken": "^9.0.2",
-    "mongodb": "^6.11.0",
-    "ws": "^8.18.0"
+    "mongodb": "^6.16.0",
+    "ws": "^8.18.1"
   },
   "devDependencies": {
     "@types/bcrypt": "^5.0.2",
     "@types/jsonwebtoken": "^9.0.9",
-    "@types/node": "^22.13.9",
-    "@types/ws": "^8.18.0",
-    "tsx": "^4.19.3",
-    "typescript": "^5.8.2"
+    "@types/node": "^22.15.3",
+    "@types/ws": "^8.18.1",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
   }
 }
