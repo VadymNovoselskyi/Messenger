@@ -1,5 +1,6 @@
 import { browser } from '$app/environment';
 import type { StoredMessage, StoredChat, PendingMessage } from '$lib/types/dataTypes';
+import { getCookie } from './utils.svelte';
 
 export class DbService {
 	private static instance: DbService;
@@ -62,8 +63,13 @@ export class DbService {
 		if (!chat || chat.lastSequence <= 0) {
 			return [];
 		}
-		const high = chat.lastSequence;
-		const low = Math.max(1, high - limit + 1);
+		const lastReadSequence = chat.users.find(
+			(user) => user._id === getCookie('userId')
+		)!.lastReadSequence;
+
+		const unreadCount = chat.lastSequence - lastReadSequence;
+		const high = lastReadSequence + Math.min(unreadCount, Math.round(limit / 2));
+		const low = Math.max(high - limit + 1, 0);
 
 		const tx = this.db.transaction(this.messagesStoreName, 'readonly');
 		const idx = tx.objectStore(this.messagesStoreName).index('by-chat-seq');
@@ -84,6 +90,32 @@ export class DbService {
 		});
 	}
 
+	/** Fetch the last message for a chat. */
+	public async getLastMessage(chatId: string): Promise<StoredMessage | undefined> {
+		const chat = await this.getChat(chatId);
+		if (!chat || chat.lastSequence <= 0) {
+			return undefined;
+		}
+
+		const tx = this.db.transaction(this.messagesStoreName, 'readonly');
+		const idx = tx.objectStore(this.messagesStoreName).index('by-chat-seq');
+		const range = IDBKeyRange.bound([chatId, chat.lastSequence], [chatId, chat.lastSequence]);
+		const req = idx.openCursor(range, 'prev');
+
+		return new Promise((resolve, reject) => {
+			req.onsuccess = () => {
+				const cursor = req.result;
+				if (!cursor) {
+					return resolve(undefined);
+				}
+				resolve(cursor.value);
+				cursor.continue();
+			};
+			req.onerror = () => reject(req.error);
+		});
+	}
+
+	/** Fetch messages by index. */
 	public async getMessagesByIndex(
 		chatId: string,
 		low: number,

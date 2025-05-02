@@ -1,0 +1,18 @@
+#PROD
+# Use official Node.js image as base
+FROM node:lts-alpine
+
+# Set working directory inside the container
+WORKDIR /www/client
+
+# Copy only package manifests, install deps
+COPY package.json package-lock.json ./
+RUN npm ci
+
+# Copy source & build
+COPY . .
+RUN npm run build && \
+    npm prune --production
+
+ENV PORT=5173
+CMD ["npm","run","start"]

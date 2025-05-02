@@ -12,23 +12,29 @@ services:
   client:
     build:
       context: ./www/client
-      dockerfile: Dockerfile
+      # dockerfile: Dockerfile.prod
+      dockerfile: Dockerfile.local
     container_name: client
     volumes:
       - ./www/client:/www/client:cached
       - /www/client/node_modules
-    command: "npm run dev -- --host 0.0.0.0"
+    environment:
+      PORT: 5173
+    # command: "npm run start"
+    command: "npm run dev -- --host 0.0.0.0 --port 5173"
     cpus: 0.5
 
   server:
     build:
       context: ./www/server
-      dockerfile: Dockerfile
+      # dockerfile: Dockerfile.prod
+      dockerfile: Dockerfile.local
     container_name: server
     volumes:
       - ./www/server:/usr/src/server:cached
       - /usr/src/server/node_modules
-    command: npm run dev
+    # command: "npm run start"
+    command: "npm run dev"
     cpus: 0.5
 
   mongodb:

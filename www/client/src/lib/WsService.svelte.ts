@@ -243,6 +243,7 @@ export class WsService {
 			const { createdChat } = payload as createChatResponse;
 			const createdStoredChat = toStoredChat(createdChat);
 			await chatsStore.addChat(createdStoredChat);
+			messagesStore.addEmptyChat(createdStoredChat._id);
 			chatsStore.sortChats();
 			return;
 		} else {

@@ -4,14 +4,18 @@ export class PaginationService<T> {
 	private lowerLoadedPage = $state<number>(1);
 	private upperLoadedPage = $state<number>(1);
 
+	private start = $derived.by(() => {
+		return Math.max((this.lowerPage - this.lowerLoadedPage) * this.pageSize, 0);
+	});
+	private end = $derived.by(() => {
+		return Math.min(
+			this.elements.length - (this.upperLoadedPage - this.upperPage) * this.pageSize,
+			this.elements.length
+		);
+	});
 	private _paginatedElements = $derived.by<T[]>(() => {
-		this.elements;
-		console.log('pages', this.lowerPage, this.upperPage);
-		console.log('elements.length', this.elements.length);
-		const start = Math.max((this.lowerLoadedPage - this.lowerPage) * this.pageSize, 0);
-		const end = Math.min((this.upperPage - this.lowerPage + 1) * this.pageSize, this.elements.length);
-		console.log('start', start, 'end', end);
-		return this.elements.slice(start, end);
+		if (this.elements.length <= this.maxPages * this.pageSize) return this.elements;
+		return this.elements.slice(this.start, this.end);
 	});
 
 	constructor(
@@ -19,12 +23,13 @@ export class PaginationService<T> {
 		private maxPages: number,
 		private pageSize: number,
 		private getter: (direction: 'UP' | 'DOWN', elements: T[]) => Promise<T[]>,
-		private totalLength: number
+		private _totalLength: number
 	) {
-		this.lowerPage = Math.ceil(this.totalLength / this.pageSize);
-		this.upperPage = Math.ceil(this.totalLength / this.pageSize);
-		this.lowerLoadedPage = this.lowerPage;
-		this.upperLoadedPage = this.upperPage;
+		const totalPages = Math.ceil(this._totalLength / this.pageSize);
+		this.lowerPage = totalPages;
+		this.upperPage = totalPages;
+		this.lowerLoadedPage = totalPages;
+		this.upperLoadedPage = totalPages;
 	}
 
 	public get paginatedElements() {
@@ -32,7 +37,6 @@ export class PaginationService<T> {
 	}
 
 	public async changePage(direction: 'UP' | 'DOWN') {
-		//UP (the sendTime is older)
 		if (
 			(this.lowerPage === this.lowerLoadedPage && direction === 'UP') ||
 			(this.upperPage === this.upperLoadedPage && direction === 'DOWN')
@@ -40,23 +44,28 @@ export class PaginationService<T> {
 			const newElements = await this.getter(direction, this.elements);
 			if (!newElements.length) return;
 
-			this.elements = [
-				...(direction === 'DOWN' ? this.elements : []),
-				...newElements,
-				...(direction === 'UP' ? this.elements : [])
-			];
-
-			if (direction === 'UP') this.lowerLoadedPage = this.lowerPage - 1;
-			else if (direction === 'DOWN') this.upperLoadedPage = this.upperPage + 1;
-			// console.log(newElements.length, this.elements.length);
-			// console.log(this.elements[0].sequence, this.elements[this.elements.length - 1].sequence);
+			if (direction === 'UP') {
+				this.elements.unshift(...newElements);
+				this.lowerLoadedPage = this.lowerPage - 1;
+			} else {
+				this.elements.push(...newElements);
+				this.upperLoadedPage = this.upperPage + 1;
+			}
 		}
-		if (this.upperPage - this.lowerPage < this.maxPages) {
+		if (this.upperPage - this.lowerPage < this.maxPages - 1) {
 			if (direction === 'UP') this.lowerPage -= 1;
 			else if (direction === 'DOWN') this.upperPage += 1;
 		} else {
 			this.lowerPage += direction === 'DOWN' ? 1 : -1;
 			this.upperPage += direction === 'DOWN' ? 1 : -1;
+		}
+	}
+
+	public set totalLength(length: number) {
+		this._totalLength = length;
+
+		if (this._totalLength > this.upperLoadedPage * this.pageSize) {
+			this.upperLoadedPage = Math.ceil(this._totalLength / this.pageSize);
 		}
 	}
 }

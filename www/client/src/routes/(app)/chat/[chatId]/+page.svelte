@@ -13,6 +13,7 @@
 	import { chatsStore } from '$lib/ChatsStore.svelte';
 	import { messagesStore } from '$lib/MessagesStore.svelte';
 	import type { StoredChat, StoredMessage } from '$lib/types/dataTypes';
+	import Loader from '$lib/components/Loader.svelte';
 
 	let { chatId } = $derived(page.params);
 	let chat = $derived(chatsStore.getChat(chatId));
@@ -31,7 +32,7 @@
 		const isFilled = await store.check();
 		if (!isFilled) {
 			const keys = await generateKeys();
-			await sendPreKeys(keys);
+			sendPreKeys(keys);
 		}
 
 		if (!chatsStore.hasLoaded || !messagesStore.hasLoaded) {
@@ -77,20 +78,30 @@
 </svelte:head>
 
 <div id="wrapper">
-	<section id="chats-list">
-		<ChatList chats={chatsStore.chats} lastMessages={messagesStore.getLatestMessages()} />
-	</section>
-
-	{#if chatsStore.hasLoaded && messagesStore.hasLoaded && chat}
-		{#key chat!._id}
-			<MessageList
-				bind:this={messageList}
-				{chat}
-				submitFn={sendMessagePrep}
-				messages={messages ?? []}
-			/>
-		{/key}
+	{#if chatsStore.hasLoaded && messagesStore.hasLoaded}
+		<ChatList chats={chatsStore.chats} lastMessages={messagesStore.getLastMessages()} />
+	{:else}
+		<div class="chats-loader">
+			<Loader />
+		</div>
 	{/if}
+
+	<section id="chat-display">
+		{#if chatsStore.hasLoaded && messagesStore.hasLoaded && chat}
+			{#key chat!._id}
+				<MessageList
+					bind:this={messageList}
+					{chat}
+					submitFn={sendMessagePrep}
+					messages={messages ?? []}
+				/>
+			{/key}
+		{:else}
+			<div class="messages-loader">
+				<Loader />
+			</div>
+		{/if}
+	</section>
 </div>
 
 <style lang="scss">
@@ -98,5 +109,25 @@
 		display: grid;
 		grid-template-columns: minmax(14rem, 3fr) 8fr;
 		height: 94vh;
+
+		#chat-display {
+			background-color: #3a506b;
+			position: relative;
+		}
+	}
+
+	.chats-loader {
+		justify-self: center;
+		align-self: center;
+	}
+
+	.messages-loader {
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		justify-self: center;
+		align-self: center;
 	}
 </style>

@@ -37,20 +37,25 @@
 		PAGE_SIZE,
 		async (direction, elements) => {
 			let low: number;
+			let high: number;
 			if (direction === 'UP') {
 				low = Math.max(elements[0].sequence - PAGE_SIZE, 0);
+				high = Math.min(low + PAGE_SIZE - 1, elements[0].sequence - 1);
 			} else if (direction === 'DOWN') {
-				low = Math.max(elements[elements.length - 1].sequence + 1, 0);
+				low = Math.max(elements.at(-1)!.sequence + 1, 0);
+				high = Math.min(low + PAGE_SIZE - 1, lastSequence);
 			} else return [];
 
-			const high = Math.min(low + PAGE_SIZE - 1, lastSequence, elements[0].sequence - 1);
-			console.log(`low: ${low}, high: ${high}`);
 			if (low >= high) return [];
 
 			return (await getDbService()).getMessagesByIndex(chat._id, low, high);
 		},
 		lastSequence
 	);
+
+	$effect(() => {
+		paginationService.totalLength = lastSequence;
+	});
 
 	// svelte-ignore state_referenced_locally
 	let startingLastReadSequenceMe = $state(
@@ -79,10 +84,20 @@
 	let lastTimeoutTime = $state(0);
 	let readTimeoutId = $state<number>();
 
-	// let topObserver = createObserver(handleTopIntersection);
-	// let bottomObserver = createObserver(handleBottomIntersection);
+	let topObserver = new IntersectionObserver((entries) => {
+		for (const entry of entries) {
+			if (!entry.isIntersecting) continue;
+			handleTopIntersection();
+		}
+	});
+	let bottomObserver = new IntersectionObserver((entries) => {
+		for (const entry of entries) {
+			if (!entry.isIntersecting) continue;
+			handleBottomIntersection();
+		}
+	});
 
-	const READ_OBSERVER_OPTIONS: IntersectionObserverInit = { threshold: 0.9 };
+	const READ_OBSERVER_OPTIONS: IntersectionObserverInit = { threshold: 0.4 };
 	const readObserver = new IntersectionObserver((entries) => {
 		for (const entry of entries) {
 			if (!entry.isIntersecting) continue;
@@ -119,6 +134,9 @@
 			top: scrollTop,
 			behavior: 'instant'
 		});
+
+		topObserver.observe(topAnchor);
+		bottomObserver.observe(bottomAnchor);
 	}
 
 	function handleMessageRead(event: CustomEvent<IntersectionObserverEntry>) {
@@ -152,6 +170,52 @@
 		}, MAX_READ_TIMEOUT - timeoutOffset);
 		stashedReadCount++;
 		lastTimeoutTime = Date.now();
+	}
+
+	async function handleTopIntersection() {
+		const prevTopEl = paginationService.paginatedElements[0];
+		if (!prevTopEl) return;
+		const prevTopId = prevTopEl._id;
+		const prevTopSequence = prevTopEl.sequence;
+
+		if (prevTopSequence <= 1) return;
+
+		const wasDragging = scrollBar && scrollBar.isDraggingOn();
+		if (wasDragging) scrollBar.onMouseUp();
+
+		await paginationService.changePage('UP');
+		await tick();
+
+		const prevTopElement = document.getElementById(prevTopId);
+		if (prevTopElement) {
+			prevTopElement.scrollIntoView({ behavior: 'instant', block: 'start' });
+			scrollableContent.scrollTop -= SCROLL_ADJUSTMENT;
+		}
+
+		if (wasDragging) scrollBar.onMouseDown();
+	}
+
+	async function handleBottomIntersection() {
+		const prevBottomEl = paginationService.paginatedElements.at(-1);
+		if (!prevBottomEl) return;
+		const prevBottomId = prevBottomEl._id;
+		const prevBottomSequence = prevBottomEl.sequence;
+
+		if (prevBottomSequence === lastSequence) return;
+
+		const wasDragging = scrollBar && scrollBar.isDraggingOn();
+		if (wasDragging) scrollBar.onMouseUp();
+
+		await paginationService.changePage('DOWN');
+		await tick();
+
+		const prevBottomElement = document.getElementById(prevBottomId);
+		if (prevBottomElement) {
+			prevBottomElement.scrollIntoView({ behavior: 'instant', block: 'end' });
+			scrollableContent.scrollTop += SCROLL_ADJUSTMENT;
+		}
+
+		if (wasDragging) scrollBar.onMouseDown();
 	}
 
 	function getMessageReadStatus(sequence: number) {
@@ -207,8 +271,6 @@
 			{/if}
 		{/each}
 		<div bind:this={bottomAnchor} id="bottom-anchor" class="anchor"></div>
-		<button onclick={() => paginationService.changePage('UP')}>UP⬆️</button>
-		<button onclick={() => paginationService.changePage('DOWN')}>DOWN⬇️</button>
 
 		<!-- <Loader promise={unreadMessagesPromise} /> -->
 	</section>

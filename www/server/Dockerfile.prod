@@ -1,0 +1,16 @@
+#PROD
+FROM node:lts-alpine
+
+WORKDIR /usr/src/server
+
+# 1) Copy just package files, install deps
+COPY package.json package-lock.json ./
+RUN npm ci                    
+
+# 2) Copy source, compile TypeScript, prune dev-deps, then start
+COPY . .
+RUN npm run build && \
+    npm prune --production   
+
+# 3) Expose and launch the compiled server
+CMD ["npm", "run", "start"] 

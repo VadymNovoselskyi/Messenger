@@ -2,22 +2,7 @@ import WebSocket, { WebSocketServer } from "ws";
 import dotenv from "dotenv";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
-import {
-  readUpdate,
-  getExtraMessages,
-  getExtraNewMessages,
-  readAll,
-  createChat,
-  createUser,
-  findUser,
-  savePreKeys,
-  sendMessage,
-  findChat,
-  updateLastAckSequence,
-  updateLastAckReadSequence,
-  deleteMessages,
-  fetchChatsUpdates,
-} from "./mongodb/mongoApi.js";
+import * as mongoApi from "./mongodb/mongoApi.js";
 import { base64ToBinary, generateToken } from "./utils.js";
 
 import * as apiTypes from "./types/apiTypes.js";
@@ -104,7 +89,7 @@ wss.on("connection", ws => {
     if (api === apiTypes.API.LOGIN) {
       const { username, password } = payload as apiTypes.loginPayload;
       try {
-        const user = await findUser(username);
+        const user = await mongoApi.findUser(username);
         const isPasswordValid = await bcrypt.compare(password, user.password);
         if (!isPasswordValid) {
           return deliveryService.sendMessage(ws.userId ?? "", {
@@ -156,7 +141,7 @@ wss.on("connection", ws => {
       }
 
       try {
-        const userId = await createUser(username, password, preKeyBundleReconstructed);
+        const userId = await mongoApi.createUser(username, password, preKeyBundleReconstructed);
         const token = generateToken(userId.toString());
         ws.isAuthenticated = true;
         ws.userId = userId.toString();
@@ -239,7 +224,7 @@ async function handleAuthenticatedCall(
     switch (api) {
       case apiTypes.API.FETCH_CHATS_UPDATES: {
         const { chatIds } = payload as apiTypes.fetchChatsUpdatesPayload;
-        const chats = await fetchChatsUpdates(
+        const chats = await mongoApi.fetchChatsUpdates(
           new ObjectId(userId),
           chatIds.map(id => new ObjectId(id))
         );
@@ -257,7 +242,7 @@ async function handleAuthenticatedCall(
       }
       case apiTypes.API.READ_UPDATE: {
         const { chatId, sequence } = payload as apiTypes.readUpdatePayload;
-        const { receivingUserId } = await readUpdate(
+        const { receivingUserId } = await mongoApi.readUpdate(
           new ObjectId(userId),
           new ObjectId(chatId),
           sequence
@@ -274,7 +259,7 @@ async function handleAuthenticatedCall(
               payload: { chatId, sequence },
             },
             () => {
-              updateLastAckReadSequence(
+              mongoApi.updateLastAckReadSequence(
                 new ObjectId(chatId),
                 new ObjectId(receivingUserId),
                 sequence
@@ -286,7 +271,7 @@ async function handleAuthenticatedCall(
       }
       case apiTypes.API.EXTRA_MESSAGES: {
         const { chatId, currentIndex } = payload as apiTypes.getExtraMessagesPayload;
-        const extraMessages = await getExtraMessages(new ObjectId(chatId), currentIndex);
+        const extraMessages = await mongoApi.getExtraMessages(new ObjectId(chatId), currentIndex);
         deliveryService.sendMessage(userId, {
           id,
           api,
@@ -297,7 +282,7 @@ async function handleAuthenticatedCall(
       }
       case apiTypes.API.EXTRA_NEW_MESSAGES: {
         const { chatId, unreadCount } = payload as apiTypes.getExtraNewMessagesPayload;
-        const extraNewMessages = await getExtraNewMessages(new ObjectId(chatId), unreadCount);
+        const extraNewMessages = await mongoApi.getExtraNewMessages(new ObjectId(chatId), unreadCount);
         deliveryService.sendMessage(userId, {
           id,
           api,
@@ -311,7 +296,7 @@ async function handleAuthenticatedCall(
       }
       case apiTypes.API.READ_ALL: {
         const { chatId } = payload as apiTypes.readAllPayload;
-        await readAll(new ObjectId(chatId), new ObjectId(ws.userId));
+        await mongoApi.readAll(new ObjectId(chatId), new ObjectId(ws.userId));
         deliveryService.sendMessage(userId, {
           id,
           api,
@@ -322,7 +307,7 @@ async function handleAuthenticatedCall(
       }
       case apiTypes.API.CREATE_CHAT: {
         const { username } = payload as apiTypes.createChatPayload;
-        const { createdChat, receivingUserId, preKeyBundle } = await createChat(
+        const { createdChat, receivingUserId, preKeyBundle } = await mongoApi.createChat(
           new ObjectId(userId),
           username
         );
@@ -364,12 +349,12 @@ async function handleAuthenticatedCall(
           });
         }
 
-        await savePreKeys(new ObjectId(userId), preKeyBundleReconstructed);
+        await mongoApi.savePreKeys(new ObjectId(userId), preKeyBundleReconstructed);
         break;
       }
       case apiTypes.API.SEND_PRE_KEY_MESSAGE: {
         const { chatId, ciphertext } = payload as apiTypes.sendPreKeyMessagePayload;
-        const chat = await findChat(new ObjectId(chatId));
+        const chat = await mongoApi.findChat(new ObjectId(chatId));
         const receivingUserId = chat.users.find(user => user._id.toString() !== userId)?._id;
         if (!receivingUserId) throw new Error(`User with id ${userId} not found in chat ${chatId}`);
 
@@ -387,7 +372,7 @@ async function handleAuthenticatedCall(
 
       case apiTypes.API.SEND_MESSAGE: {
         const { chatId, ciphertext } = payload as apiTypes.sendMessagePayload;
-        const { sentMessage, receivingUserId } = await sendMessage(
+        const { sentMessage, receivingUserId } = await mongoApi.sendMessage(
           new ObjectId(userId),
           new ObjectId(chatId),
           ciphertext
@@ -404,17 +389,17 @@ async function handleAuthenticatedCall(
               payload: { chatId, message: sentMessage },
             },
             () => {
-              updateLastAckSequence(
+              mongoApi.updateLastAckSequence(
                 new ObjectId(chatId),
                 new ObjectId(receivingUserId),
                 sentMessage.sequence
               );
-              updateLastAckReadSequence(
+              mongoApi.updateLastAckReadSequence(
                 new ObjectId(chatId),
                 new ObjectId(receivingUserId),
                 sentMessage.sequence
               );
-              deleteMessages(new ObjectId(chatId), sentMessage.sequence);
+              mongoApi.deleteMessages(new ObjectId(chatId), sentMessage.sequence);
             }
           );
         }

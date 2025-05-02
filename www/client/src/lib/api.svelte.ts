@@ -74,6 +74,7 @@ export async function createChat(event: SubmitEvent): Promise<void> {
 
 		const createdStoredChat = utils.toStoredChat(createdChat);
 		await chatsStore.addChat(createdStoredChat);
+		messagesStore.addEmptyChat(createdStoredChat._id);
 		chatsStore.sortChats();
 
 		await handleSessionBootstrap(username, createdStoredChat, preKeyBundle);
@@ -168,7 +169,7 @@ export async function sendMessage(chatId: string, text: string) {
 		const tempId = utils.generateId();
 		const pendingMessage: dataTypes.PendingMessage = {
 			_id: tempId,
-			sequence: -1,
+			sequence: chat.lastSequence + 1,
 			tempId: tempId,
 			chatId,
 			from: utils.getCookie('userId') ?? '',

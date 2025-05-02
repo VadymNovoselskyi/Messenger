@@ -10,6 +10,7 @@
 	import { SignalProtocolStore } from '$lib/SignalProtocolStore';
 	import { chatsStore } from '$lib/ChatsStore.svelte';
 	import { messagesStore } from '$lib/MessagesStore.svelte';
+	import Loader from '$lib/components/Loader.svelte';
 
 	onMount(async () => {
 		if (!browser) return;
@@ -22,7 +23,7 @@
 		const isFilled = await store.check();
 		if (!isFilled) {
 			const keys = await generateKeys();
-			await sendPreKeys(keys);
+			sendPreKeys(keys);
 		}
 
 		if (!chatsStore.hasLoaded || !messagesStore.hasLoaded) {
@@ -39,9 +40,15 @@
 </svelte:head>
 
 <div id="wrapper">
-	<section id="chats-list">
-		<ChatList chats={chatsStore.chats} lastMessages={messagesStore.getLatestMessages()} />
-	</section>
+	{#if chatsStore.hasLoaded && messagesStore.hasLoaded}
+		<section id="chats-list">
+			<ChatList chats={chatsStore.chats} lastMessages={messagesStore.getLastMessages()} />
+		</section>
+	{:else}
+		<div class="chats-loader">
+			<Loader />
+		</div>
+	{/if}
 
 	<section id="chat-display"></section>
 </div>
@@ -55,5 +62,10 @@
 		#chat-display {
 			background-color: #3a506b;
 		}
+	}
+
+	.chats-loader {
+		justify-self: center;
+		align-self: center;
 	}
 </style>

@@ -1,11 +1,11 @@
-# Use official Node.js image as base
-FROM node:latest
+#LOCAL
+FROM node:lts-alpine
 
 # Set working directory inside the container
 WORKDIR /usr/src/server
 
 # Copy package.json and package-lock.json first (if available)
-COPY package*.json ./
+COPY package*.json package-lock.json ./
 
 # Install dependencies
 RUN npm install

@@ -6,6 +6,8 @@
 
 	import { formatISODate, getOtherUsername, getCookie } from '$lib/utils.svelte';
 	import type { StoredChat, StoredMessage } from '$lib/types/dataTypes';
+	import Loader from './Loader.svelte';
+	import { messagesStore } from '$lib/MessagesStore.svelte';
 
 	const {
 		chats,

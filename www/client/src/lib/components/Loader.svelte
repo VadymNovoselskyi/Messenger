@@ -1,16 +1,19 @@
 <script lang="ts">
-	let { promise }: { promise: Promise<any> } = $props();
+	let { promise }: { promise?: Promise<any> } = $props();
 </script>
 
-{#await promise}
+{#if promise}
+	{#await promise}
+		<div class="loader"></div>
+	{:catch error}
+		<p class="error-message">{error.message}</p>
+	{/await}
+{:else}
 	<div class="loader"></div>
-{:catch error}
-	<p class="error-message">{error.message}</p>
-{/await}
+{/if}
 
 <style lang="scss">
 	.loader {
-		grid-column: span 10;
 		justify-self: center;
 
 		width: 3rem;
@@ -33,7 +36,6 @@
 	}
 
 	.error-message {
-		grid-column: span 10;
 		justify-self: center;
 
 		background-color: rgba(255, 0, 0, 0.1);

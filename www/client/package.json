@@ -5,11 +5,15 @@
 	"scripts": {
 		"dev": "vite dev",
 		"build": "vite build",
+		"start": "node build/index.js",
 		"preview": "vite preview",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"format": "prettier --write .",
 		"lint": "prettier --check ."
+	},
+	"dependencies": {
+		"@privacyresearch/libsignal-protocol-typescript": "^0.0.16"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-auto": "^6.0.0",
@@ -24,8 +28,5 @@
 		"svelte-check": "^4.1.6",
 		"typescript": "^5.8.3",
 		"vite": "^6.3.4"
-	},
-	"dependencies": {
-		"@privacyresearch/libsignal-protocol-typescript": "^0.0.16"
 	}
 }
