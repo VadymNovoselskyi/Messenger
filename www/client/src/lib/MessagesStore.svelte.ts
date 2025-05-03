@@ -38,13 +38,13 @@ export class MessagesStore {
 	}
 
 	/* Adds a new message to a chat */
-	public async addMessage(message: StoredMessage): Promise<void> {
+	public async addMessage(message: StoredMessage, isNecessary = true): Promise<void> {
 		const messages = this._messages[message.chatId];
 		if (!messages) {
 			this._messages[message.chatId] = [message];
 			this._lastMessages[message.chatId] = message;
 		} else {
-			if ((this._messages[message.chatId]?.at(-1)?.sequence ?? 0) === message.sequence - 1) {
+			if (isNecessary && (this._messages[message.chatId]?.at(-1)?.sequence ?? 0) === message.sequence - 1) {
 				messages.push(message);
 			}
 			if ((this._lastMessages[message.chatId]?.sequence ?? 0) < message.sequence) {

@@ -12,6 +12,7 @@ export type ChatDocument = {
     lastAckSequence: number;
     lastAckReadSequence: number;
   }[];
+  unacknowledgedBy: ObjectId;
   lastSequence: number;
   lastModified: Date;
 };
@@ -24,6 +25,7 @@ export type UserDocument = {
   signedPreKey: BinarySignedPreKey;
   preKeys: BinaryPreKey[];
   password: string;
+  lastMetadataSync: Date;
 };
 
 export type MessageDocument = {

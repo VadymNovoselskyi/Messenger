@@ -26,6 +26,16 @@ export async function toApiChat(chat: ChatDocument, messages: MessageDocument[])
   };
 }
 
+export function toApiChatMetadata(chat: ChatDocument): ApiChat {
+  return {
+    _id: chat._id.toString(),
+    users: chat.users.map(user => toApiUser(user)),
+    messages: [],
+    lastSequence: chat.lastSequence,
+    lastModified: chat.lastModified.toISOString(),
+  };
+}
+
 export function toApiMessage(message: MessageDocument): ApiMessage {
   return {
     _id: message._id.toString(),

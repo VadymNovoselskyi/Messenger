@@ -7,8 +7,8 @@ import {
 export class SignalProtocolStore implements StorageType {
 	private static instance: SignalProtocolStore;
 	private dbPromise: Promise<IDBDatabase>;
-	private dbName: string = 'SignalProtocolStore';
-	private storeName: string = 'store';
+	private dbName: string = 'EncyptionStore';
+	private storeName: string = 'signalProtocolStore';
 
 	constructor() {
 		this.dbPromise = new Promise((resolve, reject) => {

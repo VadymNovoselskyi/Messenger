@@ -1,3 +1,4 @@
+import { page } from '$app/state';
 import { goto } from '$app/navigation';
 import * as utils from '$lib/utils.svelte';
 import * as dataTypes from '$lib/types/dataTypes';
@@ -11,34 +12,58 @@ import { WsService, wsService } from './WsService.svelte';
 import { messagesStore } from './MessagesStore.svelte';
 import { getCookie } from '$lib/utils.svelte';
 import type { StoredChat } from '$lib/types/dataTypes';
+import { SessionRecord } from '@privacyresearch/libsignal-protocol-typescript/lib/session-record';
+import { tick } from 'svelte';
 
-export async function syncChats(chatIds: string[]): Promise<void> {
+export async function syncActiveChats(chatIds: string[]): Promise<string[]> {
 	try {
-		const call = WsService.createAPICall(apiTypes.API.FETCH_CHATS_UPDATES, {
+		const call = WsService.createAPICall(apiTypes.API.SYNC_ACTIVE_CHATS, {
 			chatIds
 		});
 		const response = await wsService.sendRequest(call);
-		const { chats } = response as apiTypes.fetchChatsUpdatesResponse;
+		const { chats } = response as apiTypes.syncActiveChatsResponse;
 
 		const store = SignalProtocolStore.getInstance();
+
+		const incompleteChatIds: string[] = [];
+		const { chatId } = page.params;
 		for (const chat of chats) {
-			const usedChat = utils.toStoredChat(chat);
+			await chatsStore.updateChat(chat);
 			const missedMessages = chat.messages;
 			const address = new libsignal.SignalProtocolAddress(utils.getOtherUsername(chat._id), 1);
 			const sessionCipher = new libsignal.SessionCipher(store, address);
 
-			for (const message of missedMessages) {
+			for (const [index, message] of missedMessages.entries()) {
+				if (index === 0 && chat._id === chatId) goto('/');
 				const decryptedMessage: dataTypes.StoredMessage = message;
 
 				const ciphertext = message.ciphertext;
 				const cipherBinary = atob(ciphertext.body!);
 				const plaintext = await sessionCipher.decryptWhisperMessage(cipherBinary!, 'binary');
 				decryptedMessage.plaintext = new TextDecoder().decode(new Uint8Array(plaintext!));
-				await messagesStore.addMessage(decryptedMessage);
+				await messagesStore.addMessage(decryptedMessage, index < 20 ? true : false);
+				await tick();
+				if (index === 0 && chat._id === chatId) goto(`/chat/${chatId}`);
 			}
-			await chatsStore.updateChat(chat);
+			if (chat.lastSequence > chat.messages.at(-1)!.sequence) incompleteChatIds.push(chat._id);
 		}
 		chatsStore.sortChats();
+		return incompleteChatIds;
+	} catch (error) {
+		console.error('Error in getChats:', error);
+		throw error;
+	}
+}
+
+export async function syncAllChatsMetadata(): Promise<boolean> {
+	try {
+		const call = WsService.createAPICall(apiTypes.API.SYNC_ALL_CHATS_METADATA, {});
+		const response = await wsService.sendRequest(call);
+		const { chats, isComplete } = response as apiTypes.syncAllChatsMetadataResponse;
+
+		for (const chat of chats) await chatsStore.updateChat(chat);
+		chatsStore.sortChats();
+		return isComplete;
 	} catch (error) {
 		console.error('Error in getChats:', error);
 		throw error;
@@ -215,7 +240,10 @@ export async function sendMessage(chatId: string, text: string) {
 	}
 }
 
-export async function sendPreKeyMessage(chatId: string, text: string = 'ESTABLISH_SESSION_SENDER') {
+export async function sendPreKeyWhisperMessage(
+	chatId: string,
+	text: string = 'ESTABLISH_SESSION_SENDER'
+) {
 	const chat = chatsStore.getChat(chatId);
 	if (!chat) throw new Error(`Chat with id ${chatId} not found`);
 
@@ -226,7 +254,11 @@ export async function sendPreKeyMessage(chatId: string, text: string = 'ESTABLIS
 	const ciphertext = await sessionCipher.encrypt(utils.textToArrayBuffer(text));
 	const base64Body = btoa(ciphertext.body!);
 	ciphertext.body = base64Body;
-	const call = WsService.createAPICall(apiTypes.API.SEND_PRE_KEY_MESSAGE, { chatId, ciphertext });
+
+	const call = WsService.createAPICall(apiTypes.API.SEND_PRE_KEY_WHISPER_MESSAGE, {
+		chatId,
+		ciphertext
+	});
 	await wsService.sendRequest(call);
 }
 
@@ -266,5 +298,11 @@ async function handleSessionBootstrap(
 	const sessionBuilder = new libsignal.SessionBuilder(store, receiverAddress);
 	await sessionBuilder.processPreKey(receiverDevice);
 
-	sendPreKeyMessage(_id);
+	await sendPreKeyWhisperMessage(_id);
+
+	const addressStr = receiverAddress.toString();
+	const serialized = await store.loadSession(addressStr);
+	const record = SessionRecord.deserialize(serialized);
+	record!.getOpenSession()!.pendingPreKey = undefined;
+	await store.storeSession(addressStr, record.serialize());
 }

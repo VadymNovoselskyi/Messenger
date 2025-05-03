@@ -3,7 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
 
-	import { syncChats, sendPreKeys } from '$lib/api.svelte';
+	import { syncActiveChats, sendPreKeys, syncAllChatsMetadata } from '$lib/api.svelte';
 	import { generateKeys, getCookie } from '$lib/utils.svelte';
 
 	import ChatList from '$lib/components/ChatList.svelte';
@@ -27,10 +27,13 @@
 		}
 
 		if (!chatsStore.hasLoaded || !messagesStore.hasLoaded) {
-			const chatIds = await chatsStore.loadLatestChats();
-			await messagesStore.loadLatestMessages(chatIds);
+			let incompleteChatIds = await chatsStore.loadLatestChats();
+			await messagesStore.loadLatestMessages(incompleteChatIds);
 			chatsStore.sortChats();
-			syncChats(chatIds);
+
+			while (incompleteChatIds.length) incompleteChatIds = await syncActiveChats(incompleteChatIds);
+			let isComplete = await syncAllChatsMetadata();
+			while (!isComplete) isComplete = await syncAllChatsMetadata();
 		}
 	});
 </script>

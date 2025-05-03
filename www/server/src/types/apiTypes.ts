@@ -28,19 +28,15 @@ export type ApiUser = {
 
 export enum API {
   AUTHENTICATE = "authenticate",
-  FETCH_UPDATES = "fetchUpdates",
-  FETCH_CHATS_UPDATES = "fetchChatsUpdates",  
+  SYNC_ALL_CHATS_METADATA = "syncAllChatsMetadata",
+  SYNC_ACTIVE_CHATS = "syncActiveChats",  
   RECEIVE_MESSAGE = "receiveMessage",
-  RECEIVE_PRE_KEY_MESSAGE = "receivePreKeyMessage",
   READ_UPDATE = "readUpdate",
-  EXTRA_MESSAGES = "extraMessages",
-  EXTRA_NEW_MESSAGES = "extraNewMessages",
-  READ_ALL = "readAll",
   CREATE_CHAT = "createChat",
   LOGIN = "login",
   SIGNUP = "signup",
   SEND_KEYS = "sendKeys",
-  SEND_PRE_KEY_MESSAGE = "sendPreKeyMessage",
+  SEND_PRE_KEY_WHISPER_MESSAGE = "sendPreKeyWhisperMessage",
   SEND_MESSAGE = "sendMessage",
   PING = "ping",
   PONG = "pong",
@@ -57,38 +53,32 @@ export interface APIMessage {
 
 /** Union type for request payloads */
 export type messagePayload =
-  | fetchUpdatesPayload
-  | fetchChatsUpdatesPayload
+  | syncAllChatsMetadataPayload
+  | syncActiveChatsPayload
   | sendMessagePayload
   | readUpdatePayload
-  | getExtraMessagesPayload
-  | getExtraNewMessagesPayload
-  | readAllPayload
   | createChatPayload
   | loginPayload
   | sendKeysPayload
-  | sendPreKeyMessagePayload
+  | sendPreKeyWhisperMessagePayload
 
 /** Union type for response payloads */
 export type responsePayload =
-  | fetchUpdatesResponse
-  | fetchChatsUpdatesResponse
+  | syncAllChatsMetadataResponse
+  | syncActiveChatsResponse
   | sendMessageResponse
+  | sendPreKeyWhisperMessageResponse
   | receiveMessageResponse
-  | receivePreKeyMessageResponse
   | readUpdateResponse
-  | getExtraMessagesResponse
-  | getExtraNewMessagesResponse
-  | readAllResponse
   | createChatResponse
   | loginResponse
   | signupResponse
   | errorResponse
   | sendKeysResponse
 
-export type fetchUpdatesPayload = Record<string, never>;
+export type syncAllChatsMetadataPayload = Record<string, never>;
 
-export type fetchChatsUpdatesPayload = {
+export type syncActiveChatsPayload = {
   chatIds: string[];
 };
 
@@ -100,20 +90,6 @@ export type sendMessagePayload = {
 export type readUpdatePayload = {
   chatId: string;
   sequence: number;
-};
-
-export type getExtraMessagesPayload = {
-  chatId: string;
-  currentIndex: number;
-};
-
-export type getExtraNewMessagesPayload = {
-  chatId: string;
-  unreadCount: number;
-};
-
-export type readAllPayload = {
-  chatId: string;
 };
 
 export type createChatPayload = {
@@ -135,17 +111,18 @@ export type sendKeysPayload = {
   preKeyBundle: StringifiedPreKeyBundle;
 };
 
-export type sendPreKeyMessagePayload = {
+export type sendPreKeyWhisperMessagePayload = {
   chatId: string;
   ciphertext: MessageType;
 };
 
 //Responses
-export type fetchUpdatesResponse = {
+export type syncAllChatsMetadataResponse = {
   chats: ApiChat[];
+  isComplete: boolean;
 };
 
-export type fetchChatsUpdatesResponse = {
+export type syncActiveChatsResponse = {
   chats: ApiChat[];
 };
 
@@ -156,27 +133,15 @@ export type receiveMessageResponse = {
   message: MessageDocument;
 };
 
-export type receivePreKeyMessageResponse = {
+export type sendPreKeyWhisperMessageResponse = {
   chatId: string;
-  ciphertext: MessageType;
+  message: MessageDocument;
 };
 
 export type readUpdateResponse = {
   chatId: string;
   sequence: number;
 };
-
-export type getExtraMessagesResponse = {
-  chatId: string;
-  extraMessages: ApiMessage[];
-};
-
-export type getExtraNewMessagesResponse = {
-  chatId: string;
-  extraNewMessages: ApiMessage[];
-};
-
-export type readAllResponse = Record<string, never>;
 
 export type createChatResponse = {
   createdChat: ApiChat;

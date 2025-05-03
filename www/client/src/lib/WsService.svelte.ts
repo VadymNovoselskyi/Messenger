@@ -4,7 +4,7 @@ import { SessionCipher } from '@privacyresearch/libsignal-protocol-typescript';
 import { SignalProtocolAddress } from '@privacyresearch/libsignal-protocol-typescript';
 import { SignalProtocolStore } from './SignalProtocolStore';
 import { chatsStore } from './ChatsStore.svelte';
-import { sendPreKeyMessage } from './api.svelte';
+import { sendPreKeyWhisperMessage } from './api.svelte';
 import {
 	API,
 	type APIMessage,
@@ -14,7 +14,6 @@ import {
 	type messagePayload,
 	type readUpdateResponse,
 	type receiveMessageResponse,
-	type receivePreKeyMessageResponse,
 	type responsePayload
 } from './types/apiTypes';
 import { toStoredChat, generateId, getCookie, getOtherUsername } from './utils.svelte';
@@ -156,7 +155,6 @@ export class WsService {
 				try {
 					console.log('decryptPreKeyWhisperMessage');
 					await sessionCipher.decryptPreKeyWhisperMessage(cipherBinary!, 'binary');
-					sendPreKeyMessage(chatId, '');
 					return;
 				} catch (e) {
 					console.error(e);
@@ -193,49 +191,22 @@ export class WsService {
 			await chatsStore.updateChat(updatedChat);
 			await messagesStore.addMessage(messageToStore);
 			chatsStore.sortChats();
-		} else if (api === API.RECEIVE_PRE_KEY_MESSAGE) {
-			const { chatId, ciphertext } = payload as receivePreKeyMessageResponse;
-			const chat = chatsStore.getChat(chatId);
-			if (!chat) throw new Error(`Chat with id ${chatId} not found`);
-
-			const senderAddress: SignalProtocolAddress = new SignalProtocolAddress(
-				getOtherUsername(chatId),
-				1
-			);
-
-			const store = SignalProtocolStore.getInstance();
-			const sessionCipher = new SessionCipher(store, senderAddress);
-			const cipherBinary = atob(ciphertext.body!);
-
-			if (ciphertext.type === 3) {
-				try {
-					console.log('decryptPreKeyWhisperMessage');
-					await sessionCipher.decryptPreKeyWhisperMessage(cipherBinary!, 'binary');
-					sendPreKeyMessage(chatId, '');
-					return;
-				} catch (e) {
-					console.error(e);
-				}
-			}
-			if (ciphertext.type !== 1) throw new Error(`Unknown message type: ${ciphertext.type}`);
-
-			await sessionCipher.decryptWhisperMessage(cipherBinary!, 'binary');
 		} else if (api === API.READ_UPDATE) {
 			const { chatId, sequence } = payload as readUpdateResponse;
 			const chat = chatsStore.getChat(chatId);
 			if (!chat) throw new Error(`Chat with id ${chatId} not found`);
 
-            const lastSequence = Math.max(
-                chat.users.find((user) => user._id !== getCookie('userId'))!.lastReadSequence,
-                sequence
-            );
-            const updatedChat = {
-                ...chat,
-                users: chat.users.map((user) => {
-                    if (user._id !== getCookie('userId')) {
-                        return { ...user, lastReadSequence: lastSequence };
-                    }
-                    return user;
+			const lastSequence = Math.max(
+				chat.users.find((user) => user._id !== getCookie('userId'))!.lastReadSequence,
+				sequence
+			);
+			const updatedChat = {
+				...chat,
+				users: chat.users.map((user) => {
+					if (user._id !== getCookie('userId')) {
+						return { ...user, lastReadSequence: lastSequence };
+					}
+					return user;
 				})
 			};
 			await chatsStore.updateChat(updatedChat);

@@ -62,7 +62,7 @@ export async function generateKeys(): Promise<unorgonizedKeys> {
 
 	// Generate and store 100 one-time pre-keys
 	const oneTimePreKeys: libsignal.PreKeyPairType[] = [];
-	for (let i = 0; i < 100; i++) {
+	for (let i = 0; i < 10; i++) {
 		const prekey = await libsignal.KeyHelper.generatePreKey(i + 2);
 		oneTimePreKeys.push(prekey);
 		await store.storePreKey(prekey.keyId, prekey.keyPair);

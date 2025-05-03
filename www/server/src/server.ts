@@ -222,24 +222,65 @@ async function handleAuthenticatedCall(
 ): Promise<void> {
   try {
     switch (api) {
-      case apiTypes.API.FETCH_CHATS_UPDATES: {
-        const { chatIds } = payload as apiTypes.fetchChatsUpdatesPayload;
-        const chats = await mongoApi.fetchChatsUpdates(
+      case apiTypes.API.SYNC_ACTIVE_CHATS: {
+        const { chatIds } = payload as apiTypes.syncActiveChatsPayload;
+        const chats = await mongoApi.syncActiveChatsUpdates(
           new ObjectId(userId),
           chatIds.map(id => new ObjectId(id))
         );
 
-        deliveryService.sendMessage(userId, {
-          id,
-          api,
-          status: "SUCCESS",
-          payload: { chats },
-          // callback: () => {
-          //   console.log("Chats sent ACK");
-          // },
-        });
+        deliveryService.sendMessage(
+          userId,
+          {
+            id,
+            api,
+            status: "SUCCESS",
+            payload: { chats },
+          },
+          () => {
+            for (const chat of chats) {
+              const otherUser = chat.users.find(user => user._id.toString() !== userId)!;
+              mongoApi.updateLastAckSequence(
+                new ObjectId(chat._id),
+                new ObjectId(userId),
+                chat.messages.at(-1)!.sequence
+              );
+              mongoApi.updateLastAckReadSequence(
+                new ObjectId(chat._id),
+                new ObjectId(userId),
+                otherUser.lastReadSequence
+              );
+              mongoApi.deletePreviousMessages(
+                new ObjectId(chat._id),
+                chat.messages.at(-1)!.sequence
+              );
+            }
+          }
+        );
         break;
       }
+      case apiTypes.API.SYNC_ALL_CHATS_METADATA: {
+        const { chats, isComplete, unacknowledgedChats } = await mongoApi.syncAllChatsMetadata(
+          new ObjectId(userId)
+        );
+        deliveryService.sendMessage(
+          userId,
+          {
+            id,
+            api,
+            status: "SUCCESS",
+            payload: { chats, isComplete },
+          },
+          () => {
+            mongoApi.updateLastMetadataSync(new ObjectId(userId), chats.at(-1)!.lastModified);
+            for (const chat of unacknowledgedChats) {
+              mongoApi.markChatAsAcknowledged(new ObjectId(chat._id), new ObjectId(userId));
+            }
+          }
+        );
+        break;
+      }
+
       case apiTypes.API.READ_UPDATE: {
         const { chatId, sequence } = payload as apiTypes.readUpdatePayload;
         const { receivingUserId } = await mongoApi.readUpdate(
@@ -267,42 +308,6 @@ async function handleAuthenticatedCall(
             }
           );
         }
-        break;
-      }
-      case apiTypes.API.EXTRA_MESSAGES: {
-        const { chatId, currentIndex } = payload as apiTypes.getExtraMessagesPayload;
-        const extraMessages = await mongoApi.getExtraMessages(new ObjectId(chatId), currentIndex);
-        deliveryService.sendMessage(userId, {
-          id,
-          api,
-          status: "SUCCESS",
-          payload: { chatId, extraMessages: extraMessages.map(message => toApiMessage(message)) },
-        });
-        break;
-      }
-      case apiTypes.API.EXTRA_NEW_MESSAGES: {
-        const { chatId, unreadCount } = payload as apiTypes.getExtraNewMessagesPayload;
-        const extraNewMessages = await mongoApi.getExtraNewMessages(new ObjectId(chatId), unreadCount);
-        deliveryService.sendMessage(userId, {
-          id,
-          api,
-          status: "SUCCESS",
-          payload: {
-            chatId,
-            extraNewMessages: extraNewMessages.map(message => toApiMessage(message)),
-          },
-        });
-        break;
-      }
-      case apiTypes.API.READ_ALL: {
-        const { chatId } = payload as apiTypes.readAllPayload;
-        await mongoApi.readAll(new ObjectId(chatId), new ObjectId(ws.userId));
-        deliveryService.sendMessage(userId, {
-          id,
-          api,
-          status: "SUCCESS",
-          payload: {},
-        });
         break;
       }
       case apiTypes.API.CREATE_CHAT: {
@@ -352,21 +357,30 @@ async function handleAuthenticatedCall(
         await mongoApi.savePreKeys(new ObjectId(userId), preKeyBundleReconstructed);
         break;
       }
-      case apiTypes.API.SEND_PRE_KEY_MESSAGE: {
-        const { chatId, ciphertext } = payload as apiTypes.sendPreKeyMessagePayload;
-        const chat = await mongoApi.findChat(new ObjectId(chatId));
-        const receivingUserId = chat.users.find(user => user._id.toString() !== userId)?._id;
-        if (!receivingUserId) throw new Error(`User with id ${userId} not found in chat ${chatId}`);
+      case apiTypes.API.SEND_PRE_KEY_WHISPER_MESSAGE: {
+        const { chatId, ciphertext } = payload as apiTypes.sendPreKeyWhisperMessagePayload;
+        const { sentMessage, receivingUserId } = await mongoApi.sendPreKeyWhisperMessage(
+          new ObjectId(userId),
+          new ObjectId(chatId),
+          ciphertext
+        );
 
         const receivingUserWs = onlineUsers.getUser(receivingUserId.toString());
         if (receivingUserWs) {
           deliveryService.sendMessage(receivingUserId.toString(), {
             id,
-            api: apiTypes.API.RECEIVE_PRE_KEY_MESSAGE,
+            api: apiTypes.API.RECEIVE_MESSAGE,
             status: "SUCCESS",
-            payload: { chatId, ciphertext },
+            payload: { chatId, message: sentMessage },
           });
         }
+
+        deliveryService.sendMessage(userId, {
+          id,
+          api,
+          status: "SUCCESS",
+          payload: {},
+        });
         break;
       }
 
@@ -399,20 +413,27 @@ async function handleAuthenticatedCall(
                 new ObjectId(receivingUserId),
                 sentMessage.sequence
               );
-              mongoApi.deleteMessages(new ObjectId(chatId), sentMessage.sequence);
+              mongoApi.deletePreviousMessages(new ObjectId(chatId), sentMessage.sequence);
             }
           );
         }
 
-        // Confirm message delivery to the sender.
-        if (ciphertext.type !== 3) {
-          deliveryService.sendMessage(userId, {
+        deliveryService.sendMessage(
+          userId,
+          {
             id,
             api,
             status: "SUCCESS",
             payload: { sentMessage: toApiMessage(sentMessage) },
-          });
-        }
+          },
+          () => {
+            mongoApi.updateLastAckSequence(
+              new ObjectId(chatId),
+              new ObjectId(userId),
+              sentMessage.sequence
+            );
+          }
+        );
         break;
       }
 

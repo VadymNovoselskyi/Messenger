@@ -200,12 +200,12 @@
 		if (!prevBottomEl) return;
 		const prevBottomId = prevBottomEl._id;
 		const prevBottomSequence = prevBottomEl.sequence;
-
+		
 		if (prevBottomSequence === lastSequence) return;
-
+		
 		const wasDragging = scrollBar && scrollBar.isDraggingOn();
 		if (wasDragging) scrollBar.onMouseUp();
-
+		
 		await paginationService.changePage('DOWN');
 		await tick();
 
@@ -359,11 +359,6 @@
 				&::after {
 					margin-left: 2rem;
 				}
-			}
-
-			&#bottom-anchor {
-				grid-row: auto;
-				overflow-anchor: auto;
 			}
 		}
 

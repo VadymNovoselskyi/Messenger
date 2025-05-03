@@ -4,7 +4,7 @@
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
 
-	import { syncChats, sendMessage, sendPreKeys } from '$lib/api.svelte';
+	import { syncActiveChats, sendMessage, sendPreKeys, syncAllChatsMetadata } from '$lib/api.svelte';
 	import { generateKeys, getCookie, getOtherUsername } from '$lib/utils.svelte';
 
 	import ChatList from '$lib/components/ChatList.svelte';
@@ -12,7 +12,6 @@
 	import { SignalProtocolStore } from '$lib/SignalProtocolStore';
 	import { chatsStore } from '$lib/ChatsStore.svelte';
 	import { messagesStore } from '$lib/MessagesStore.svelte';
-	import type { StoredChat, StoredMessage } from '$lib/types/dataTypes';
 	import Loader from '$lib/components/Loader.svelte';
 
 	let { chatId } = $derived(page.params);
@@ -36,10 +35,13 @@
 		}
 
 		if (!chatsStore.hasLoaded || !messagesStore.hasLoaded) {
-			const chatIds = await chatsStore.loadLatestChats();
-			await messagesStore.loadLatestMessages(chatIds);
+			let incompleteChatIds = await chatsStore.loadLatestChats();
+			await messagesStore.loadLatestMessages(incompleteChatIds);
 			chatsStore.sortChats();
-			syncChats(chatIds);
+
+			while (incompleteChatIds.length) incompleteChatIds = await syncActiveChats(incompleteChatIds);
+			let isComplete = await syncAllChatsMetadata();
+			while (!isComplete) isComplete = await syncAllChatsMetadata();
 		}
 	});
 
