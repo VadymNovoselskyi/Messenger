@@ -4,8 +4,16 @@
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
 
-	import { syncActiveChats, sendMessage, sendPreKeys, syncAllChatsMetadata } from '$lib/api.svelte';
-	import { generateKeys, getCookie, getOtherUsername } from '$lib/utils.svelte';
+	import {
+		syncActiveChats,
+		sendMessage,
+		sendPreKeyBundle,
+		syncAllChatsMetadata,
+
+		sendPreKeys
+
+	} from '$lib/api.svelte';
+	import { generateEphemeralKeys, generatePreKeyBundle, getCookie, getOtherUsername } from '$lib/utils.svelte';
 
 	import ChatList from '$lib/components/ChatList.svelte';
 	import MessageList from '$lib/components/MessageList.svelte';
@@ -17,6 +25,7 @@
 	let { chatId } = $derived(page.params);
 	let chat = $derived(chatsStore.getChat(chatId));
 	let messages = $derived(messagesStore.getChatMessages(chatId));
+	let isSyncing = $state(false);
 	let messageList = $state() as MessageList;
 
 	onMount(async () => {
@@ -30,15 +39,24 @@
 		const store = SignalProtocolStore.getInstance();
 		const isFilled = await store.check();
 		if (!isFilled) {
-			const keys = await generateKeys();
-			sendPreKeys(keys);
+			const preKeysBundle = await generatePreKeyBundle(4);
+			sendPreKeyBundle(preKeysBundle);
+			setTimeout(() => {
+				generateEphemeralKeys(96).then((extraPreKeys) => sendPreKeys(extraPreKeys));
+			}, 10000);
 		}
 
 		if (!chatsStore.hasLoaded || !messagesStore.hasLoaded) {
-			let incompleteChatIds = await chatsStore.loadLatestChats();
-			await messagesStore.loadLatestMessages(incompleteChatIds);
+			const activeChats = await chatsStore.loadLatestChats();
+			await messagesStore.loadLatestMessages(activeChats);
+			if (chatsStore.getChat(chatId)) {
+				isSyncing = true;
+				await syncActiveChats([chatId]);
+			}
 			chatsStore.sortChats();
+			isSyncing = false;
 
+			let incompleteChatIds = activeChats;
 			while (incompleteChatIds.length) incompleteChatIds = await syncActiveChats(incompleteChatIds);
 			let isComplete = await syncAllChatsMetadata();
 			while (!isComplete) isComplete = await syncAllChatsMetadata();
@@ -89,7 +107,7 @@
 	{/if}
 
 	<section id="chat-display">
-		{#if chatsStore.hasLoaded && messagesStore.hasLoaded && chat}
+		{#if chatsStore.hasLoaded && messagesStore.hasLoaded && chat && !isSyncing}
 			{#key chat!._id}
 				<MessageList
 					bind:this={messageList}

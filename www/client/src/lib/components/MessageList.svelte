@@ -46,8 +46,7 @@
 				high = Math.min(low + PAGE_SIZE - 1, lastSequence);
 			} else return [];
 
-			if (low >= high) return [];
-
+			if (low > high) return [];
 			return (await getDbService()).getMessagesByIndex(chat._id, low, high);
 		},
 		lastSequence

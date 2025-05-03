@@ -125,7 +125,7 @@ export class DbService {
 		if (!chat || chat.lastSequence <= 0) {
 			return [];
 		}
-
+		
 		const tx = this.db.transaction(this.messagesStoreName, 'readonly');
 		const idx = tx.objectStore(this.messagesStoreName).index('by-chat-seq');
 		const range = IDBKeyRange.bound([chatId, low], [chatId, high]);

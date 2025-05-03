@@ -56,8 +56,13 @@ export class PaginationService<T> {
 			if (direction === 'UP') this.lowerPage -= 1;
 			else if (direction === 'DOWN') this.upperPage += 1;
 		} else {
-			this.lowerPage += direction === 'DOWN' ? 1 : -1;
-			this.upperPage += direction === 'DOWN' ? 1 : -1;
+			if (direction === 'UP') {
+				this.lowerPage -= 1;
+				this.upperPage = this.lowerPage + this.maxPages - 1;
+			} else {
+				this.upperPage += 1;
+				this.lowerPage = this.upperPage - this.maxPages + 1;
+			}
 		}
 	}
 
@@ -66,6 +71,7 @@ export class PaginationService<T> {
 
 		if (this._totalLength > this.upperLoadedPage * this.pageSize) {
 			this.upperLoadedPage = Math.ceil(this._totalLength / this.pageSize);
+			if (this.upperPage === this.upperLoadedPage - 1) this.upperPage += 1;
 		}
 	}
 }

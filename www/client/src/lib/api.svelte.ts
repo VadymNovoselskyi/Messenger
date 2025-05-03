@@ -26,26 +26,28 @@ export async function syncActiveChats(chatIds: string[]): Promise<string[]> {
 		const store = SignalProtocolStore.getInstance();
 
 		const incompleteChatIds: string[] = [];
-		const { chatId } = page.params;
 		for (const chat of chats) {
-			await chatsStore.updateChat(chat);
 			const missedMessages = chat.messages;
+			await chatsStore.updateChat(chat);
 			const address = new libsignal.SignalProtocolAddress(utils.getOtherUsername(chat._id), 1);
 			const sessionCipher = new libsignal.SessionCipher(store, address);
 
 			for (const [index, message] of missedMessages.entries()) {
-				if (index === 0 && chat._id === chatId) goto('/');
 				const decryptedMessage: dataTypes.StoredMessage = message;
 
 				const ciphertext = message.ciphertext;
 				const cipherBinary = atob(ciphertext.body!);
+				if (ciphertext.type === 3) {
+					await sessionCipher.decryptPreKeyWhisperMessage(cipherBinary!, 'binary');
+					continue;
+				}
 				const plaintext = await sessionCipher.decryptWhisperMessage(cipherBinary!, 'binary');
 				decryptedMessage.plaintext = new TextDecoder().decode(new Uint8Array(plaintext!));
 				await messagesStore.addMessage(decryptedMessage, index < 20 ? true : false);
-				await tick();
-				if (index === 0 && chat._id === chatId) goto(`/chat/${chatId}`);
 			}
-			if (chat.lastSequence > chat.messages.at(-1)!.sequence) incompleteChatIds.push(chat._id);
+			if (missedMessages.length && chat.lastSequence > missedMessages.at(-1)!.sequence) {
+				incompleteChatIds.push(chat._id);
+			}
 		}
 		chatsStore.sortChats();
 		return incompleteChatIds;
@@ -59,9 +61,11 @@ export async function syncAllChatsMetadata(): Promise<boolean> {
 	try {
 		const call = WsService.createAPICall(apiTypes.API.SYNC_ALL_CHATS_METADATA, {});
 		const response = await wsService.sendRequest(call);
-		const { chats, isComplete } = response as apiTypes.syncAllChatsMetadataResponse;
+		const { chats, newChats, isComplete } = response as apiTypes.syncAllChatsMetadataResponse;
 
 		for (const chat of chats) await chatsStore.updateChat(chat);
+		for (const chat of newChats) await chatsStore.addChat(chat);
+		await syncActiveChats(newChats.map((chat) => chat._id));
 		chatsStore.sortChats();
 		return isComplete;
 	} catch (error) {
@@ -150,8 +154,7 @@ export async function signup(event: SubmitEvent): Promise<void> {
 	}
 }
 
-// Create a PreKey Bundle for publishing or for use by the SessionBuilder.
-export async function sendPreKeys(keys: signalTypes.unorgonizedKeys): Promise<void> {
+export async function sendPreKeyBundle(keys: signalTypes.unorgonizedKeys): Promise<void> {
 	const preKeyBundle: signalTypes.StringifiedPreKeyBundle = {
 		registrationId: keys.registrationId,
 		identityKey: utils.arrayBufferToBase64(keys.identityKeyPair.pubKey),
@@ -169,11 +172,29 @@ export async function sendPreKeys(keys: signalTypes.unorgonizedKeys): Promise<vo
 		});
 	}
 
-	const call = WsService.createAPICall(apiTypes.API.SEND_KEYS, { preKeyBundle });
+	const call = WsService.createAPICall(apiTypes.API.SEND_PRE_KEY_BUNDLE, { preKeyBundle });
 	try {
 		await wsService.sendRequest(call);
 	} catch (error) {
-		console.error('Error in signup:', error);
+		console.error('Error in sendPreKeys:', error);
+		throw error;
+	}
+}
+
+export async function sendPreKeys(preKeys: libsignal.PreKeyPairType<ArrayBuffer>[]): Promise<void> {
+	const stringifiedPreKeys: signalTypes.StringifiedPreKey[] = [];
+	for (const preKey of preKeys) {
+		stringifiedPreKeys.push({
+			keyId: preKey.keyId,
+			publicKey: utils.arrayBufferToBase64(preKey.keyPair.pubKey)
+		});
+	}
+
+	const call = WsService.createAPICall(apiTypes.API.ADD_PRE_KEYS, { preKeys: stringifiedPreKeys });
+	try {
+		await wsService.sendRequest(call);
+	} catch (error) {
+		console.error('Error in sendPreKeys:', error);
 		throw error;
 	}
 }

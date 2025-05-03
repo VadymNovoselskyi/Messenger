@@ -12,9 +12,10 @@ export type ChatDocument = {
     lastAckSequence: number;
     lastAckReadSequence: number;
   }[];
-  unacknowledgedBy: ObjectId;
+  unacknowledgedBy?: ObjectId;
   lastSequence: number;
   lastModified: Date;
+  lastMetadataChange: Date;
 };
 
 export type UserDocument = {

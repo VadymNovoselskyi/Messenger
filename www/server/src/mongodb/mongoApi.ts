@@ -7,7 +7,7 @@ import { ObjectId } from "mongodb";
 import { MessageType } from "@privacyresearch/libsignal-protocol-typescript";
 
 import { ChatDocument, MessageDocument, UserDocument } from "../types/mongoTypes.js";
-import { BinaryPreKeyBundle, StringifiedPreKeyBundle } from "../types/signalTypes.js";
+import { BinaryPreKey, BinaryPreKeyBundle, StringifiedPreKeyBundle } from "../types/signalTypes.js";
 import { ApiChat, ApiMessage, ApiUser } from "../types/apiTypes.js";
 import { toApiChat, toApiChatMetadata } from "../apiUtils.js";
 
@@ -15,7 +15,7 @@ import { toApiChat, toApiChatMetadata } from "../apiUtils.js";
 const MAX_CHATS_MESSAGE_SYNC = 10;
 const MAX_CHATS_METADATA_SYNC = 50;
 const MAX_MESSAGES = 50;
-
+const METADATA_SYNC_OFFSET = 1000 * 60;
 /**
  * Retrieves the list of chats for a given user.
  * @param userId - The ID of the user to retrieve chats for.
@@ -40,15 +40,15 @@ export async function syncActiveChatsUpdates(
           .find({
             chatId: chatDocument._id,
             from: { $ne: userId },
-            sequence: { $gt: lastAckSequence },
+            sequence: { $gte: lastAckSequence },
           })
-          .sort({ sendTime: -1 })
+          .sort({ sendTime: 1 })
           .limit(
-            Math.max(MAX_MESSAGES, (MAX_CHATS_MESSAGE_SYNC * MAX_MESSAGES) / chatDocuments.length)
+            Math.max(MAX_MESSAGES) //, (MAX_CHATS_MESSAGE_SYNC * MAX_MESSAGES) / chatDocuments.length
           )
           .toArray();
 
-        return toApiChat(chatDocument, messages.reverse());
+        return toApiChat(chatDocument, messages);
       })
     );
 
@@ -72,17 +72,23 @@ export async function syncAllChatsMetadata(
     if (!user) throw new Error(`User with id ${userId} not found`);
     const lastMetadataSync = user.lastMetadataSync;
 
+    const offsetMetadataSyncDate = new Date(lastMetadataSync.getTime() - METADATA_SYNC_OFFSET);
     const chatDocuments: ChatDocument[] = await chatsCollection
       .find({
         "users._id": userId,
-        lastModified: { $gte: new Date(lastMetadataSync.getTime() - 1000 * 60) },
+        $or: [
+          { lastModified: { $gte: offsetMetadataSyncDate } },
+          { lastMetadataChange: { $gte: offsetMetadataSyncDate } },
+        ],
       })
       .limit(MAX_CHATS_METADATA_SYNC)
       .sort({ lastModified: 1 })
       .toArray();
 
-    const unacknowledgedChats = chatDocuments.filter(chat => chat.unacknowledgedBy.equals(userId));
-    const chats: ApiChat[] = chatDocuments.map(toApiChatMetadata);
+    const unacknowledgedChats = chatDocuments.filter(chat => chat.unacknowledgedBy?.equals(userId));
+    const chats: ApiChat[] = chatDocuments
+      .filter(chat => !chat.unacknowledgedBy?.equals(userId))
+      .map(toApiChatMetadata);
 
     return {
       chats,
@@ -91,7 +97,7 @@ export async function syncAllChatsMetadata(
     };
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : "An unknown error occurred";
-    throw new Error(`Error fetching chats for user ID ${userId}: ${errMsg}`);
+    throw new Error(`Error syncing all chats metadata for user ID ${userId}: ${errMsg}`);
   }
 }
 
@@ -230,7 +236,7 @@ export async function readUpdate(
         lastSequence: { $gte: sequence },
         "users._id": userId,
       },
-      { $set: { "users.$.lastReadSequence": sequence } }
+      { $set: { "users.$.lastReadSequence": sequence, lastMetadataChange: new Date() } }
     );
     if (!chat) throw new Error(`Couldn't find chat for chatId ${chatId}`);
 
@@ -266,6 +272,14 @@ export async function createChat(
     if (creatingUser._id.equals(receivingUser._id)) {
       throw new Error(`You can't create a chat with yourself.`);
     }
+    if (
+      !receivingUser.registrationId ||
+      !receivingUser.identityKey ||
+      !receivingUser.signedPreKey ||
+      !receivingUser.preKeys
+    ) {
+      throw new Error(`Receiving user "${receivingUsername}" doesn't have a preKeyBundle.`);
+    }
 
     // Ensure that a chat between the two users doesn't already exist.
     const presentChat = await chatsCollection.findOne({
@@ -283,6 +297,7 @@ export async function createChat(
       );
     }
 
+    const now = new Date();
     const result = await chatsCollection.insertOne({
       users: [
         {
@@ -302,7 +317,8 @@ export async function createChat(
       ],
       unacknowledgedBy: receivingUser._id,
       lastSequence: 0,
-      lastModified: new Date(),
+      lastModified: now,
+      lastMetadataChange: now,
     });
 
     if (!result.acknowledged || !result.insertedId) {
@@ -388,7 +404,7 @@ export async function createUser(
  * @param userId - The ID of the user to save the preKeyBundle for.
  * @param preKeyBundle - The preKeyBundle to save.
  */
-export async function savePreKeys(userId: ObjectId, preKeyBundle: BinaryPreKeyBundle) {
+export async function savePreKeyBundle(userId: ObjectId, preKeyBundle: BinaryPreKeyBundle) {
   try {
     const { modifiedCount } = await usersCollection.updateOne(
       { _id: userId },
@@ -399,6 +415,25 @@ export async function savePreKeys(userId: ObjectId, preKeyBundle: BinaryPreKeyBu
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : "An unknown error occurred";
     throw new Error(`Error adding preKeyBundle: ${errMsg}`);
+  }
+}
+
+/**
+ * Adds user's preKeys to be used in X3DH.
+ * @param userId - The ID of the user to add the preKeys for.
+ * @param preKeys - The preKeys to add.
+ */
+export async function addPreKeys(userId: ObjectId, preKeys: BinaryPreKey[]) {
+  try {
+    const { modifiedCount } = await usersCollection.updateOne(
+      { _id: userId },
+      { $push: { preKeys: { $each: preKeys } } }
+    );
+
+    if (!modifiedCount) throw new Error(`Couldn't add keys for userId: ${userId}`);
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : "An unknown error occurred";
+    throw new Error(`Error adding preKeys: ${errMsg}`);
   }
 }
 
@@ -486,7 +521,10 @@ export async function markChatAsAcknowledged(chatId: ObjectId, userId: ObjectId)
  */
 export async function updateLastMetadataSync(userId: ObjectId, date: string) {
   try {
-    await usersCollection.updateOne({ _id: userId }, { $set: { lastMetadataSync: new Date(date) } });
+    await usersCollection.updateOne(
+      { _id: userId },
+      { $set: { lastMetadataSync: new Date(date) } }
+    );
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : "An unknown error occurred";
     throw new Error(`Error updating lastMetadataSync: ${errMsg}`);

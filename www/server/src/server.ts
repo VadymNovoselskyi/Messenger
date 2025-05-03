@@ -7,8 +7,8 @@ import { base64ToBinary, generateToken } from "./utils.js";
 
 import * as apiTypes from "./types/apiTypes.js";
 import { ObjectId } from "mongodb";
-import { BinaryPreKeyBundle } from "./types/signalTypes.js";
-import { toApiChat, toApiMessage } from "./apiUtils.js";
+import { BinaryPreKey, BinaryPreKeyBundle } from "./types/signalTypes.js";
+import { toApiChat, toApiChatMetadata, toApiMessage } from "./apiUtils.js";
 import { DeliveryService } from "./DeliveryService.js";
 import { OnlineUsersService } from "./OnlineUsersService.js";
 
@@ -46,11 +46,12 @@ wss.on("connection", ws => {
     };
 
     if (api === apiTypes.API.PONG) return;
-    console.log(`Received message: ${message}`);
     if (api === apiTypes.API.ACK) {
       deliveryService.handleAck(ws.userId ?? "", id);
       return;
     }
+
+    console.log(`Received message: ${message}`);
 
     if (api === apiTypes.API.AUTHENTICATE) {
       console.log("Authenticating");
@@ -243,7 +244,7 @@ async function handleAuthenticatedCall(
               mongoApi.updateLastAckSequence(
                 new ObjectId(chat._id),
                 new ObjectId(userId),
-                chat.messages.at(-1)!.sequence
+                chat.messages.at(-1)?.sequence ?? 0
               );
               mongoApi.updateLastAckReadSequence(
                 new ObjectId(chat._id),
@@ -252,7 +253,7 @@ async function handleAuthenticatedCall(
               );
               mongoApi.deletePreviousMessages(
                 new ObjectId(chat._id),
-                chat.messages.at(-1)!.sequence
+                chat.messages.at(-1)?.sequence ?? 0
               );
             }
           }
@@ -260,7 +261,7 @@ async function handleAuthenticatedCall(
         break;
       }
       case apiTypes.API.SYNC_ALL_CHATS_METADATA: {
-        const { chats, isComplete, unacknowledgedChats } = await mongoApi.syncAllChatsMetadata(
+        const { chats, unacknowledgedChats, isComplete } = await mongoApi.syncAllChatsMetadata(
           new ObjectId(userId)
         );
         deliveryService.sendMessage(
@@ -269,10 +270,17 @@ async function handleAuthenticatedCall(
             id,
             api,
             status: "SUCCESS",
-            payload: { chats, isComplete },
+            payload: {
+              chats,
+              newChats: unacknowledgedChats.map(chat => toApiChatMetadata(chat)),
+              isComplete,
+            },
           },
           () => {
-            mongoApi.updateLastMetadataSync(new ObjectId(userId), chats.at(-1)!.lastModified);
+            const metadataSyncDate = isComplete
+              ? new Date().toISOString()
+              : chats.at(-1)?.lastModified ?? new Date().toISOString();
+            mongoApi.updateLastMetadataSync(new ObjectId(userId), metadataSyncDate);
             for (const chat of unacknowledgedChats) {
               mongoApi.markChatAsAcknowledged(new ObjectId(chat._id), new ObjectId(userId));
             }
@@ -326,17 +334,26 @@ async function handleAuthenticatedCall(
 
         const receivingUserWs = onlineUsers.getUser(receivingUserId.toString());
         if (receivingUserWs) {
-          deliveryService.sendMessage(receivingUserId.toString(), {
-            id,
-            api,
-            status: "SUCCESS",
-            payload: { createdChat: createdApiChat },
-          });
+          deliveryService.sendMessage(
+            receivingUserId.toString(),
+            {
+              id,
+              api,
+              status: "SUCCESS",
+              payload: { createdChat: createdApiChat },
+            },
+            () => {
+              mongoApi.markChatAsAcknowledged(
+                new ObjectId(createdChat._id),
+                new ObjectId(receivingUserId)
+              );
+            }
+          );
         }
         break;
       }
-      case apiTypes.API.SEND_KEYS: {
-        let { preKeyBundle } = payload as apiTypes.sendKeysPayload;
+      case apiTypes.API.SEND_PRE_KEY_BUNDLE: {
+        let { preKeyBundle } = payload as apiTypes.sendPreKeyBundlePayload;
         const preKeyBundleReconstructed: BinaryPreKeyBundle = {
           registrationId: preKeyBundle.registrationId,
           identityKey: base64ToBinary(preKeyBundle.identityKey),
@@ -354,9 +371,35 @@ async function handleAuthenticatedCall(
           });
         }
 
-        await mongoApi.savePreKeys(new ObjectId(userId), preKeyBundleReconstructed);
+        await mongoApi.savePreKeyBundle(new ObjectId(userId), preKeyBundleReconstructed);
+        deliveryService.sendMessage(userId, {
+          id,
+          api,
+          status: "SUCCESS",
+          payload: {},
+        });
         break;
       }
+
+      case apiTypes.API.ADD_PRE_KEYS: {
+        const { preKeys } = payload as apiTypes.addPreKeysPayload;
+        const preKeysReconstructed: BinaryPreKey[] = [];
+        for (const preKey of preKeys) {
+          preKeysReconstructed.push({
+            keyId: preKey.keyId,
+            publicKey: base64ToBinary(preKey.publicKey),
+          });
+        }
+        await mongoApi.addPreKeys(new ObjectId(userId), preKeysReconstructed);
+        deliveryService.sendMessage(userId, {
+          id,
+          api,
+          status: "SUCCESS",
+          payload: {},
+        });
+        break;
+      }
+
       case apiTypes.API.SEND_PRE_KEY_WHISPER_MESSAGE: {
         const { chatId, ciphertext } = payload as apiTypes.sendPreKeyWhisperMessagePayload;
         const { sentMessage, receivingUserId } = await mongoApi.sendPreKeyWhisperMessage(

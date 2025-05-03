@@ -1,20 +1,21 @@
 import type { MessageType } from '@privacyresearch/libsignal-protocol-typescript';
-import type { StringifiedPreKeyBundle } from './signalTypes';
+import type { StringifiedPreKey, StringifiedPreKeyBundle } from './signalTypes';
 import type { ApiChat, ApiMessage } from './dataTypes';
 
 /** API endpoints enumeration */
 export enum API {
 	AUTHENTICATE = 'authenticate',
-	SYNC_ALL_CHATS_METADATA = 'syncAllChatsMetadata',
-	SYNC_ACTIVE_CHATS = 'syncActiveChats',
+	SEND_MESSAGE = 'sendMessage',
+	SEND_PRE_KEY_WHISPER_MESSAGE = 'sendPreKeyWhisperMessage',
 	RECEIVE_MESSAGE = 'receiveMessage',
 	READ_UPDATE = 'readUpdate',
 	CREATE_CHAT = 'createChat',
+	SYNC_ACTIVE_CHATS = 'syncActiveChats',
+	SYNC_ALL_CHATS_METADATA = 'syncAllChatsMetadata',
 	LOGIN = 'login',
 	SIGNUP = 'signup',
-	SEND_KEYS = 'sendKeys',
-	SEND_PRE_KEY_WHISPER_MESSAGE = 'sendPreKeyWhisperMessage',
-	SEND_MESSAGE = 'sendMessage',
+	SEND_PRE_KEY_BUNDLE = 'sendPreKeyBundle',
+	ADD_PRE_KEYS = 'addPreKeys',
 	ACK = 'ack',
 	PING = 'ping',
 	PONG = 'pong'
@@ -45,7 +46,8 @@ export type messagePayload =
 	| createChatPayload
 	| loginPayload
 	| signupPayload
-	| sendKeysPayload
+	| sendPreKeyBundlePayload
+	| addPreKeysPayload
 	| sendPreKeyWhisperMessagePayload
 	| sendMessagePayload;
 
@@ -60,7 +62,8 @@ export type responsePayload =
 	| loginResponse
 	| signupResponse
 	| errorResponse
-	| sendKeysResponse
+	| sendPreKeyBundleResponse
+	| addPreKeysResponse
 	| sendPreKeyWhisperMessageResponse
 	| sendMessageResponse;
 
@@ -91,8 +94,12 @@ export type signupPayload = {
 	password: string;
 };
 
-export type sendKeysPayload = {
+export type sendPreKeyBundlePayload = {
 	preKeyBundle: StringifiedPreKeyBundle;
+};
+
+export type addPreKeysPayload = {
+	preKeys: StringifiedPreKey[];
 };
 
 export type sendMessagePayload = {
@@ -116,6 +123,7 @@ export type syncActiveChatsResponse = {
 
 export type syncAllChatsMetadataResponse = {
 	chats: ApiChat[];
+	newChats: ApiChat[];
 	isComplete: boolean;
 };
 
@@ -144,7 +152,9 @@ export type signupResponse = {
 	token: string; //JWT
 };
 
-export type sendKeysResponse = Record<string, never>;
+export type sendPreKeyBundleResponse = Record<string, never>;
+
+export type addPreKeysResponse = Record<string, never>;
 
 export type sendPreKeyWhisperMessageResponse = Record<string, never>;
 

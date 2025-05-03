@@ -45,7 +45,7 @@ export function getCookie(name: string): string | null {
 	return null;
 }
 
-export async function generateKeys(): Promise<unorgonizedKeys> {
+export async function generatePreKeyBundle(preKeyNumber: number): Promise<unorgonizedKeys> {
 	const store = SignalProtocolStore.getInstance();
 
 	// Generate and store registration ID
@@ -61,19 +61,24 @@ export async function generateKeys(): Promise<unorgonizedKeys> {
 	await store.storeSignedPreKey(signedPreKey.keyId, signedPreKey.keyPair);
 
 	// Generate and store 100 one-time pre-keys
-	const oneTimePreKeys: libsignal.PreKeyPairType[] = [];
-	for (let i = 0; i < 10; i++) {
-		const prekey = await libsignal.KeyHelper.generatePreKey(i + 2);
-		oneTimePreKeys.push(prekey);
-		await store.storePreKey(prekey.keyId, prekey.keyPair);
-	}
-
+	const oneTimePreKeys = await generateEphemeralKeys(preKeyNumber);
 	return {
 		registrationId,
 		identityKeyPair,
 		signedPreKey,
 		oneTimePreKeys
 	};
+}
+
+export async function generateEphemeralKeys(preKeyNumber: number): Promise<libsignal.PreKeyPairType<ArrayBuffer>[]> {
+	const store = SignalProtocolStore.getInstance();
+	const oneTimePreKeys: libsignal.PreKeyPairType<ArrayBuffer>[] = [];
+	for (let i = 0; i < preKeyNumber; i++) {
+		const prekey = await libsignal.KeyHelper.generatePreKey(i + 2);
+		oneTimePreKeys.push(prekey);
+		await store.storePreKey(prekey.keyId, prekey.keyPair);
+	}
+	return oneTimePreKeys;
 }
 
 /**

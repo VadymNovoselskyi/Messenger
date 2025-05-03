@@ -1,5 +1,5 @@
 import { ObjectId } from "mongodb";
-import { StringifiedPreKeyBundle } from "./signalTypes.js";
+import { StringifiedPreKey, StringifiedPreKeyBundle } from "./signalTypes.js";
 import { MessageType } from "@privacyresearch/libsignal-protocol-typescript";
 import { MessageDocument } from "./mongoTypes.js";
 
@@ -35,7 +35,8 @@ export enum API {
   CREATE_CHAT = "createChat",
   LOGIN = "login",
   SIGNUP = "signup",
-  SEND_KEYS = "sendKeys",
+  SEND_PRE_KEY_BUNDLE = "sendPreKeyBundle",
+  ADD_PRE_KEYS = "addPreKeys",
   SEND_PRE_KEY_WHISPER_MESSAGE = "sendPreKeyWhisperMessage",
   SEND_MESSAGE = "sendMessage",
   PING = "ping",
@@ -59,7 +60,8 @@ export type messagePayload =
   | readUpdatePayload
   | createChatPayload
   | loginPayload
-  | sendKeysPayload
+  | sendPreKeyBundlePayload
+  | addPreKeysPayload
   | sendPreKeyWhisperMessagePayload
 
 /** Union type for response payloads */
@@ -73,8 +75,9 @@ export type responsePayload =
   | createChatResponse
   | loginResponse
   | signupResponse
+  | sendPreKeyBundleResponse
+  | addPreKeysResponse
   | errorResponse
-  | sendKeysResponse
 
 export type syncAllChatsMetadataPayload = Record<string, never>;
 
@@ -107,8 +110,12 @@ export type signupPayload = {
   preKeyBundle: StringifiedPreKeyBundle;
 };
 
-export type sendKeysPayload = {
+export type sendPreKeyBundlePayload = {
   preKeyBundle: StringifiedPreKeyBundle;
+};
+
+export type addPreKeysPayload = {
+  preKeys: StringifiedPreKey[];
 };
 
 export type sendPreKeyWhisperMessagePayload = {
@@ -119,6 +126,7 @@ export type sendPreKeyWhisperMessagePayload = {
 //Responses
 export type syncAllChatsMetadataResponse = {
   chats: ApiChat[];
+  newChats: ApiChat[];
   isComplete: boolean;
 };
 
@@ -158,7 +166,9 @@ export type signupResponse = {
   token: string; //JWT
 };
 
-export type sendKeysResponse = Record<string, never>;
+export type sendPreKeyBundleResponse = Record<string, never>;
+
+export type addPreKeysResponse = Record<string, never>;
 
 export type errorResponse = {
   message: string;

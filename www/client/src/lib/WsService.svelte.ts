@@ -53,35 +53,9 @@ export class WsService {
 		} else if (this.ws?.readyState === WebSocket.OPEN) return this.ws;
 
 		return new Promise((resolve, reject) => {
-			this.ws!.addEventListener(
-				'open',
-				() => {
-					this.sendRequest(WsService.createAPICall(API.AUTHENTICATE, {}));
-					this.resetPingTimeout();
-					resolve(this.ws!);
-				},
-				{ once: true }
-			);
-			this.ws!.addEventListener(
-				'close',
-				() => {
-					this.ws!.removeEventListener('message', this.messageHandler);
-					this.ws!.close();
-					this.ws = null;
-					reject(new Error('WebSocket connection closed'));
-				},
-				{ once: true }
-			);
-			this.ws!.addEventListener(
-				'error',
-				(event) => {
-					console.error('WebSocket connection error:', event);
-					this.ws!.close();
-					this.ws = null;
-					reject(new Error('Failed to connect to WebSocket'));
-				},
-				{ once: true }
-			);
+			this.ws!.addEventListener('open', this.handleOpen.bind(this, resolve), { once: true });
+			this.ws!.addEventListener('close', this.handleClose.bind(this, reject), { once: true });
+			this.ws!.addEventListener('error', this.handleError.bind(this, reject), { once: true });
 		});
 	}
 
@@ -152,13 +126,8 @@ export class WsService {
 			const cipherBinary = atob(cipherMessage.body!);
 
 			if (cipherMessage.type === 3) {
-				try {
-					console.log('decryptPreKeyWhisperMessage');
-					await sessionCipher.decryptPreKeyWhisperMessage(cipherBinary!, 'binary');
-					return;
-				} catch (e) {
-					console.error(e);
-				}
+				await sessionCipher.decryptPreKeyWhisperMessage(cipherBinary!, 'binary');
+				return;
 			}
 			if (cipherMessage.type !== 1) throw new Error(`Unknown message type: ${cipherMessage.type}`);
 
@@ -234,6 +203,26 @@ export class WsService {
 		const ws = await this.getWs();
 		ws.send(JSON.stringify({ api: API.PONG }));
 		this.resetPingTimeout();
+	}
+
+	private handleOpen(resolve: (value: WebSocket) => void) {
+		this.sendRequest(WsService.createAPICall(API.AUTHENTICATE, {}));
+		this.resetPingTimeout();
+		resolve(this.ws!);
+	}
+
+	private handleClose(reject: (reason: any) => void) {
+		this.ws!.removeEventListener('message', this.messageHandler);
+		this.ws!.close();
+		this.ws = null;
+		reject(new Error('WebSocket connection closed'));
+	}
+
+	private handleError(reject: (reason: any) => void) {
+		this.ws!.removeEventListener('message', this.messageHandler);
+		this.ws!.close();
+		this.ws = null;
+		reject(new Error('WebSocket connection error'));
 	}
 
 	public static createAPICall(api: API, payload: messagePayload, id?: string): APIMessage {
