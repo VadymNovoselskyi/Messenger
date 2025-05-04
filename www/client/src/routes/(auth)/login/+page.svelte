@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { login, signup } from '$lib/api.svelte';
+	import { login, signup } from '$lib/api/RequestService';
 
 	let signupSelected: boolean = false;
 	const nameRegex = /[A-Za-z]{3, 20}/;

@@ -1,12 +1,11 @@
-import { getDbService } from './DbService.svelte';
-import type { PendingMessage, StoredMessage } from './types/dataTypes';
-
+import { getMessagesDbService } from '$lib/indexedDB/MessagesDbService.svelte';
+import type { PendingMessage, StoredMessage } from '$lib/types/dataTypes';
 export class MessagesStore {
 	private static instance: MessagesStore;
 	private _loadedMessages = $state<Record<string, StoredMessage[]>>({});
 	private _lastMessages = $state<Record<string, StoredMessage | undefined>>({});
 	private _hasLoaded = $state(false);
-	private getDb = getDbService;
+	private getMessagesDb = getMessagesDbService;
 
 	private constructor() {}
 
@@ -24,7 +23,7 @@ export class MessagesStore {
 	/* Loads the latest messages for a list of chats */
 	public async loadLatestMessages(chatIds: string[]): Promise<void> {
 		for (const chatId of chatIds) {
-			const messages = await (await this.getDb()).getLatestMessages(chatId);
+			const messages = await (await this.getMessagesDb()).getLatestMessages(chatId);
 			this._loadedMessages[chatId] = messages;
 		}
 		this._lastMessages = await this.loadLastMessages();
@@ -54,7 +53,7 @@ export class MessagesStore {
 			}
 		}
 
-		await (await this.getDb()).putMessage($state.snapshot(message));
+		await (await this.getMessagesDb()).putMessage($state.snapshot(message));
 	}
 
 	/* Updates an existing message in a chat */
@@ -65,7 +64,7 @@ export class MessagesStore {
 		if (index === -1) return;
 		messages[index] = message;
 
-		await (await this.getDb()).putMessage($state.snapshot(message));
+		await (await this.getMessagesDb()).putMessage($state.snapshot(message));
 	}
 
 	/* Adds a new pending message to a chat */
@@ -86,7 +85,7 @@ export class MessagesStore {
 			}
 		}
 
-		await (await this.getDb()).putPendingMessage($state.snapshot(pendingMessage));
+		await (await this.getMessagesDb()).putPendingMessage($state.snapshot(pendingMessage));
 	}
 
 	/* Handles a pending message promotion */
@@ -102,7 +101,7 @@ export class MessagesStore {
 		const index = messages.findIndex((m) => m._id === tempId);
 		if (index !== -1) messages[index] = message;
 
-		await (await this.getDb()).promotePendingMessage(tempId, $state.snapshot(message));
+		await (await this.getMessagesDb()).promotePendingMessage(tempId, $state.snapshot(message));
 	}
 
 	/* Adds an empty chat to the store */
@@ -113,7 +112,7 @@ export class MessagesStore {
 
 	/* Returns the latest message for each chat */
 	private async loadLastMessages(): Promise<Record<string, StoredMessage | undefined>> {
-		const db = await this.getDb();
+		const db = await this.getMessagesDb();
 		const lastMessages: Record<string, StoredMessage | undefined> = {};
 		for (const chatId of Object.keys(this._loadedMessages)) {
 			lastMessages[chatId] = await db.getLastMessage(chatId);

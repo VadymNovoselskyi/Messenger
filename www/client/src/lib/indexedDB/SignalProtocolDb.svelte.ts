@@ -4,8 +4,8 @@ import {
 	type KeyPairType
 } from '@privacyresearch/libsignal-protocol-typescript';
 
-export class SignalProtocolStore implements StorageType {
-	private static instance: SignalProtocolStore;
+export class SignalProtocolDb implements StorageType {
+	private static instance: SignalProtocolDb;
 	private dbPromise: Promise<IDBDatabase>;
 	private dbName: string = 'EncyptionStore';
 	private storeName: string = 'signalProtocolStore';
@@ -27,11 +27,11 @@ export class SignalProtocolStore implements StorageType {
 	}
 
 	public static getInstance() {
-		if (!SignalProtocolStore.instance) {
-			const instance = new SignalProtocolStore();
-			SignalProtocolStore.instance = instance;
+		if (!SignalProtocolDb.instance) {
+			const instance = new SignalProtocolDb();
+			SignalProtocolDb.instance = instance;
 		}
-		return SignalProtocolStore.instance;
+		return SignalProtocolDb.instance;
 	}
 
 	// Base CRUD methods for IndexedDB

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onDestroy, onMount, untrack } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
@@ -9,25 +9,21 @@
 		sendMessage,
 		sendPreKeyBundle,
 		syncAllChatsMetadata,
-		sendPreKeys
-	} from '$lib/api.svelte';
-	import {
-		generateEphemeralKeys,
-		generatePreKeyBundle,
-		getCookie,
-		getOtherUserChatMetadata
-	} from '$lib/utils.svelte';
+		addPreKeys
+	} from '$lib/api/RequestService';
+	
 
-	import ChatList from '$lib/components/ChatList.svelte';
-	import MessageList from '$lib/components/MessageList.svelte';
-	import { SignalProtocolStore } from '$lib/SignalProtocolStore';
-	import { chatsStore } from '$lib/ChatsStore.svelte';
-	import { messagesStore } from '$lib/MessagesStore.svelte';
 	import Loader from '$lib/components/Loader.svelte';
-	import type { StoredChat } from '$lib/types/dataTypes';
-	import { getDbService } from '$lib/DbService.svelte';
+	import MessageList from '$lib/components/MessageList.svelte';
 	import MessageField from '$lib/components/MessageField.svelte';
 	import Scrollbar from '$lib/components/Scrollbar.svelte';
+
+	import { SignalProtocolDb } from '$lib/indexedDB/SignalProtocolDb.svelte';
+	import { chatsStore } from '$lib/stores/ChatsStore.svelte';
+	import { messagesStore } from '$lib/stores/MessagesStore.svelte';
+	import { getCookie } from '$lib/utils/cookieUtils';
+	import { generateEphemeralKeys, generatePreKeyBundle } from '$lib/utils/signalUtils';
+	import { getOtherUserChatMetadata } from '$lib/utils/chatMetadataUtils.svelte';
 
 	let { chatId } = $derived(page.params);
 	let chat = $derived(chatsStore.getLoadedChat(chatId));
@@ -44,13 +40,13 @@
 			return;
 		}
 
-		const store = SignalProtocolStore.getInstance();
+		const store = SignalProtocolDb.getInstance();
 		const isFilled = await store.check();
 		if (!isFilled) {
 			const preKeysBundle = await generatePreKeyBundle(4);
 			sendPreKeyBundle(preKeysBundle);
 			setTimeout(() => {
-				generateEphemeralKeys(96).then((extraPreKeys) => sendPreKeys(extraPreKeys));
+				generateEphemeralKeys(96).then((extraPreKeys) => addPreKeys(extraPreKeys));
 			}, 10000);
 		}
 

@@ -1,14 +1,15 @@
 <script lang="ts">
-	import { onDestroy, onMount, tick } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { page } from '$app/state';
 	import Scrollbar from '$lib/components/Scrollbar.svelte';
 	import AddChatButton from '$lib/components/AddChatButton.svelte';
-	import { PaginationService } from '$lib/PaginationService.svelte';
-	import { getDbService } from '$lib/DbService.svelte';
-	import { chatsStore } from '$lib/ChatsStore.svelte';
-	import { messagesStore } from '$lib/MessagesStore.svelte';
+	import { PaginationService } from '$lib/services/PaginationService.svelte';
+	import { getChatsDbService } from '$lib/indexedDB/ChatsDbService.svelte';
+	import { chatsStore } from '$lib/stores/ChatsStore.svelte';
+	import { messagesStore } from '$lib/stores/MessagesStore.svelte';
 
-	import { formatISODate, getOtherUserChatMetadata, getMyChatMetadata } from '$lib/utils.svelte';
+	import { formatISODate } from '$lib/utils/utils.svelte';
+	import { getOtherUserChatMetadata, getMyChatMetadata } from '$lib/utils/chatMetadataUtils.svelte';
 	import type { StoredChat, StoredMessage } from '$lib/types/dataTypes';
 
 	const {
@@ -93,7 +94,7 @@
 			lastModified ??= new Date().toISOString();
 
 			const newChats = await (
-				await getDbService()
+				await getChatsDbService()
 			).getChatsByDate(lastModified, PAGE_SIZE, direction);
 			await messagesStore.loadLatestMessages(newChats.map((chat) => chat._id));
 			return newChats;

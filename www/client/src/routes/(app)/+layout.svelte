@@ -3,9 +3,9 @@
 	import Nav from '$lib/components/Nav.svelte';
 	import '$lib/style.scss';
 	import './app-style.scss';
-	import { chatsStore } from '$lib/ChatsStore.svelte';
+	import { chatsStore } from '$lib/stores/ChatsStore.svelte';
 	import ChatList from '$lib/components/ChatList.svelte';
-	import { messagesStore } from '$lib/MessagesStore.svelte';
+	import { messagesStore } from '$lib/stores/MessagesStore.svelte';
 	import Loader from '$lib/components/Loader.svelte';
 
 	const links: Link[] = [

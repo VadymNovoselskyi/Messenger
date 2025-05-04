@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { createChat } from '$lib/api.svelte';
+	import { createChat } from '$lib/api/RequestService';
 
 	let usernameInput = $state() as HTMLInputElement;
 	let { showAddChat = $bindable() }: { showAddChat: boolean } = $props();

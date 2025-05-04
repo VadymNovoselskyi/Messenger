@@ -1,6 +1,7 @@
-import { getDbService } from './DbService.svelte';
+
 import type { PendingMessage, StoredChat, StoredMessage } from '$lib/types/dataTypes';
-import { messagesStore } from '$lib/MessagesStore.svelte';
+import { messagesStore } from '$lib/stores/MessagesStore.svelte';
+import { getChatsDbService } from '$lib/indexedDB/ChatsDbService.svelte';
 
 export class ChatsStore {
 	private static instance: ChatsStore;
@@ -8,7 +9,7 @@ export class ChatsStore {
 	private _loadedChats = $state<StoredChat[]>([]);
 	private _hasLoaded = $state(false);
 	private _chatsCount = $state(0);
-	private getDb = getDbService;
+	private getChatsDb = getChatsDbService;
 
 	private constructor() {}
 
@@ -22,10 +23,10 @@ export class ChatsStore {
 
 	/* Loads multiple chats from the database */
 	public async loadLatestChats(): Promise<string[]> {
-		const chats = await (await this.getDb()).getLatestChats(ChatsStore.LOAD_CHATS_COUNT);
+		const chats = await (await this.getChatsDb()).getLatestChats(ChatsStore.LOAD_CHATS_COUNT);
 		this._loadedChats.push(...chats);
 		this._hasLoaded = true;
-		this._chatsCount = await (await this.getDb()).getChatsCount();
+		this._chatsCount = await (await this.getChatsDb()).getChatsCount();
 		return chats.map((chat) => chat._id);
 	}
 
@@ -58,7 +59,7 @@ export class ChatsStore {
 	public async getChat(chatId: string): Promise<StoredChat | undefined> {
 		let chat = this._loadedChats.find((chat) => chat._id === chatId);
 		if (!chat) {
-			chat = await (await this.getDb()).getChat(chatId);
+			chat = await (await this.getChatsDb()).getChat(chatId);
 			if (chat) {
 				await messagesStore.loadLatestMessages([chatId]);
 				this._loadedChats.push(chat);
@@ -74,7 +75,7 @@ export class ChatsStore {
 		else this._loadedChats.push(chat);
 		this._chatsCount++;
 
-		await (await this.getDb()).putChat($state.snapshot(chat));
+		await (await this.getChatsDb()).putChat($state.snapshot(chat));
 	}
 
 	/* Updates an existing chat in the store */
@@ -83,7 +84,7 @@ export class ChatsStore {
 		if (i === -1) return;
 		this._loadedChats[i] = chatToUpdate;
 
-		await (await this.getDb()).putChat($state.snapshot(chatToUpdate));
+		await (await this.getChatsDb()).putChat($state.snapshot(chatToUpdate));
 	}
 
 	/* Sorts chats by last modified date */

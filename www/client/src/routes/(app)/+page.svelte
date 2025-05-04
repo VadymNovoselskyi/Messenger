@@ -7,15 +7,14 @@
 		syncActiveChats,
 		sendPreKeyBundle,
 		syncAllChatsMetadata,
-		sendPreKeys
-	} from '$lib/api.svelte';
-	import { generateEphemeralKeys, generatePreKeyBundle, getCookie } from '$lib/utils.svelte';
+		addPreKeys
+	} from '$lib/api/RequestService';
+	import { generateEphemeralKeys, generatePreKeyBundle } from '$lib/utils/signalUtils';
+	import { getCookie } from '$lib/utils/cookieUtils';
 
-	import ChatList from '$lib/components/ChatList.svelte';
-	import { SignalProtocolStore } from '$lib/SignalProtocolStore';
-	import { chatsStore } from '$lib/ChatsStore.svelte';
-	import { messagesStore } from '$lib/MessagesStore.svelte';
-	import Loader from '$lib/components/Loader.svelte';
+	import { SignalProtocolDb } from '$lib/indexedDB/SignalProtocolDb.svelte';
+	import { chatsStore } from '$lib/stores/ChatsStore.svelte';
+	import { messagesStore } from '$lib/stores/MessagesStore.svelte';
 
 	onMount(async () => {
 		if (!browser) return;
@@ -23,13 +22,13 @@
 			goto('/login');
 			return;
 		}
-		const store = SignalProtocolStore.getInstance();
+		const store = SignalProtocolDb.getInstance();
 		const isFilled = await store.check();
 		if (!isFilled) {
 			const preKeysBundle = await generatePreKeyBundle(4);
 			sendPreKeyBundle(preKeysBundle);
 			setTimeout(() => {
-				generateEphemeralKeys(96).then((extraPreKeys) => sendPreKeys(extraPreKeys));
+				generateEphemeralKeys(96).then((extraPreKeys) => addPreKeys(extraPreKeys));
 			}, 10000);
 		}
 

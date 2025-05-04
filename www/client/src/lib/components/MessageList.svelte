@@ -1,19 +1,16 @@
 <script lang="ts">
 	import { onMount, tick } from 'svelte';
 	import Scrollbar from '$lib/components/Scrollbar.svelte';
-	import { PaginationService } from '$lib/PaginationService.svelte';
-	import { getDbService } from '$lib/DbService.svelte';
+	import { PaginationService } from '$lib/services/PaginationService.svelte';
+	import { getMessagesDbService } from '$lib/indexedDB/MessagesDbService.svelte';
 
-	import { sendReadUpdate } from '$lib/api.svelte';
-	import {
-		formatISODate,
-		getCookie,
-		getMyChatMetadata,
-		getOtherUserChatMetadata
-	} from '$lib/utils.svelte';
+	import { sendReadUpdate } from '$lib/api/RequestService';
+	import { formatISODate } from '$lib/utils/utils.svelte';
+	import { getMyChatMetadata, getOtherUserChatMetadata } from '$lib/utils/chatMetadataUtils.svelte';
 
 	import type { Action } from 'svelte/action';
 	import type { StoredMessage, StoredChat } from '$lib/types/dataTypes';
+	import { getCookie } from '$lib/utils/cookieUtils';
 
 	const {
 		chat,
@@ -40,7 +37,7 @@
 			} else return [];
 
 			if (low > high) return [];
-			return (await getDbService()).getMessagesByIndex(chat._id, low, high);
+			return (await getMessagesDbService()).getMessagesByIndex(chat._id, low, high);
 		},
 		// svelte-ignore state_referenced_locally
 		lastSequence
@@ -202,13 +199,6 @@
 		console.log(wrapper.clientHeight, bottomAnchor.offsetTop, wrapper.scrollHeight);
 		if (unreadAnchor) unreadAnchor.scrollIntoView({ behavior: 'instant', block: 'start' });
 		if (bottomAnchor) bottomAnchor.scrollIntoView({ behavior: 'instant', block: 'end' });
-		// const scrollTop = unreadAnchor
-		// 	? unreadAnchor.offsetTop - wrapper.clientHeight + SCROLL_ADJUSTMENT
-		// 	: bottomAnchor.offsetTop;
-		// wrapper.scrollTo({
-		// 	top: scrollTop,
-		// 	behavior: 'instant'
-		// });
 
 		topObserver.observe(topAnchor);
 		bottomObserver.observe(bottomAnchor);
