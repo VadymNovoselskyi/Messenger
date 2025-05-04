@@ -13,7 +13,6 @@ import { messagesStore } from './MessagesStore.svelte';
 import { getCookie } from '$lib/utils.svelte';
 import type { StoredChat } from '$lib/types/dataTypes';
 import { SessionRecord } from '@privacyresearch/libsignal-protocol-typescript/lib/session-record';
-import { tick } from 'svelte';
 
 export async function syncActiveChats(chatIds: string[]): Promise<string[]> {
 	try {
@@ -29,7 +28,10 @@ export async function syncActiveChats(chatIds: string[]): Promise<string[]> {
 		for (const chat of chats) {
 			const missedMessages = chat.messages;
 			await chatsStore.updateChat(chat);
-			const address = new libsignal.SignalProtocolAddress(utils.getOtherUsername(chat._id), 1);
+			const address = new libsignal.SignalProtocolAddress(
+				utils.getOtherUserChatMetadata(chat._id)._id,
+				1
+			);
 			const sessionCipher = new libsignal.SessionCipher(store, address);
 
 			for (const [index, message] of missedMessages.entries()) {
@@ -65,7 +67,7 @@ export async function syncAllChatsMetadata(): Promise<boolean> {
 
 		for (const chat of chats) await chatsStore.updateChat(chat);
 		for (const chat of newChats) await chatsStore.addChat(chat);
-		await syncActiveChats(newChats.map((chat) => chat._id));
+		if (newChats.length) await syncActiveChats(newChats.map((chat) => chat._id));
 		chatsStore.sortChats();
 		return isComplete;
 	} catch (error) {
@@ -75,7 +77,7 @@ export async function syncAllChatsMetadata(): Promise<boolean> {
 }
 
 export async function sendReadUpdate(chatId: string, sequence: number): Promise<void> {
-	const chat = chatsStore.getChat(chatId);
+	const chat = chatsStore.getLoadedChat(chatId);
 	if (!chat) throw new Error(`Chat with id ${chatId} not found`);
 	await chatsStore.updateChat(chat);
 
@@ -101,12 +103,11 @@ export async function createChat(event: SubmitEvent): Promise<void> {
 		const { createdChat, preKeyBundle } = response as apiTypes.createChatResponse;
 		if (!preKeyBundle) throw new Error(`no preKeyBundle received`);
 
-		const createdStoredChat = utils.toStoredChat(createdChat);
-		await chatsStore.addChat(createdStoredChat);
-		messagesStore.addEmptyChat(createdStoredChat._id);
+		await chatsStore.addChat(createdChat);
+		messagesStore.addEmptyChat(createdChat._id);
 		chatsStore.sortChats();
 
-		await handleSessionBootstrap(username, createdStoredChat, preKeyBundle);
+		await handleSessionBootstrap(createdChat, preKeyBundle);
 		return;
 	} catch (error) {
 		console.error('Error in createChat:', error);
@@ -201,10 +202,13 @@ export async function sendPreKeys(preKeys: libsignal.PreKeyPairType<ArrayBuffer>
 
 export async function sendMessage(chatId: string, text: string) {
 	try {
-		const chat = chatsStore.getChat(chatId);
+		const chat = chatsStore.getLoadedChat(chatId);
 		if (!chat) throw new Error(`Chat with id ${chatId} not found`);
 
-		const address = new libsignal.SignalProtocolAddress(utils.getOtherUsername(chatId), 1);
+		const address = new libsignal.SignalProtocolAddress(
+			utils.getOtherUserChatMetadata(chatId)._id,
+			1
+		);
 		const store = SignalProtocolStore.getInstance();
 		const sessionCipher = new libsignal.SessionCipher(store, address);
 
@@ -265,10 +269,13 @@ export async function sendPreKeyWhisperMessage(
 	chatId: string,
 	text: string = 'ESTABLISH_SESSION_SENDER'
 ) {
-	const chat = chatsStore.getChat(chatId);
+	const chat = chatsStore.getLoadedChat(chatId);
 	if (!chat) throw new Error(`Chat with id ${chatId} not found`);
 
-	const address = new libsignal.SignalProtocolAddress(utils.getOtherUsername(chatId), 1);
+	const address = new libsignal.SignalProtocolAddress(
+		utils.getOtherUserChatMetadata(chatId)._id,
+		1
+	);
 	const store = SignalProtocolStore.getInstance();
 	const sessionCipher = new libsignal.SessionCipher(store, address);
 
@@ -284,7 +291,6 @@ export async function sendPreKeyWhisperMessage(
 }
 
 async function handleSessionBootstrap(
-	username: string,
 	createdChat: dataTypes.StoredChat,
 	preKeyBundle: signalTypes.StringifiedPreKeyBundle
 ) {
@@ -305,7 +311,7 @@ async function handleSessionBootstrap(
 	};
 
 	const receiverAddress: libsignal.SignalProtocolAddress = new libsignal.SignalProtocolAddress(
-		username,
+		utils.getOtherUserChatMetadata(_id)._id,
 		1
 	);
 	const receiverDevice: libsignal.DeviceType = {

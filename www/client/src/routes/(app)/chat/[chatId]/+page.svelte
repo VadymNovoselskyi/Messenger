@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount, untrack } from 'svelte';
+	import { onDestroy, onMount, untrack } from 'svelte';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
@@ -9,11 +9,14 @@
 		sendMessage,
 		sendPreKeyBundle,
 		syncAllChatsMetadata,
-
 		sendPreKeys
-
 	} from '$lib/api.svelte';
-	import { generateEphemeralKeys, generatePreKeyBundle, getCookie, getOtherUsername } from '$lib/utils.svelte';
+	import {
+		generateEphemeralKeys,
+		generatePreKeyBundle,
+		getCookie,
+		getOtherUserChatMetadata
+	} from '$lib/utils.svelte';
 
 	import ChatList from '$lib/components/ChatList.svelte';
 	import MessageList from '$lib/components/MessageList.svelte';
@@ -21,17 +24,22 @@
 	import { chatsStore } from '$lib/ChatsStore.svelte';
 	import { messagesStore } from '$lib/MessagesStore.svelte';
 	import Loader from '$lib/components/Loader.svelte';
+	import type { StoredChat } from '$lib/types/dataTypes';
+	import { getDbService } from '$lib/DbService.svelte';
+	import MessageField from '$lib/components/MessageField.svelte';
+	import Scrollbar from '$lib/components/Scrollbar.svelte';
 
 	let { chatId } = $derived(page.params);
-	let chat = $derived(chatsStore.getChat(chatId));
-	let messages = $derived(messagesStore.getChatMessages(chatId));
-	let isSyncing = $state(false);
-	let messageList = $state() as MessageList;
+	let chat = $derived(chatsStore.getLoadedChat(chatId));
+	let messages = $derived(messagesStore.getLoadedChatMessages(chatId));
+	let isSyncing = $state(true);
+	let showScrollbar = $state(false);
+	let scrollBar = $state() as Scrollbar;
+	let scrollableContent = $state() as HTMLElement;
 
 	onMount(async () => {
 		if (!browser) return;
 		if (!getCookie('userId') || !getCookie('token')) {
-			console.log(getCookie('userId'), getCookie('token'));
 			goto('/login');
 			return;
 		}
@@ -47,25 +55,31 @@
 		}
 
 		if (!chatsStore.hasLoaded || !messagesStore.hasLoaded) {
+			// const chatIndex = await (await getDbService()).getChatIndex(chatId);
+			// console.log(chatIndex);
+			// let chatsToSync: string[] = [];
+			// if (chat) {
+			// 	await syncActiveChats([chatId]);
+			// 	chatsToSync = await chatsStore.loadChatsByDate(chat.lastModified);
+			// } else chatsToSync = await chatsStore.loadLatestChats();
+			// console.log(chatsToSync);
+			// await messagesStore.loadLatestMessages(chatsToSync);
+
 			const activeChats = await chatsStore.loadLatestChats();
 			await messagesStore.loadLatestMessages(activeChats);
-			if (chatsStore.getChat(chatId)) {
-				isSyncing = true;
-				await syncActiveChats([chatId]);
-			}
-			chatsStore.sortChats();
+			if (!activeChats.includes(chatId)) goto('/');
 			isSyncing = false;
 
 			let incompleteChatIds = activeChats;
 			while (incompleteChatIds.length) incompleteChatIds = await syncActiveChats(incompleteChatIds);
 			let isComplete = await syncAllChatsMetadata();
 			while (!isComplete) isComplete = await syncAllChatsMetadata();
-		}
+		} else isSyncing = false;
 	});
 
 	$effect(() => {
 		chatId;
-		if (!chatsStore.hasLoaded || !messagesStore.hasLoaded) return;
+		if (!chatsStore.hasLoaded || !messagesStore.hasLoaded || isSyncing) return;
 		untrack(() => {
 			if (!chat) {
 				goto('/');
@@ -83,62 +97,78 @@
 
 		const { chatId } = page.params;
 
-		const chat = chatsStore.chats.find((chat) => chat._id === chatId);
+		const chat = chatsStore.loadedChats.find((chat) => chat._id === chatId);
 		if (!chat) throw new Error(`Chat with id ${chatId} not found`);
 
-		// // Update UI immediately and reset unread if needed
 		sendMessage(chatId, input);
 	}
+
+	$effect(() => {
+		if (messages.length && scrollableContent) {
+			showScrollbar = scrollableContent.scrollHeight !== scrollableContent.clientHeight;
+		}
+	});
 </script>
 
 <svelte:head>
 	<title>
-		{getOtherUsername(page.params.chatId)}
+		{getOtherUserChatMetadata(page.params.chatId).username}
 	</title>
 </svelte:head>
 
-<div id="wrapper">
-	{#if chatsStore.hasLoaded && messagesStore.hasLoaded}
-		<ChatList chats={chatsStore.chats} lastMessages={messagesStore.getLastMessages()} />
-	{:else}
-		<div class="chats-loader">
-			<Loader />
-		</div>
-	{/if}
-
-	<section id="chat-display">
-		{#if chatsStore.hasLoaded && messagesStore.hasLoaded && chat && !isSyncing}
+{#if chatsStore.hasLoaded && messagesStore.hasLoaded && chat && !isSyncing}
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<div
+		id="message-list"
+		onmouseover={showScrollbar && scrollBar ? scrollBar.show : null}
+		onmouseleave={showScrollbar && scrollBar ? scrollBar.hide : null}
+		onfocus={showScrollbar && scrollBar ? scrollBar.show : null}
+		onblur={showScrollbar && scrollBar ? scrollBar.hide : null}
+	>
+		<section
+			id="messages"
+			bind:this={scrollableContent}
+			onscroll={showScrollbar && scrollBar ? scrollBar.updateThumbPosition : null}
+			aria-label="Messages"
+		>
 			{#key chat!._id}
-				<MessageList
-					bind:this={messageList}
-					{chat}
-					submitFn={sendMessagePrep}
-					messages={messages ?? []}
-				/>
+				<MessageList {chat} messages={messages ?? []} {scrollBar} />
 			{/key}
-		{:else}
-			<div class="messages-loader">
-				<Loader />
-			</div>
+		</section>
+
+		<MessageField submitFn={sendMessagePrep} />
+		{#if showScrollbar}
+			<Scrollbar bind:this={scrollBar} {scrollableContent} width={0.4} />
 		{/if}
-	</section>
-</div>
+	</div>
+{:else}
+	<div class="messages-loader">
+		<Loader />
+	</div>
+{/if}
 
 <style lang="scss">
-	#wrapper {
+	#message-list {
 		display: grid;
-		grid-template-columns: minmax(14rem, 3fr) 8fr;
+		grid-template-rows: 1fr auto;
+
+		background-color: #3a506b;
+		position: relative;
 		height: 94vh;
+		overflow: hidden;
 
-		#chat-display {
-			background-color: #3a506b;
-			position: relative;
+		#messages {
+			overflow-y: scroll;
+
+			/* Hide scrollbar for IE, Edge, and Firefox */
+			-ms-overflow-style: none; /* IE and Edge */
+			scrollbar-width: none; /* Firefox */
+
+			/* Hide scrollbar for Chrome, Safari, and Opera */
+			&::-webkit-scrollbar {
+				display: none;
+			}
 		}
-	}
-
-	.chats-loader {
-		justify-self: center;
-		align-self: center;
 	}
 
 	.messages-loader {

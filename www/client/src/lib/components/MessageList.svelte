@@ -1,36 +1,29 @@
 <script lang="ts">
-	// ===============================================================
-	// Imports: Svelte lifecycle functions, components, API & utilities
-	// ===============================================================
-	import { onMount, tick, untrack } from 'svelte';
-	import MessageField from '$lib/components/MessageField.svelte';
-	import Loader from '$lib/components/Loader.svelte';
+	import { onMount, tick } from 'svelte';
 	import Scrollbar from '$lib/components/Scrollbar.svelte';
-	import { sendReadUpdate } from '$lib/api.svelte';
-	import { formatISODate, getCookie } from '$lib/utils.svelte';
-	import type { StoredMessage, StoredChat } from '$lib/types/dataTypes';
-	import type { Action } from 'svelte/action';
 	import { PaginationService } from '$lib/PaginationService.svelte';
 	import { getDbService } from '$lib/DbService.svelte';
 
-	onMount(async () => {
-		await setAnchors();
-	});
+	import { sendReadUpdate } from '$lib/api.svelte';
+	import {
+		formatISODate,
+		getCookie,
+		getMyChatMetadata,
+		getOtherUserChatMetadata
+	} from '$lib/utils.svelte';
 
-	// ===============================================================
-	// Props & Derived values from chat
-	// ===============================================================
+	import type { Action } from 'svelte/action';
+	import type { StoredMessage, StoredChat } from '$lib/types/dataTypes';
+
 	const {
 		chat,
 		messages,
-		submitFn
-	}: { chat: StoredChat; messages: StoredMessage[]; submitFn: (event: SubmitEvent) => void } =
-		$props();
+		scrollBar
+	}: { chat: StoredChat; messages: StoredMessage[]; scrollBar: Scrollbar } = $props();
 	const { users, lastSequence } = $derived(chat);
 
 	const MAX_PAGES = 5;
 	const PAGE_SIZE = 20;
-	// svelte-ignore state_referenced_locally
 	const paginationService = new PaginationService<StoredMessage>(
 		messages,
 		MAX_PAGES,
@@ -49,6 +42,7 @@
 			if (low > high) return [];
 			return (await getDbService()).getMessagesByIndex(chat._id, low, high);
 		},
+		// svelte-ignore state_referenced_locally
 		lastSequence
 	);
 
@@ -57,21 +51,13 @@
 	});
 
 	// svelte-ignore state_referenced_locally
-	let startingLastReadSequenceMe = $state(
-		users.find((user) => user._id === getCookie('userId'))!.lastReadSequence
-	);
-	let lastReadSequenceMe = $derived(
-		users.find((user) => user._id === getCookie('userId'))!.lastReadSequence
-	);
-	let lastReadSequenceOther = $derived(
-		users.find((user) => user._id !== getCookie('userId'))!.lastReadSequence
-	);
+	let startingLastReadSequenceMe = $state(getMyChatMetadata(chat._id).lastReadSequence);
+	let lastReadSequenceMe = $derived(getMyChatMetadata(chat._id).lastReadSequence);
+	let lastReadSequenceOther = $derived(getOtherUserChatMetadata(chat._id).lastReadSequence);
 	let unreadCount = $derived(lastSequence - lastReadSequenceMe);
 
 	const SCROLL_ADJUSTMENT = 24;
-	let scrollableContent = $state() as HTMLElement;
-	let scrollBar = $state() as Scrollbar;
-	let showScrollbar = $state<boolean>();
+	let wrapper = $state() as HTMLElement;
 
 	let topAnchor = $state() as HTMLElement;
 	let unreadAnchor = $state() as HTMLElement;
@@ -83,29 +69,31 @@
 	let lastTimeoutTime = $state(0);
 	let readTimeoutId = $state<number>();
 
-	let topObserver = new IntersectionObserver((entries) => {
+	const topObserver = new IntersectionObserver((entries) => {
 		for (const entry of entries) {
 			if (!entry.isIntersecting) continue;
 			handleTopIntersection();
 		}
 	});
-	let bottomObserver = new IntersectionObserver((entries) => {
+	const bottomObserver = new IntersectionObserver((entries) => {
 		for (const entry of entries) {
 			if (!entry.isIntersecting) continue;
 			handleBottomIntersection();
 		}
 	});
 
-	const READ_OBSERVER_OPTIONS: IntersectionObserverInit = { threshold: 0.4 };
-	const readObserver = new IntersectionObserver((entries) => {
-		for (const entry of entries) {
-			if (!entry.isIntersecting) continue;
-			readObserver.unobserve(entry.target);
-			entry.target.dispatchEvent(
-				new CustomEvent<IntersectionObserverEntry>('intersect', { detail: entry })
-			);
-		}
-	}, READ_OBSERVER_OPTIONS);
+	const readObserver = new IntersectionObserver(
+		(entries) => {
+			for (const entry of entries) {
+				if (!entry.isIntersecting) continue;
+				readObserver.unobserve(entry.target);
+				entry.target.dispatchEvent(
+					new CustomEvent<IntersectionObserverEntry>('intersect', { detail: entry })
+				);
+			}
+		},
+		{ threshold: 0.4 }
+	);
 	const readIntersectionAction: Action<Element, boolean> = (element, enabled) => {
 		if (!enabled) return;
 		readObserver.observe(element);
@@ -120,22 +108,50 @@
 		};
 	};
 
-	async function setAnchors() {
-		await tick();
-		if (!topAnchor || !bottomAnchor || (!unreadAnchor && unreadCount)) {
-			requestAnimationFrame(setAnchors);
-			return;
-		}
-		const scrollTop = unreadAnchor
-			? unreadAnchor.offsetTop - scrollableContent.clientHeight + SCROLL_ADJUSTMENT
-			: bottomAnchor.offsetTop;
-		scrollableContent.scrollTo({
-			top: scrollTop,
-			behavior: 'instant'
-		});
+	async function handleTopIntersection() {
+		const prevTopEl = paginationService.paginatedElements[0];
+		if (!prevTopEl) return;
+		const prevTopId = prevTopEl._id;
+		const prevTopSequence = prevTopEl.sequence;
 
-		topObserver.observe(topAnchor);
-		bottomObserver.observe(bottomAnchor);
+		if (prevTopSequence <= 1) return;
+
+		const wasDragging = scrollBar && scrollBar.isDraggingOn();
+		if (wasDragging) scrollBar.onMouseUp();
+
+		await paginationService.changePage('UP');
+		await tick();
+
+		const prevTopElement = document.getElementById(prevTopId);
+		if (prevTopElement) {
+			prevTopElement.scrollIntoView({ behavior: 'instant', block: 'start' });
+			wrapper.scrollTop -= SCROLL_ADJUSTMENT;
+		}
+
+		if (wasDragging) scrollBar.onMouseDown();
+	}
+
+	async function handleBottomIntersection() {
+		const prevBottomEl = paginationService.paginatedElements.at(-1);
+		if (!prevBottomEl) return;
+		const prevBottomId = prevBottomEl._id;
+		const prevBottomSequence = prevBottomEl.sequence;
+
+		if (prevBottomSequence === lastSequence) return;
+
+		const wasDragging = scrollBar && scrollBar.isDraggingOn();
+		if (wasDragging) scrollBar.onMouseUp();
+
+		await paginationService.changePage('DOWN');
+		await tick();
+
+		const prevBottomElement = document.getElementById(prevBottomId);
+		if (prevBottomElement) {
+			prevBottomElement.scrollIntoView({ behavior: 'instant', block: 'end' });
+			wrapper.scrollTop += SCROLL_ADJUSTMENT;
+		}
+
+		if (wasDragging) scrollBar.onMouseDown();
 	}
 
 	function handleMessageRead(event: CustomEvent<IntersectionObserverEntry>) {
@@ -143,7 +159,7 @@
 			(message) => message._id === event.detail.target.id
 		)?.sequence;
 		if (!lastReadSequence) return;
-		users.find((user) => user._id === getCookie('userId'))!.lastReadSequence = lastReadSequence;
+		getMyChatMetadata(chat._id).lastReadSequence = lastReadSequence;
 
 		if (stashedReadCount >= MAX_STASHED_COUNT || lastReadSequence === lastSequence) {
 			clearTimeout(readTimeoutId);
@@ -171,203 +187,133 @@
 		lastTimeoutTime = Date.now();
 	}
 
-	async function handleTopIntersection() {
-		const prevTopEl = paginationService.paginatedElements[0];
-		if (!prevTopEl) return;
-		const prevTopId = prevTopEl._id;
-		const prevTopSequence = prevTopEl.sequence;
+	onMount(setAnchors);
 
-		if (prevTopSequence <= 1) return;
+	$effect(() => {
+		if (!unreadCount && lastSequence) startingLastReadSequenceMe = lastSequence;
+	});
 
-		const wasDragging = scrollBar && scrollBar.isDraggingOn();
-		if (wasDragging) scrollBar.onMouseUp();
-
-		await paginationService.changePage('UP');
+	async function setAnchors() {
 		await tick();
-
-		const prevTopElement = document.getElementById(prevTopId);
-		if (prevTopElement) {
-			prevTopElement.scrollIntoView({ behavior: 'instant', block: 'start' });
-			scrollableContent.scrollTop -= SCROLL_ADJUSTMENT;
+		if (!topAnchor || !bottomAnchor || (!unreadAnchor && unreadCount)) {
+			requestAnimationFrame(setAnchors);
+			return;
 		}
+		console.log(wrapper.clientHeight, bottomAnchor.offsetTop, wrapper.scrollHeight);
+		if (unreadAnchor) unreadAnchor.scrollIntoView({ behavior: 'instant', block: 'start' });
+		if (bottomAnchor) bottomAnchor.scrollIntoView({ behavior: 'instant', block: 'end' });
+		// const scrollTop = unreadAnchor
+		// 	? unreadAnchor.offsetTop - wrapper.clientHeight + SCROLL_ADJUSTMENT
+		// 	: bottomAnchor.offsetTop;
+		// wrapper.scrollTo({
+		// 	top: scrollTop,
+		// 	behavior: 'instant'
+		// });
 
-		if (wasDragging) scrollBar.onMouseDown();
-	}
-
-	async function handleBottomIntersection() {
-		const prevBottomEl = paginationService.paginatedElements.at(-1);
-		if (!prevBottomEl) return;
-		const prevBottomId = prevBottomEl._id;
-		const prevBottomSequence = prevBottomEl.sequence;
-		
-		if (prevBottomSequence === lastSequence) return;
-		
-		const wasDragging = scrollBar && scrollBar.isDraggingOn();
-		if (wasDragging) scrollBar.onMouseUp();
-		
-		await paginationService.changePage('DOWN');
-		await tick();
-
-		const prevBottomElement = document.getElementById(prevBottomId);
-		if (prevBottomElement) {
-			prevBottomElement.scrollIntoView({ behavior: 'instant', block: 'end' });
-			scrollableContent.scrollTop += SCROLL_ADJUSTMENT;
-		}
-
-		if (wasDragging) scrollBar.onMouseDown();
+		topObserver.observe(topAnchor);
+		bottomObserver.observe(bottomAnchor);
 	}
 
 	function getMessageReadStatus(sequence: number) {
 		return lastReadSequenceOther >= sequence && sequence >= 0 ? '✓✓' : '✓';
 	}
-
-	$effect(() => {
-		if (!showScrollbar && messages.length) {
-			showScrollbar = scrollableContent.scrollHeight !== scrollableContent.clientHeight;
-		}
-	});
-	$effect(() => {
-		if (!unreadCount && lastSequence) startingLastReadSequenceMe = lastSequence;
-	});
 </script>
 
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<div
-	id="message-list"
-	onmouseover={showScrollbar && scrollBar ? scrollBar.show : null}
-	onmouseleave={showScrollbar && scrollBar ? scrollBar.hide : null}
-	onfocus={showScrollbar && scrollBar ? scrollBar.show : null}
-	onblur={showScrollbar && scrollBar ? scrollBar.hide : null}
->
-	<section
-		id="messages"
-		bind:this={scrollableContent}
-		onscroll={showScrollbar && scrollBar ? scrollBar.updateThumbPosition : null}
-		aria-label="Messages"
-	>
-		<!-- <Loader promise={extraMessagesPromise} /> -->
-
-		<div bind:this={topAnchor} class="anchor"></div>
-		{#each paginationService.paginatedElements as { _id, from, plaintext, sequence, sendTime, isPending } (_id)}
-			<!-- Dont mind the error below, just a TypeScript issue (oninspect) -->
-			<div
-				class="message"
-				class:sent={from === getCookie('userId')}
-				class:received={from !== getCookie('userId')}
-				class:pending={isPending}
-				use:readIntersectionAction={sequence > lastReadSequenceMe && !!unreadCount}
-				onintersect={handleMessageRead}
-				id={_id}
-			>
-				<p class="text">{plaintext}</p>
-				<p class="sendTime">
-					{formatISODate(sendTime)}
-					{from === getCookie('userId') ? getMessageReadStatus(sequence) : ''}
-				</p>
-			</div>
-			{#if sequence === startingLastReadSequenceMe && sequence !== lastSequence}
-				<div bind:this={unreadAnchor} id="unread-anchor" class="anchor">Unread Messages</div>
-			{/if}
-		{/each}
-		<div bind:this={bottomAnchor} id="bottom-anchor" class="anchor"></div>
-
-		<!-- <Loader promise={unreadMessagesPromise} /> -->
-	</section>
-	<MessageField {submitFn} />
-	{#if showScrollbar}
-		<Scrollbar bind:this={scrollBar} {scrollableContent} width={0.4} />
-	{/if}
+<div id="wrapper" bind:this={wrapper}>
+	<div bind:this={topAnchor} class="anchor"></div>
+	{#each paginationService.paginatedElements as { _id, from, plaintext, sequence, sendTime, isPending } (_id)}
+		<!-- Dont mind the error below, just a TypeScript issue (oninspect) -->
+		<div
+			class="message"
+			class:sent={from === getCookie('userId')}
+			class:received={from !== getCookie('userId')}
+			class:pending={isPending}
+			use:readIntersectionAction={sequence > lastReadSequenceMe && !!unreadCount}
+			onintersect={handleMessageRead}
+			id={_id}
+		>
+			<p class="text">{plaintext}</p>
+			<p class="sendTime">
+				{formatISODate(sendTime)}
+				{from === getCookie('userId') ? getMessageReadStatus(sequence) : ''}
+			</p>
+		</div>
+		{#if sequence === startingLastReadSequenceMe && sequence !== lastSequence}
+			<div bind:this={unreadAnchor} id="unread-anchor" class="anchor">Unread Messages</div>
+		{/if}
+	{/each}
+	<div bind:this={bottomAnchor} id="bottom-anchor" class="anchor"></div>
 </div>
 
 <style lang="scss">
-	#message-list {
-		display: grid;
-		grid-template-rows: 1fr auto;
-
-		background-color: #3a506b;
-		position: relative;
-		height: 94vh;
-	}
-
-	#messages {
+	#wrapper {
 		display: grid;
 		grid-template-columns: repeat(10, 1fr);
 		grid-auto-rows: max-content;
 
 		padding: 0 0.8rem;
+	}
 
-		overflow-y: scroll;
+	.message {
+		position: relative;
+		overflow-wrap: break-word;
+		overflow-anchor: none;
+		padding: 0.6rem;
+		border-radius: 1rem;
+		margin: 0.8rem 0;
+		font-size: 1.1rem;
 
-		.message {
-			position: relative;
-			overflow-wrap: break-word;
-			overflow-anchor: none;
-			padding: 0.6rem;
-			border-radius: 1rem;
-			margin: 0.8rem 0;
-			font-size: 1.1rem;
-
-			&.received {
-				grid-column: 1/7;
-				background-color: #edf6f9;
-			}
-
-			&.sent {
-				grid-column: 5/11;
-				background-color: #83c5be;
-			}
-
-			&.pending {
-				background-color: #83c5c08f;
-				opacity: 0.8;
-			}
-
-			.sendTime {
-				justify-self: end;
-				font-size: 0.9rem;
-				font-weight: 300;
-			}
+		&.received {
+			grid-column: 1/7;
+			background-color: #edf6f9;
 		}
 
-		.anchor {
+		&.sent {
+			grid-column: 5/11;
+			background-color: #83c5be;
+		}
+
+		&.pending {
+			background-color: #83c5c08f;
+			opacity: 0.8;
+		}
+
+		.sendTime {
+			justify-self: end;
+			font-size: 0.9rem;
+			font-weight: 300;
+		}
+	}
+
+	.anchor {
+		grid-column: 1/-1;
+		height: 1px;
+		width: 100%;
+
+		&#unread-anchor {
 			grid-column: 1/-1;
-			height: 1px;
-			width: 100%;
+			display: flex;
+			align-items: center;
+			margin: 1rem 0;
+			color: var(--primary-text-color);
 
-			&#unread-anchor {
-				grid-column: 1/-1;
-				display: flex;
-				align-items: center;
-				margin: 1rem 0;
-				color: var(--primary-text-color);
-
-				/* Create the left and right lines with pseudo-elements on the container */
-				&::before,
-				&::after {
-					content: '';
-					flex-grow: 1;
-					height: 2px;
-					background-color: #0065e1;
-				}
-
-				/* Reserve a 2rem gap between the text and the lines */
-				&::before {
-					margin-right: 2rem;
-				}
-
-				&::after {
-					margin-left: 2rem;
-				}
+			/* Create the left and right lines with pseudo-elements on the container */
+			&::before,
+			&::after {
+				content: '';
+				flex-grow: 1;
+				height: 2px;
+				background-color: #0065e1;
 			}
-		}
 
-		/* Hide scrollbar for IE, Edge, and Firefox */
-		-ms-overflow-style: none; /* IE and Edge */
-		scrollbar-width: none; /* Firefox */
+			/* Reserve a 2rem gap between the text and the lines */
+			&::before {
+				margin-right: 2rem;
+			}
 
-		/* Hide scrollbar for Chrome, Safari, and Opera */
-		&::-webkit-scrollbar {
-			display: none;
+			&::after {
+				margin-left: 2rem;
+			}
 		}
 	}
 </style>

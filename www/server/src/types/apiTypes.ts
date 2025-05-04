@@ -107,7 +107,6 @@ export type loginPayload = {
 export type signupPayload = {
   username: string;
   password: string;
-  preKeyBundle: StringifiedPreKeyBundle;
 };
 
 export type sendPreKeyBundlePayload = {

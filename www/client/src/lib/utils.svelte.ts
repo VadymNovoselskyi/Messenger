@@ -70,7 +70,9 @@ export async function generatePreKeyBundle(preKeyNumber: number): Promise<unorgo
 	};
 }
 
-export async function generateEphemeralKeys(preKeyNumber: number): Promise<libsignal.PreKeyPairType<ArrayBuffer>[]> {
+export async function generateEphemeralKeys(
+	preKeyNumber: number
+): Promise<libsignal.PreKeyPairType<ArrayBuffer>[]> {
 	const store = SignalProtocolStore.getInstance();
 	const oneTimePreKeys: libsignal.PreKeyPairType<ArrayBuffer>[] = [];
 	for (let i = 0; i < preKeyNumber; i++) {
@@ -120,16 +122,29 @@ export function textToArrayBuffer(text: string): ArrayBuffer {
 	return buf;
 }
 
-export function getOtherUsername(chatId: string): string {
-	if (!browser) return '';
-	const chat = chatsStore.getChat(chatId);
-	if (!chat) {
-		console.warn(`No chat found for chatId: ${chatId}`);
-		return '';
-	}
+export function getOtherUserChatMetadata(chatId: string): {
+	_id: string;
+	username: string;
+	lastReadSequence: number;
+} {
+	if (!browser) return { _id: '', username: '', lastReadSequence: 0 };
+	const chat = chatsStore.getLoadedChat(chatId);
+	if (!chat) return { _id: '', username: '', lastReadSequence: 0 };
 
-	const otherUser = chat.users.find((user) => user._id !== getCookie('userId'));
-	return otherUser?.username ?? '';
+	const otherUserChatMetadata = chat.users.find((user) => user._id !== getCookie('userId'));
+	return otherUserChatMetadata ?? { _id: '', username: '', lastReadSequence: 0 };
+}
+export function getMyChatMetadata(chatId: string): {
+	_id: string;
+	username: string;
+	lastReadSequence: number;
+} {
+	if (!browser) return { _id: '', username: '', lastReadSequence: 0 };
+	const chat = chatsStore.getLoadedChat(chatId);
+	if (!chat) return { _id: '', username: '', lastReadSequence: 0 };
+
+	const myChatMetadata = chat.users.find((user) => user._id === getCookie('userId'));
+	return myChatMetadata ?? { _id: '', username: '', lastReadSequence: 0 };
 }
 
 export function toStoredChat(chat: ApiChat): StoredChat {

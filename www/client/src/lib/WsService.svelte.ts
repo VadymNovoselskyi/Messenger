@@ -16,7 +16,7 @@ import {
 	type receiveMessageResponse,
 	type responsePayload
 } from './types/apiTypes';
-import { toStoredChat, generateId, getCookie, getOtherUsername } from './utils.svelte';
+import { toStoredChat, generateId, getCookie, getOtherUserChatMetadata } from './utils.svelte';
 import type { StoredChat, StoredMessage } from './types/dataTypes';
 import { messagesStore } from './MessagesStore.svelte';
 
@@ -112,11 +112,11 @@ export class WsService {
 		} else if (api === API.RECEIVE_MESSAGE) {
 			const { chatId, message } = payload as receiveMessageResponse;
 
-			const chat = chatsStore.getChat(chatId);
+			const chat = chatsStore.getLoadedChat(chatId);
 			if (!chat) throw new Error(`Chat with id ${chatId} not found`);
 
 			const senderAddress: SignalProtocolAddress = new SignalProtocolAddress(
-				getOtherUsername(chatId),
+				getOtherUserChatMetadata(chatId)._id,
 				1
 			);
 
@@ -162,13 +162,10 @@ export class WsService {
 			chatsStore.sortChats();
 		} else if (api === API.READ_UPDATE) {
 			const { chatId, sequence } = payload as readUpdateResponse;
-			const chat = chatsStore.getChat(chatId);
+			const chat = chatsStore.getLoadedChat(chatId);
 			if (!chat) throw new Error(`Chat with id ${chatId} not found`);
 
-			const lastSequence = Math.max(
-				chat.users.find((user) => user._id !== getCookie('userId'))!.lastReadSequence,
-				sequence
-			);
+			const lastSequence = Math.max(getOtherUserChatMetadata(chatId).lastReadSequence, sequence);
 			const updatedChat = {
 				...chat,
 				users: chat.users.map((user) => {

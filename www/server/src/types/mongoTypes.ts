@@ -21,11 +21,11 @@ export type ChatDocument = {
 export type UserDocument = {
   _id: ObjectId;
   username: string;
-  registrationId: number;
-  identityKey: Binary;
-  signedPreKey: BinarySignedPreKey;
-  preKeys: BinaryPreKey[];
   password: string;
+  registrationId?: number;
+  identityKey?: Binary;
+  signedPreKey?: BinarySignedPreKey;
+  preKeys?: BinaryPreKey[];
   lastMetadataSync: Date;
 };
 

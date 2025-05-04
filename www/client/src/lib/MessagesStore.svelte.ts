@@ -1,10 +1,9 @@
 import { getDbService } from './DbService.svelte';
-import type { PendingMessage, StoredChat, StoredMessage } from './types/dataTypes';
-import { getCookie } from './utils.svelte';
+import type { PendingMessage, StoredMessage } from './types/dataTypes';
 
 export class MessagesStore {
 	private static instance: MessagesStore;
-	private _messages = $state<Record<string, StoredMessage[]>>({});
+	private _loadedMessages = $state<Record<string, StoredMessage[]>>({});
 	private _lastMessages = $state<Record<string, StoredMessage | undefined>>({});
 	private _hasLoaded = $state(false);
 	private getDb = getDbService;
@@ -18,7 +17,7 @@ export class MessagesStore {
 		return MessagesStore.instance;
 	}
 
-	public getLastMessages(): Record<string, StoredMessage | undefined> {
+	public get lastMessages(): Record<string, StoredMessage | undefined> {
 		return this._lastMessages;
 	}
 
@@ -26,25 +25,28 @@ export class MessagesStore {
 	public async loadLatestMessages(chatIds: string[]): Promise<void> {
 		for (const chatId of chatIds) {
 			const messages = await (await this.getDb()).getLatestMessages(chatId);
-			this._messages[chatId] = messages;
+			this._loadedMessages[chatId] = messages;
 		}
 		this._lastMessages = await this.loadLastMessages();
 		this._hasLoaded = true;
 	}
 
-	/* Returns all messages for a chat */
-	public getChatMessages(chatId: string): StoredMessage[] {
-		return this._messages[chatId] ?? [];
+	/* Returns all loaded messages for a chat */
+	public getLoadedChatMessages(chatId: string): StoredMessage[] {
+		return this._loadedMessages[chatId] ?? [];
 	}
 
 	/* Adds a new message to a chat */
 	public async addMessage(message: StoredMessage, isNecessary = true): Promise<void> {
-		const messages = this._messages[message.chatId];
+		const messages = this._loadedMessages[message.chatId];
 		if (!messages) {
-			this._messages[message.chatId] = [message];
+			this._loadedMessages[message.chatId] = [message];
 			this._lastMessages[message.chatId] = message;
 		} else {
-			if (isNecessary && (this._messages[message.chatId]?.at(-1)?.sequence ?? 0) === message.sequence - 1) {
+			if (
+				isNecessary &&
+				(this._loadedMessages[message.chatId]?.at(-1)?.sequence ?? 0) === message.sequence - 1
+			) {
 				messages.push(message);
 			}
 			if ((this._lastMessages[message.chatId]?.sequence ?? 0) < message.sequence) {
@@ -57,7 +59,7 @@ export class MessagesStore {
 
 	/* Updates an existing message in a chat */
 	public async updateMessage(message: StoredMessage): Promise<void> {
-		const messages = this._messages[message.chatId];
+		const messages = this._loadedMessages[message.chatId];
 		if (!messages) return;
 		const index = messages.findIndex((m) => m._id === message._id);
 		if (index === -1) return;
@@ -68,13 +70,13 @@ export class MessagesStore {
 
 	/* Adds a new pending message to a chat */
 	public async addPendingMessage(pendingMessage: PendingMessage): Promise<void> {
-		const messages = this._messages[pendingMessage.chatId];
+		const messages = this._loadedMessages[pendingMessage.chatId];
 		if (!messages) {
-			this._messages[pendingMessage.chatId] = [pendingMessage];
+			this._loadedMessages[pendingMessage.chatId] = [pendingMessage];
 			this._lastMessages[pendingMessage.chatId] = pendingMessage;
 		} else {
 			if (
-				(this._messages[pendingMessage.chatId]?.at(-1)?.sequence ?? 0) ===
+				(this._loadedMessages[pendingMessage.chatId]?.at(-1)?.sequence ?? 0) ===
 				pendingMessage.sequence - 1
 			) {
 				messages.push(pendingMessage);
@@ -92,7 +94,7 @@ export class MessagesStore {
 		tempId: string,
 		message: StoredMessage
 	): Promise<void> {
-		const messages = this._messages[message.chatId];
+		const messages = this._loadedMessages[message.chatId];
 		if (!messages) return;
 		if (this._lastMessages[message.chatId]!.sequence < message.sequence) {
 			this._lastMessages[message.chatId] = message;
@@ -103,8 +105,9 @@ export class MessagesStore {
 		await (await this.getDb()).promotePendingMessage(tempId, $state.snapshot(message));
 	}
 
+	/* Adds an empty chat to the store */
 	public addEmptyChat(chatId: string) {
-		this._messages[chatId] = [];
+		this._loadedMessages[chatId] = [];
 		this._lastMessages[chatId] = undefined;
 	}
 
@@ -112,7 +115,7 @@ export class MessagesStore {
 	private async loadLastMessages(): Promise<Record<string, StoredMessage | undefined>> {
 		const db = await this.getDb();
 		const lastMessages: Record<string, StoredMessage | undefined> = {};
-		for (const chatId of Object.keys(this._messages)) {
+		for (const chatId of Object.keys(this._loadedMessages)) {
 			lastMessages[chatId] = await db.getLastMessage(chatId);
 		}
 		return lastMessages;

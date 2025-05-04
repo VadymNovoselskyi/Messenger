@@ -2,12 +2,10 @@
 	import { onMount } from 'svelte';
 	let {
 		scrollableContent,
-		width,
-		lastScroll = $bindable()
+		width
 	}: {
 		scrollableContent: HTMLElement;
 		width: number;
-		lastScroll?: number;
 	} = $props();
 
 	let scrollableThumb: HTMLElement;
@@ -29,7 +27,6 @@
 			const contentHeight = scrollableContent.scrollHeight;
 			const visibleHeight = scrollableContent.clientHeight;
 			const scrollTop = scrollableContent.scrollTop;
-			if (lastScroll !== undefined) lastScroll = scrollTop;
 
 			// Calculate thumb height proportionally, but not less than 20px.
 			const computedThumbHeight = (visibleHeight / contentHeight) * visibleHeight;

@@ -123,26 +123,10 @@ wss.on("connection", ws => {
     }
     // Handle signup request.
     if (api === apiTypes.API.SIGNUP) {
-      const { username, password, preKeyBundle } = payload as apiTypes.signupPayload;
-      const preKeyBundleReconstructed: BinaryPreKeyBundle = {
-        registrationId: preKeyBundle.registrationId,
-        identityKey: base64ToBinary(preKeyBundle.identityKey),
-        signedPreKey: {
-          keyId: preKeyBundle.signedPreKey.keyId,
-          publicKey: base64ToBinary(preKeyBundle.signedPreKey.publicKey),
-          signature: base64ToBinary(preKeyBundle.signedPreKey.signature),
-        },
-        preKeys: [],
-      };
-      for (const preKey of preKeyBundle.preKeys) {
-        preKeyBundleReconstructed.preKeys.push({
-          keyId: preKey.keyId,
-          publicKey: base64ToBinary(preKey.publicKey),
-        });
-      }
+      const { username, password } = payload as apiTypes.signupPayload;
 
       try {
-        const userId = await mongoApi.createUser(username, password, preKeyBundleReconstructed);
+        const userId = await mongoApi.createUser(username, password);
         const token = generateToken(userId.toString());
         ws.isAuthenticated = true;
         ws.userId = userId.toString();
@@ -155,12 +139,14 @@ wss.on("connection", ws => {
         });
       } catch (error) {
         const errMsg = error instanceof Error ? error.message : "An unknown error occurred";
-        deliveryService.sendMessage(ws.userId ?? "", {
-          id,
-          api,
-          status: "ERROR",
-          payload: { message: errMsg },
-        });
+        ws.send(
+          JSON.stringify({
+            id,
+            api,
+            status: "ERROR",
+            payload: { message: errMsg },
+          })
+        );
       }
       return;
     }
@@ -240,7 +226,7 @@ async function handleAuthenticatedCall(
           },
           () => {
             for (const chat of chats) {
-              const otherUser = chat.users.find(user => user._id.toString() !== userId)!;
+              const otherUserMetadata = chat.users.find(user => user._id.toString() !== userId)!;
               mongoApi.updateLastAckSequence(
                 new ObjectId(chat._id),
                 new ObjectId(userId),
@@ -249,11 +235,12 @@ async function handleAuthenticatedCall(
               mongoApi.updateLastAckReadSequence(
                 new ObjectId(chat._id),
                 new ObjectId(userId),
-                otherUser.lastReadSequence
+                otherUserMetadata.lastReadSequence
               );
+              if (!chat.messages.at(-1)) return;
               mongoApi.deletePreviousMessages(
                 new ObjectId(chat._id),
-                chat.messages.at(-1)?.sequence ?? 0
+                chat.messages.at(-1)!.sequence
               );
             }
           }

@@ -26,7 +26,7 @@ export class OnlineUsersService {
 
   public addUser(ws: WebSocket) {
     if (!ws.userId) {
-      throw new Error("User ID is not set");
+      throw new Error("User _id is not set");
     }
     this.onlineUsers.set(ws.userId, ws);
   }

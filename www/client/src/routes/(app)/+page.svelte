@@ -20,7 +20,6 @@
 	onMount(async () => {
 		if (!browser) return;
 		if (!getCookie('userId') || !getCookie('token')) {
-			console.log(getCookie('userId'), getCookie('token'));
 			goto('/login');
 			return;
 		}
@@ -37,7 +36,6 @@
 		if (!chatsStore.hasLoaded || !messagesStore.hasLoaded) {
 			let incompleteChatIds = await chatsStore.loadLatestChats();
 			await messagesStore.loadLatestMessages(incompleteChatIds);
-			chatsStore.sortChats();
 
 			while (incompleteChatIds.length) incompleteChatIds = await syncActiveChats(incompleteChatIds);
 			let isComplete = await syncAllChatsMetadata();
@@ -49,34 +47,3 @@
 <svelte:head>
 	<title>Chats</title>
 </svelte:head>
-
-<div id="wrapper">
-	{#if chatsStore.hasLoaded && messagesStore.hasLoaded}
-		<section id="chats-list">
-			<ChatList chats={chatsStore.chats} lastMessages={messagesStore.getLastMessages()} />
-		</section>
-	{:else}
-		<div class="chats-loader">
-			<Loader />
-		</div>
-	{/if}
-
-	<section id="chat-display"></section>
-</div>
-
-<style lang="scss">
-	#wrapper {
-		display: grid;
-		grid-template-columns: minmax(14rem, 3fr) 8fr;
-		height: 94vh;
-
-		#chat-display {
-			background-color: #3a506b;
-		}
-	}
-
-	.chats-loader {
-		justify-self: center;
-		align-self: center;
-	}
-</style>

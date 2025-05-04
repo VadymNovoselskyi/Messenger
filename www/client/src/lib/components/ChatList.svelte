@@ -1,13 +1,15 @@
 <script lang="ts">
-	import { onMount, tick } from 'svelte';
+	import { onDestroy, onMount, tick } from 'svelte';
 	import { page } from '$app/state';
 	import Scrollbar from '$lib/components/Scrollbar.svelte';
 	import AddChatButton from '$lib/components/AddChatButton.svelte';
-
-	import { formatISODate, getOtherUsername, getCookie } from '$lib/utils.svelte';
-	import type { StoredChat, StoredMessage } from '$lib/types/dataTypes';
-	import Loader from './Loader.svelte';
+	import { PaginationService } from '$lib/PaginationService.svelte';
+	import { getDbService } from '$lib/DbService.svelte';
+	import { chatsStore } from '$lib/ChatsStore.svelte';
 	import { messagesStore } from '$lib/MessagesStore.svelte';
+
+	import { formatISODate, getOtherUserChatMetadata, getMyChatMetadata } from '$lib/utils.svelte';
+	import type { StoredChat, StoredMessage } from '$lib/types/dataTypes';
 
 	const {
 		chats,
@@ -20,79 +22,107 @@
 	} = $props();
 
 	let showAddChat = $state(false);
-	let bottomObserver = $state<IntersectionObserver>();
 
 	let scrollableContent = $state() as HTMLElement;
 	let scrollBar = $state() as Scrollbar;
-	let showScrollbar = $state<boolean>();
-	let bottom_anchor = $state() as HTMLElement;
+	let showScrollbar = $state(false);
 
-	const INDEXES_PER_STACK = 14;
-	//dynamic loading of messages
-	let stacksLoaded = $state(1);
-	let indexesToShow = $derived(
-		(chats?.length || 0) >= stacksLoaded * INDEXES_PER_STACK
-			? stacksLoaded * INDEXES_PER_STACK
-			: chats?.length || 0
-	);
-	let lastChats = $derived(chats?.slice(0, indexesToShow));
+	let topAnchor = $state() as HTMLElement;
+	let bottomAnchor = $state() as HTMLElement;
 
-	onMount(async () => {
-		// bottomObserver = createObserver(handleBottomIntersection);
-		await checkContentHeight();
+	const topObserver = new IntersectionObserver((entries) => {
+		for (const entry of entries) {
+			if (!entry.isIntersecting) continue;
+			handleTopIntersection();
+		}
+	});
+	const bottomObserver = new IntersectionObserver((entries) => {
+		for (const entry of entries) {
+			if (!entry.isIntersecting) continue;
+			handleBottomIntersection();
+		}
 	});
 
-	// Effect: re-check content height when derived chat list changes
-	$effect(() => {
-		lastChats; // dependency for reactivity
+	async function handleTopIntersection() {
+		const prevTopEl = paginationService.paginatedElements[0];
+		if (!prevTopEl) return;
+		const prevTopId = prevTopEl._id;
 
-		requestAnimationFrame(async () => {
-			await tick();
-			await checkContentHeight();
-		});
+		const wasDragging = scrollBar && scrollBar.isDraggingOn();
+		if (wasDragging) scrollBar.onMouseUp();
 
-		// Start observing bottom anchor for lazy loading after tick
-		if (scrollBar) bottomObserver!.observe(bottom_anchor);
-	});
-
-	/**
-	 * Checks if the scrollable content requires a scrollbar and restores its previous scroll position.
-	 */
-	async function checkContentHeight() {
+		await paginationService.changePage('UP');
 		await tick();
-		if (!scrollableContent) {
-			requestAnimationFrame(checkContentHeight);
+
+		const prevTopElement = document.getElementById(prevTopId);
+		if (prevTopElement) prevTopElement.scrollIntoView({ behavior: 'instant', block: 'start' });
+
+		if (wasDragging) scrollBar.onMouseDown();
+	}
+
+	async function handleBottomIntersection() {
+		const prevBottomEl = paginationService.paginatedElements.at(-1);
+		if (!prevBottomEl) return;
+		const prevBottomId = prevBottomEl._id;
+
+		const wasDragging = scrollBar && scrollBar.isDraggingOn();
+		if (wasDragging) scrollBar.onMouseUp();
+
+		await paginationService.changePage('DOWN');
+		await tick();
+
+		const prevBottomElement = document.getElementById(prevBottomId);
+		if (prevBottomElement) prevBottomElement.scrollIntoView({ behavior: 'instant', block: 'end' });
+
+		if (wasDragging) scrollBar.onMouseDown();
+	}
+
+	const MAX_PAGES = 5;
+	const PAGE_SIZE = 6;
+	const paginationService = new PaginationService<StoredChat>(
+		chats,
+		MAX_PAGES,
+		PAGE_SIZE,
+		async (direction, elements) => {
+			let lastModified: string | undefined;
+			if (direction === 'DOWN') {
+				lastModified = elements.at(-1)?.lastModified;
+			} else if (direction === 'UP') {
+				lastModified = elements.at(0)?.lastModified;
+			}
+			lastModified ??= new Date().toISOString();
+
+			const newChats = await (
+				await getDbService()
+			).getChatsByDate(lastModified, PAGE_SIZE, direction);
+			await messagesStore.loadLatestMessages(newChats.map((chat) => chat._id));
+			return newChats;
+		},
+		chatsStore.chatsCount
+	);
+
+	onMount(setAnchors);
+
+	async function setAnchors() {
+		await tick();
+		if (!topAnchor || !bottomAnchor) {
+			requestAnimationFrame(setAnchors);
 			return;
 		}
 
-		// Set flag if content overflows container height
-		showScrollbar = scrollableContent.scrollHeight !== scrollableContent.clientHeight;
-
-		// // Reset scroll position to stored value
-		// scrollableContent.scrollTop = 0;
-		// requestAnimationFrame(() => {
-		// 	scrollableContent.scrollTo({
-		// 		top: memory.chatsScroll,
-		// 		behavior: 'instant'
-		// 	});
-		// });
+		topObserver.observe(topAnchor);
+		bottomObserver.observe(bottomAnchor);
 	}
 
-	/**
-	 * Load more chats on bottom intersection.
-	 */
-	async function handleBottomIntersection(): Promise<void> {
-		const isDragging = scrollBar.isDraggingOn();
-		if (isDragging) scrollBar.onMouseUp();
+	$effect(() => {
+		paginationService.totalLength = chatsStore.chatsCount;
+	});
 
-		//load more chats
-		stacksLoaded++;
-
-		if (isDragging) {
-			await tick();
-			scrollBar.onMouseDown();
+	$effect(() => {
+		if (!showScrollbar && chats.length) {
+			showScrollbar = scrollableContent.scrollHeight !== scrollableContent.clientHeight;
 		}
-	}
+	});
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -105,26 +135,27 @@
 >
 	<h1 id="chats-list-title">Chats</h1>
 
-	<div
+	<section
 		id="chats"
 		bind:this={scrollableContent}
 		onscroll={showScrollbar ? scrollBar.updateThumbPosition : null}
 	>
-		{#each lastChats as { _id, users, lastSequence, lastModified }, i (_id)}
+		<div bind:this={topAnchor} class="anchor"></div>
+		{#each paginationService.paginatedElements as { _id, lastSequence, lastModified } (_id)}
 			<a
 				href="{page.url.origin}/chat/{_id}"
 				class="chat"
+				id={_id}
 				class:current={page.url.pathname === `/chat/${_id}`}
 				onclick={() => {
 					if (page.params.chatId !== _id && onChatChange) onChatChange();
 				}}
 			>
-				<img src={''} alt={getOtherUsername(_id)} class="profile-picture" />
-				<p class="chat-name">{getOtherUsername(_id)}</p>
-				{#if lastSequence - users.find((user) => user._id === getCookie('userId'))!.lastReadSequence}
+				<img src={''} alt={getOtherUserChatMetadata(_id).username} class="profile-picture" />
+				<p class="chat-name">{getOtherUserChatMetadata(_id).username}</p>
+				{#if lastSequence - getMyChatMetadata(_id).lastReadSequence}
 					<p class="unread-count">
-						{lastSequence -
-							users.find((user) => user._id === getCookie('userId'))!.lastReadSequence}
+						{lastSequence - getMyChatMetadata(_id).lastReadSequence}
 					</p>
 				{/if}
 				<p class="chat-message" class:system-message={!lastMessages[_id]}>
@@ -133,8 +164,8 @@
 				<p class="send-date">{formatISODate(lastModified)}</p>
 			</a>
 		{/each}
-		<div bind:this={bottom_anchor} class="anchor"></div>
-	</div>
+		<div bind:this={bottomAnchor} class="anchor"></div>
+	</section>
 	{#if showScrollbar}
 		<Scrollbar bind:this={scrollBar} {scrollableContent} width={0.4} />
 	{/if}

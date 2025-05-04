@@ -9,7 +9,7 @@ dotenv.config();
 const JWT_KEY = process.env.JWT_KEY || "";
 
 /**
- * Generates a JWT token for the given user ID.
+ * Generates a JWT token for the given user _id.
  * @param userId - The user's unique identifier.
  * @returns A signed JWT token.
  */
