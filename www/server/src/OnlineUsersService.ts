@@ -1,5 +1,5 @@
 import { WebSocket, WebSocketServer } from "ws";
-import * as apiTypes from "./types/apiTypes.js";
+import { SystemApi } from "./types/systemTypes.js";
 
 export class OnlineUsersService {
   private static instance: OnlineUsersService;
@@ -44,7 +44,7 @@ export class OnlineUsersService {
         }
         ws.isAlive = false;
         ws.ping();
-        ws.send(JSON.stringify({ api: apiTypes.SystemApi.PING }));
+        ws.send(JSON.stringify({ api: SystemApi.PING }));
       });
     }, OnlineUsersService.PING_INTERVAL);
   }

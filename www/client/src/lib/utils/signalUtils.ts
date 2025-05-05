@@ -7,14 +7,14 @@ import * as parserUtils from '$lib/utils/parserUtils';
 import * as chatMetadataUtils from '$lib/utils/chatMetadataUtils.svelte';
 import * as dataTypes from '$lib/types/dataTypes';
 import * as signalTypes from '$lib/types/signalTypes';
-import type { unorgonizedKeys } from '$lib/types/signalTypes';
+import type { unorgonizedKeyPairs } from '$lib/types/signalTypes';
 
 /**
  * Generates a pre-key bundle and stores it in the SignalProtocolDb.
  * @param preKeyNumber The number of ephemeral keys to generate.
  * @returns The pre-key bundle.
  */
-export async function generatePreKeyBundle(preKeyNumber: number): Promise<unorgonizedKeys> {
+export async function generatePreKeyBundle(preKeyNumber: number): Promise<unorgonizedKeyPairs> {
 	const store = SignalProtocolDb.getInstance();
 
 	// Generate and store registration ID
@@ -64,7 +64,7 @@ export async function generateEphemeralKeys(
  */
 export async function handleSessionBootstrap(
 	createdChat: dataTypes.StoredChat,
-	preKeyBundle: signalTypes.StringifiedPreKeyBundle
+	preKeyBundle: signalTypes.PreKeyBundle<string>
 ): Promise<void> {
 	const { _id } = createdChat;
 	const { registrationId, identityKey, signedPreKey, preKeys } = preKeyBundle;

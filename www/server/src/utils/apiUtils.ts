@@ -1,17 +1,10 @@
 import { ObjectId } from "mongodb";
-import { ApiChat, ApiMessage, ApiUser, NotificationApi, NotificationApiMessage, RequestApi, RequestApiMessage, ResponseApiMessage, SystemApi, SystemApiMessage } from "./types/apiTypes.js";
-import { ChatDocument, MessageDocument } from "./types/mongoTypes.js";
+import { ApiChat, ApiMessage, ApiUser } from "../types/apiTypes.js";
+import { ChatDocument, MessageDocument } from "../types/mongoTypes.js";
+import { NotificationApi, NotificationApiMessage } from "../types/notificationTypes.js";
+import { RequestApi, RequestApiMessage, ResponseApiMessage } from "../types/requestTypes.js";
+import { SystemApi, SystemApiMessage } from "../types/systemTypes.js";
 
-/**
- * Sends a standardized JSON response over the WebSocket.
- *
- * @param {WebSocket} ws - The WebSocket connection to send the response through.
- * @param {types.API} [api] - (Optional) The API endpoint identifier for the response.
- * @param {string} [id] - (Optional) The unique identifier of the API call.
- * @param {"SUCCESS" | "ERROR"} [status] - (Optional) The status of the response.
- * @param {types.response} [payload] - (Optional) The response payload data.
- * @returns {void}
- */
 
 export async function toApiChat(chat: ChatDocument, messages: MessageDocument[]): Promise<ApiChat> {
   return {

@@ -194,7 +194,6 @@ export async function createChat(event: SubmitEvent): Promise<void> {
 	try {
 		const response = await wsService.sendRequest(call);
 		const { createdChat, preKeyBundle } = response as requestTypes.createChatResponse;
-		if (!preKeyBundle) throw new Error(`no preKeyBundle received`);
 
 		await chatsStore.addChat(createdChat);
 		messagesStore.addEmptyChat(createdChat._id);
@@ -273,8 +272,8 @@ export async function signup(event: SubmitEvent): Promise<void> {
  * Sends a pre-key bundle to the server.
  * @param keys The unorgonized keys to send.
  */
-export async function sendPreKeyBundle(keys: signalTypes.unorgonizedKeys): Promise<void> {
-	const preKeyBundle: signalTypes.StringifiedPreKeyBundle = {
+export async function sendPreKeyBundle(keys: signalTypes.unorgonizedKeyPairs): Promise<void> {
+	const preKeyBundle: signalTypes.PreKeyBundle<string> = {
 		registrationId: keys.registrationId,
 		identityKey: parserUtils.arrayBufferToBase64(keys.identityKeyPair.pubKey),
 		signedPreKey: {
@@ -305,7 +304,7 @@ export async function sendPreKeyBundle(keys: signalTypes.unorgonizedKeys): Promi
  * @param preKeys The pre-keys to add.
  */
 export async function addPreKeys(preKeys: libsignal.PreKeyPairType<ArrayBuffer>[]): Promise<void> {
-	const stringifiedPreKeys: signalTypes.StringifiedPreKey[] = [];
+	const stringifiedPreKeys: libsignal.PreKeyType<string>[] = [];
 	for (const preKey of preKeys) {
 		stringifiedPreKeys.push({
 			keyId: preKey.keyId,

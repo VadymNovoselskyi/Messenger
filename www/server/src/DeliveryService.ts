@@ -1,14 +1,11 @@
 import { OrderedMap } from "@js-sdsl/ordered-map";
 import { OnlineUsersService } from "./OnlineUsersService.js";
 import { WebSocket } from "ws";
-import {
-  ErrorApi,
-  ErrorApiMessage,
-  ErrorApiPayload,
-  NotificationApiMessage,
-  ResponseApiMessage,
-} from "./types/apiTypes.js";
-import { isNotificationApiMessage, isResponseApiMessage } from "./apiUtils.js";
+
+import { isNotificationApiMessage, isResponseApiMessage } from "./utils/apiUtils.js";
+import { ResponseApiMessage } from "./types/requestTypes.js";
+import { NotificationApiMessage } from "./types/notificationTypes.js";
+import { ErrorApi, ErrorApiPayload } from "./types/systemTypes.js";
 
 export type PendingMessage = ResponseApiMessage | NotificationApiMessage;
 export type PendingMesssageMetadata = {

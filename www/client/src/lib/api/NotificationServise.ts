@@ -24,8 +24,12 @@ export function handleNotification(
 async function handleIncomingMessage(payload: notifTypes.incomingMessageResponse) {
 	const { chatId, message } = payload;
 
-	const chat = chatsStore.getLoadedChat(chatId);
-	if (!chat) throw new Error(`Chat with id ${chatId} not found`);
+	let chat = chatsStore.getLoadedChat(chatId);
+	if (!chat) {
+		chat = await chatsStore.getChat(chatId);
+		if (!chat) throw new Error(`Chat with id ${chatId} not found`);
+		chatsStore.sortChats();
+	}
 
 	const senderAddress: libsignal.SignalProtocolAddress = new libsignal.SignalProtocolAddress(
 		getOtherUserChatMetadata(chatId)._id,
@@ -71,8 +75,13 @@ async function handleIncomingMessage(payload: notifTypes.incomingMessageResponse
 
 async function handleIncomingRead(payload: notifTypes.incomingReadResponse) {
 	const { chatId, sequence } = payload;
-	const chat = chatsStore.getLoadedChat(chatId);
-	if (!chat) throw new Error(`Chat with id ${chatId} not found`);
+
+	let chat = chatsStore.getLoadedChat(chatId);
+	if (!chat) {
+		chat = await chatsStore.getChat(chatId);
+		if (!chat) throw new Error(`Chat with id ${chatId} not found`);
+		chatsStore.sortChats();
+	}
 
 	const lastSequence = Math.max(getOtherUserChatMetadata(chatId).lastReadSequence, sequence);
 	const updatedChat = {

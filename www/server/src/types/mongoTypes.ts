@@ -1,7 +1,5 @@
 import { ObjectId, Binary } from "mongodb";
-import { ApiUser } from "./apiTypes.js";
-import { BinarySignedPreKey, BinaryPreKey } from "./signalTypes.js";
-import { MessageType } from "@privacyresearch/libsignal-protocol-typescript";
+import { MessageType, PreKeyType, SignedPublicPreKeyType } from "@privacyresearch/libsignal-protocol-typescript";
 
 export type ChatDocument = {
   _id: ObjectId;
@@ -24,8 +22,8 @@ export type UserDocument = {
   password: string;
   registrationId?: number;
   identityKey?: Binary;
-  signedPreKey?: BinarySignedPreKey;
-  preKeys?: BinaryPreKey[];
+  signedPreKey?: SignedPublicPreKeyType<Binary>;
+  preKeys?: PreKeyType<Binary>[];
   lastMetadataSync: Date;
 };
 

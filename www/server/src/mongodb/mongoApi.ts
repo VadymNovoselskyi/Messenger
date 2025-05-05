@@ -1,15 +1,12 @@
 import bcrypt from "bcrypt";
-
-import { chatsCollection, usersCollection, messagesCollection } from "./connect.js";
-import { binaryToBase64 } from "../utils.js";
-
 import { Binary, ObjectId } from "mongodb";
-import { MessageType } from "@privacyresearch/libsignal-protocol-typescript";
+import { MessageType, PreKeyType } from "@privacyresearch/libsignal-protocol-typescript";
+import { chatsCollection, usersCollection, messagesCollection } from "./connect.js";
 
 import { ChatDocument, MessageDocument, UserDocument } from "../types/mongoTypes.js";
-import { BinaryPreKey, BinaryPreKeyBundle, StringifiedPreKeyBundle } from "../types/signalTypes.js";
-import { ApiChat, ApiMessage, ApiUser } from "../types/apiTypes.js";
-import { toApiChat, toApiChatMetadata } from "../apiUtils.js";
+import { ApiChat } from "../types/apiTypes.js";
+import { toApiChat, toApiChatMetadata } from "../utils/apiUtils.js";
+import { PreKeyBundle } from "../types/signalTypes.js";
 
 // Constants to manage pagination limits.
 const MAX_CHATS_MESSAGE_SYNC = 10;
@@ -260,7 +257,7 @@ export async function createChat(
 ): Promise<{
   createdChat: ChatDocument;
   receivingUserId: ObjectId;
-  preKeyBundle: StringifiedPreKeyBundle;
+  preKeyBundle: PreKeyBundle<Binary>;
 }> {
   try {
     const creatingUser = await usersCollection.findOne({ _id: creatingUserId });
@@ -335,20 +332,11 @@ export async function createChat(
     //Get the preKeyBundle
     const { registrationId, identityKey, signedPreKey, preKeys } = receivingUser;
     const randomIndex = Math.floor(Math.random() * preKeys!.length);
-    const preKeyBundle: StringifiedPreKeyBundle = {
+    const preKeyBundle: PreKeyBundle<Binary> = {
       registrationId: registrationId!,
-      identityKey: binaryToBase64(identityKey!),
-      signedPreKey: {
-        keyId: signedPreKey!.keyId,
-        publicKey: binaryToBase64(signedPreKey!.publicKey),
-        signature: binaryToBase64(signedPreKey!.signature),
-      },
-      preKeys: [
-        {
-          keyId: preKeys![randomIndex].keyId,
-          publicKey: binaryToBase64(preKeys![randomIndex].publicKey),
-        },
-      ],
+      identityKey: identityKey!,
+      signedPreKey: signedPreKey!,
+      preKeys: [preKeys![randomIndex]],
     };
 
     await usersCollection.updateOne(
@@ -398,7 +386,7 @@ export async function createUser(username: string, password: string): Promise<Ob
  * @param userId - The _id of the user to save the preKeyBundle for.
  * @param preKeyBundle - The preKeyBundle to save.
  */
-export async function savePreKeyBundle(userId: ObjectId, preKeyBundle: BinaryPreKeyBundle) {
+export async function savePreKeyBundle(userId: ObjectId, preKeyBundle: PreKeyBundle<Binary>) {
   try {
     const { modifiedCount } = await usersCollection.updateOne(
       { _id: userId },
@@ -417,7 +405,7 @@ export async function savePreKeyBundle(userId: ObjectId, preKeyBundle: BinaryPre
  * @param userId - The _id of the user to add the preKeys for.
  * @param preKeys - The preKeys to add.
  */
-export async function addPreKeys(userId: ObjectId, preKeys: BinaryPreKey[]) {
+export async function addPreKeys(userId: ObjectId, preKeys: PreKeyType<Binary>[]) {
   try {
     const { modifiedCount } = await usersCollection.updateOne(
       { _id: userId },

@@ -1,6 +1,6 @@
-import type { MessageType } from "@privacyresearch/libsignal-protocol-typescript";
-import type { ApiChat, ApiMessage } from "./dataTypes";
-import type { StringifiedPreKey, StringifiedPreKeyBundle } from "./signalTypes";
+import type { MessageType, PreKeyType } from '@privacyresearch/libsignal-protocol-typescript';
+import type { ApiChat, ApiMessage } from './dataTypes';
+import * as signalTypes from './signalTypes';
 
 /* Request APIs */
 export enum RequestApi {
@@ -87,11 +87,11 @@ export type signupPayload = {
 };
 
 export type sendPreKeyBundlePayload = {
-	preKeyBundle: StringifiedPreKeyBundle;
+	preKeyBundle: signalTypes.PreKeyBundle<string>;
 };
 
 export type addPreKeysPayload = {
-	preKeys: StringifiedPreKey[];
+	preKeys: PreKeyType<string>[];
 };
 
 export type sendPreKeyWhisperMessagePayload = {
@@ -121,7 +121,7 @@ export type syncAllChatsMetadataResponse = {
 
 export type createChatResponse = {
 	createdChat: ApiChat;
-	preKeyBundle?: StringifiedPreKeyBundle;
+	preKeyBundle: signalTypes.PreKeyBundle<string>;
 };
 
 export type loginResponse = {
