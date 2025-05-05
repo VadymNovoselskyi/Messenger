@@ -7,7 +7,7 @@ import * as signalUtils from '$lib/utils/signalUtils';
 import * as parserUtils from '$lib/utils/parserUtils';
 
 import * as dataTypes from '$lib/types/dataTypes';
-import * as apiTypes from '$lib/types/apiTypes';
+import * as requestTypes from '$lib/types/requestTypes';
 import * as signalTypes from '../types/signalTypes';
 import { SignalProtocolDb } from '../indexedDB/SignalProtocolDb.svelte';
 import { chatsStore } from '../stores/ChatsStore.svelte';
@@ -18,7 +18,7 @@ import { SessionRecord } from '@privacyresearch/libsignal-protocol-typescript/li
 import { createApiRequestMessage } from '$lib/utils/apiUtils';
 
 export async function sendAuth() {
-	const call = createApiRequestMessage(apiTypes.RequestApi.SEND_AUTH, {});
+	const call = createApiRequestMessage(requestTypes.RequestApi.SEND_AUTH, {});
 	await wsService.sendRequest(call);
 }
 
@@ -55,8 +55,8 @@ export async function sendMessage(chatId: string, text: string) {
 		await messagesStore.addPendingMessage(pendingMessage);
 		chatsStore.sortChats();
 
-		const call = createApiRequestMessage(apiTypes.RequestApi.SEND_MESSAGE, { chatId, ciphertext });
-		const { sentMessage } = (await wsService.sendRequest(call)) as apiTypes.sendMessageResponse;
+		const call = createApiRequestMessage(requestTypes.RequestApi.SEND_MESSAGE, { chatId, ciphertext });
+		const { sentMessage } = (await wsService.sendRequest(call)) as requestTypes.sendMessageResponse;
 		const lastModified =
 			chat.lastModified.localeCompare(sentMessage.sendTime) > 0
 				? chat.lastModified
@@ -99,7 +99,7 @@ export async function sendReadUpdate(chatId: string, sequence: number): Promise<
 	if (!chat) throw new Error(`Chat with id ${chatId} not found`);
 	await chatsStore.updateChat(chat);
 
-	const call = createApiRequestMessage(apiTypes.RequestApi.SEND_READ_UPDATE, { chatId, sequence });
+	const call = createApiRequestMessage(requestTypes.RequestApi.SEND_READ_UPDATE, { chatId, sequence });
 	try {
 		wsService.sendRequest(call);
 	} catch (error) {
@@ -115,11 +115,11 @@ export async function sendReadUpdate(chatId: string, sequence: number): Promise<
  */
 export async function syncActiveChats(chatIds: string[]): Promise<string[]> {
 	try {
-		const call = createApiRequestMessage(apiTypes.RequestApi.SYNC_ACTIVE_CHATS, {
+		const call = createApiRequestMessage(requestTypes.RequestApi.SYNC_ACTIVE_CHATS, {
 			chatIds
 		});
 		const response = await wsService.sendRequest(call);
-		const { chats } = response as apiTypes.syncActiveChatsResponse;
+		const { chats } = response as requestTypes.syncActiveChatsResponse;
 
 		const store = SignalProtocolDb.getInstance();
 
@@ -164,9 +164,9 @@ export async function syncActiveChats(chatIds: string[]): Promise<string[]> {
  */
 export async function syncAllChatsMetadata(): Promise<boolean> {
 	try {
-		const call = createApiRequestMessage(apiTypes.RequestApi.SYNC_ALL_CHATS_METADATA, {});
+		const call = createApiRequestMessage(requestTypes.RequestApi.SYNC_ALL_CHATS_METADATA, {});
 		const response = await wsService.sendRequest(call);
-		const { chats, newChats, isComplete } = response as apiTypes.syncAllChatsMetadataResponse;
+		const { chats, newChats, isComplete } = response as requestTypes.syncAllChatsMetadataResponse;
 
 		for (const chat of chats) await chatsStore.updateChat(chat);
 		for (const chat of newChats) await chatsStore.addChat(chat);
@@ -190,10 +190,10 @@ export async function createChat(event: SubmitEvent): Promise<void> {
 	if (!username) return;
 	usernameInput.value = '';
 
-	const call = createApiRequestMessage(apiTypes.RequestApi.CREATE_CHAT, { username });
+	const call = createApiRequestMessage(requestTypes.RequestApi.CREATE_CHAT, { username });
 	try {
 		const response = await wsService.sendRequest(call);
-		const { createdChat, preKeyBundle } = response as apiTypes.createChatResponse;
+		const { createdChat, preKeyBundle } = response as requestTypes.createChatResponse;
 		if (!preKeyBundle) throw new Error(`no preKeyBundle received`);
 
 		await chatsStore.addChat(createdChat);
@@ -232,10 +232,10 @@ export async function login(event: SubmitEvent): Promise<void> {
 	usernameLogin.value = '';
 	passwordLogin.value = '';
 
-	const call = createApiRequestMessage(apiTypes.RequestApi.LOGIN, { username, password });
+	const call = createApiRequestMessage(requestTypes.RequestApi.LOGIN, { username, password });
 	try {
 		const response = await wsService.sendRequest(call);
-		const { userId, token } = response as apiTypes.loginResponse;
+		const { userId, token } = response as requestTypes.loginResponse;
 		setCookie('userId', userId, 28);
 		setCookie('token', token, 28);
 		goto('/');
@@ -256,10 +256,10 @@ export async function signup(event: SubmitEvent): Promise<void> {
 	usernameSignup.value = '';
 	passwordSignup.value = '';
 
-	const call = createApiRequestMessage(apiTypes.RequestApi.SIGNUP, { username, password });
+	const call = createApiRequestMessage(requestTypes.RequestApi.SIGNUP, { username, password });
 	try {
 		const response = await wsService.sendRequest(call);
-		const { userId, token } = response as apiTypes.signupResponse;
+		const { userId, token } = response as requestTypes.signupResponse;
 		setCookie('userId', userId, 28);
 		setCookie('token', token, 28);
 		goto('/');
@@ -291,7 +291,7 @@ export async function sendPreKeyBundle(keys: signalTypes.unorgonizedKeys): Promi
 		});
 	}
 
-	const call = createApiRequestMessage(apiTypes.RequestApi.SEND_PRE_KEY_BUNDLE, { preKeyBundle });
+	const call = createApiRequestMessage(requestTypes.RequestApi.SEND_PRE_KEY_BUNDLE, { preKeyBundle });
 	try {
 		await wsService.sendRequest(call);
 	} catch (error) {
@@ -313,7 +313,7 @@ export async function addPreKeys(preKeys: libsignal.PreKeyPairType<ArrayBuffer>[
 		});
 	}
 
-	const call = createApiRequestMessage(apiTypes.RequestApi.ADD_PRE_KEYS, {
+	const call = createApiRequestMessage(requestTypes.RequestApi.ADD_PRE_KEYS, {
 		preKeys: stringifiedPreKeys
 	});
 	try {
@@ -344,7 +344,7 @@ export async function sendPreKeyWhisperMessage(
 	const base64Body = btoa(ciphertext.body!);
 	ciphertext.body = base64Body;
 
-	const call = createApiRequestMessage(apiTypes.RequestApi.SEND_PRE_KEY_WHISPER_MESSAGE, {
+	const call = createApiRequestMessage(requestTypes.RequestApi.SEND_PRE_KEY_WHISPER_MESSAGE, {
 		chatId,
 		ciphertext
 	});

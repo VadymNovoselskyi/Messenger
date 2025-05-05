@@ -3,7 +3,7 @@ import type { StoredChat } from "$lib/types/dataTypes";
 export class ChatsDbService {
 	private static instance: ChatsDbService;
 	private db!: IDBDatabase;
-	private dbName = 'AccountStorage';
+	private dbName = 'ChatsStorage';
 	private chatsStoreName = 'chats';
 
 	public static async getInstance(): Promise<ChatsDbService> {

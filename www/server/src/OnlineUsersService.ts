@@ -44,7 +44,7 @@ export class OnlineUsersService {
         }
         ws.isAlive = false;
         ws.ping();
-        ws.send(JSON.stringify({ api: apiTypes.API.PING }));
+        ws.send(JSON.stringify({ api: apiTypes.SystemApi.PING }));
       });
     }, OnlineUsersService.PING_INTERVAL);
   }

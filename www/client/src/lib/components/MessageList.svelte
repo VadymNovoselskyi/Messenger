@@ -196,7 +196,6 @@
 			requestAnimationFrame(setAnchors);
 			return;
 		}
-		console.log(wrapper.clientHeight, bottomAnchor.offsetTop, wrapper.scrollHeight);
 		if (unreadAnchor) unreadAnchor.scrollIntoView({ behavior: 'instant', block: 'start' });
 		if (bottomAnchor) bottomAnchor.scrollIntoView({ behavior: 'instant', block: 'end' });
 

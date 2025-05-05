@@ -5,7 +5,7 @@ import type { StoredMessage, PendingMessage } from '$lib/types/dataTypes';
 export class MessagesDbService {
 	private static instance: MessagesDbService;
 	private db!: IDBDatabase;
-	private dbName = 'AccountStorage';
+	private dbName = 'MessagesStorage';
 	private messagesStoreName = 'messages';
 	private pendingMessagesStoreName = 'pendingMessages';
 
@@ -26,7 +26,7 @@ export class MessagesDbService {
 				const messageStore = db.createObjectStore(this.messagesStoreName, { keyPath: '_id' });
 				messageStore.createIndex('by-chat-seq', ['chatId', 'sequence'], { unique: true });
 
-				db.createObjectStore(this.pendingMessagesStoreName, {
+				const pendingMessagesStore = db.createObjectStore(this.pendingMessagesStoreName, {
 					keyPath: 'tempId',
 					autoIncrement: true
 				});

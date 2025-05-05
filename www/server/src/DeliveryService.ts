@@ -1,15 +1,17 @@
 import { OrderedMap } from "@js-sdsl/ordered-map";
-import { WebSocket } from "ws";
-import { API, responsePayload } from "./types/apiTypes.js";
 import { OnlineUsersService } from "./OnlineUsersService.js";
+import { WebSocket } from "ws";
+import {
+  ErrorApi,
+  ErrorApiMessage,
+  ErrorApiPayload,
+  NotificationApiMessage,
+  ResponseApiMessage,
+} from "./types/apiTypes.js";
+import { isNotificationApiMessage, isResponseApiMessage } from "./apiUtils.js";
 
-type PendingMessage = {
-  api?: API;
-  id: string;
-  status?: "SUCCESS" | "ERROR";
-  payload?: responsePayload;
-};
-type PendingMesssageMetadata = {
+export type PendingMessage = ResponseApiMessage | NotificationApiMessage;
+export type PendingMesssageMetadata = {
   retryAt: number;
   callback?: () => void;
 };
@@ -25,13 +27,15 @@ export class DeliveryService {
     OrderedMap<string, PendingMessage & PendingMesssageMetadata>
   > = new Map();
 
-  private constructor() {}
-
   public static getInstance() {
     if (!DeliveryService.instance) {
       DeliveryService.instance = new DeliveryService();
     }
     return DeliveryService.instance;
+  }
+
+  public sendError(ws: WebSocket, id: string = "", message: ErrorApiPayload) {
+    ws.send(JSON.stringify({ id, api: ErrorApi.ERROR, payload: message }));
   }
 
   public sendMessage(userId: string, message: PendingMessage, callback?: () => void): void {
@@ -42,12 +46,12 @@ export class DeliveryService {
     }
 
     ws.send(JSON.stringify(message));
-    if (ws.userId && message.status === "SUCCESS" && message.api !== API.PONG) {
-      this.addMessage(ws.userId!, message, {
-        retryAt: Date.now() + DeliveryService.ACK_TIMEOUT,
-        callback,
-      });
-    }
+
+    if (!ws.userId) return;
+    this.addMessage(ws.userId!, message, {
+      retryAt: Date.now() + DeliveryService.ACK_TIMEOUT,
+      callback,
+    });
   }
 
   public addMessage(userId: string, message: PendingMessage, metadata: PendingMesssageMetadata) {
@@ -81,10 +85,18 @@ export class DeliveryService {
 
     const now = Date.now();
     for (const [id, message] of userPendingMessages) {
-      const { api, status, payload, retryAt } = message;
-      if (now < retryAt) continue;
-      this.sendMessage(userId, { id, api, status, payload }, message.callback);
-      return;
+      if (isResponseApiMessage(message)) {
+        const { api, payload, retryAt } = message;
+        if (now < retryAt) continue;
+        this.sendMessage(userId, { id, api, payload }, message.callback);
+        return;
+      }
+      if (isNotificationApiMessage(message)) {
+        const { api, payload, retryAt } = message;
+        if (now < retryAt) continue;
+        this.sendMessage(userId, { id, api, payload }, message.callback);
+        return;
+      }
     }
   }
 

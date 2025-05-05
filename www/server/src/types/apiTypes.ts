@@ -1,7 +1,5 @@
-import { ObjectId } from "mongodb";
 import { StringifiedPreKey, StringifiedPreKeyBundle } from "./signalTypes.js";
 import { MessageType } from "@privacyresearch/libsignal-protocol-typescript";
-import { MessageDocument } from "./mongoTypes.js";
 
 export type ApiMessage = {
   _id: string;
@@ -9,7 +7,7 @@ export type ApiMessage = {
   from: string;
   ciphertext: MessageType;
   sequence: number;
-  sendTime: string; //ISO-date
+  sendTime: string;
 };
 
 export type ApiChat = {
@@ -17,7 +15,7 @@ export type ApiChat = {
   users: ApiUser[];
   messages: ApiMessage[];
   lastSequence: number;
-  lastModified: string; //ISO-Date
+  lastModified: string;
 };
 
 export type ApiUser = {
@@ -26,149 +24,199 @@ export type ApiUser = {
   lastReadSequence: number;
 };
 
-export enum API {
-  AUTHENTICATE = "authenticate",
-  SYNC_ALL_CHATS_METADATA = "syncAllChatsMetadata",
-  SYNC_ACTIVE_CHATS = "syncActiveChats",  
-  RECEIVE_MESSAGE = "receiveMessage",
-  READ_UPDATE = "readUpdate",
-  CREATE_CHAT = "createChat",
-  LOGIN = "login",
-  SIGNUP = "signup",
-  SEND_PRE_KEY_BUNDLE = "sendPreKeyBundle",
-  ADD_PRE_KEYS = "addPreKeys",
-  SEND_PRE_KEY_WHISPER_MESSAGE = "sendPreKeyWhisperMessage",
-  SEND_MESSAGE = "sendMessage",
-  PING = "ping",
-  PONG = "pong",
-  ACK = "ack",
+/* Request APIs */
+export enum RequestApi {
+	SEND_AUTH = 'sendAuth',
+	SEND_MESSAGE = 'sendMessage',
+	SEND_READ_UPDATE = 'sendReadUpdate',
+	SYNC_ACTIVE_CHATS = 'syncActiveChats',
+	SYNC_ALL_CHATS_METADATA = 'syncAllChatsMetadata',
+	CREATE_CHAT = 'createChat',
+	LOGIN = 'login',
+	SIGNUP = 'signup',
+	SEND_PRE_KEY_BUNDLE = 'sendPreKeyBundle',
+	ADD_PRE_KEYS = 'addPreKeys',
+	SEND_PRE_KEY_WHISPER_MESSAGE = 'sendPreKeyWhisperMessage'
 }
 
-/** Structure for API call messages */
-export interface APIMessage {
-  api: API;
-  id: string;
-  token?: string | null;
-  payload: messagePayload;
+export type RequestApiMessage = {
+	api: RequestApi;
+	id: string;
+	token?: string | null;
+	payload: RequestMessagePayload;
+};
+export type RequestMessagePayload =
+	| sendAuthPayload
+	| sendMessagePayload
+	| sendReadUpdatePayload
+	| syncActiveChatsPayload
+	| syncAllChatsMetadataPayload
+	| createChatPayload
+	| loginPayload
+	| signupPayload
+	| sendPreKeyBundlePayload
+	| addPreKeysPayload
+	| sendPreKeyWhisperMessagePayload;
+
+export type ResponseApiMessage = {
+	api: RequestApi;
+	id: string;
+	payload: ResponseMessagePayload;
+};
+export type ResponseMessagePayload =
+	| sendAuthResponse
+	| sendMessageResponse
+	| sendReadUpdateResponse
+	| syncActiveChatsResponse
+	| syncAllChatsMetadataResponse
+	| createChatResponse
+	| loginResponse
+	| signupResponse
+	| sendPreKeyBundleResponse
+	| addPreKeysResponse
+	| sendPreKeyWhisperMessageResponse
+
+/* Notification APIs */
+export enum NotificationApi {
+	INCOMING_MESSAGE = 'incomingMessage',
+	INCOMING_READ = 'incomingRead',
+	INCOMING_CHAT = 'incomingChat'
 }
 
-/** Union type for request payloads */
-export type messagePayload =
-  | syncAllChatsMetadataPayload
-  | syncActiveChatsPayload
-  | sendMessagePayload
-  | readUpdatePayload
-  | createChatPayload
-  | loginPayload
-  | sendPreKeyBundlePayload
-  | addPreKeysPayload
-  | sendPreKeyWhisperMessagePayload
+export type NotificationApiMessage = {
+	api: NotificationApi;
+	id: string;
+	payload: NotificationMessagePayload;
+};
+export type NotificationMessagePayload =
+	| incomingMessageResponse
+	| incomingReadResponse
+	| incomingChatResponse;
 
-/** Union type for response payloads */
-export type responsePayload =
-  | syncAllChatsMetadataResponse
-  | syncActiveChatsResponse
-  | sendMessageResponse
-  | sendPreKeyWhisperMessageResponse
-  | receiveMessageResponse
-  | readUpdateResponse
-  | createChatResponse
-  | loginResponse
-  | signupResponse
-  | sendPreKeyBundleResponse
-  | addPreKeysResponse
-  | errorResponse
+/* System APIs */
+export enum SystemApi {
+	ACK = 'ack',
+	PING = 'ping',
+	PONG = 'pong'
+}
+
+export type SystemApiMessage = {
+	api: SystemApi;
+	id?: string;
+};
+
+/* Error API */
+export enum ErrorApi {
+	ERROR = 'error'
+}
+
+export type ErrorApiMessage = {
+	api: ErrorApi;
+	id: string;
+	payload: ErrorApiPayload;
+};
+
+export type ErrorApiPayload = {
+	message: string;
+};
+
+/* Request APIs payloads */
+export type sendAuthPayload = Record<string, never>;
+export type sendMessagePayload = {
+	chatId: string;
+	ciphertext: MessageType;
+};
+
+export type sendReadUpdatePayload = {
+	chatId: string;
+	sequence: number;
+};
+
+export type syncActiveChatsPayload = {
+	chatIds: string[];
+};
 
 export type syncAllChatsMetadataPayload = Record<string, never>;
 
-export type syncActiveChatsPayload = {
-  chatIds: string[];
-};
-
-export type sendMessagePayload = {
-  chatId: string;
-  ciphertext: MessageType;
-};
-
-export type readUpdatePayload = {
-  chatId: string;
-  sequence: number;
-};
-
 export type createChatPayload = {
-  username: string;
+	username: string;
 };
 
 export type loginPayload = {
-  username: string;
-  password: string;
+	username: string;
+	password: string;
 };
 
 export type signupPayload = {
-  username: string;
-  password: string;
+	username: string;
+	password: string;
 };
 
 export type sendPreKeyBundlePayload = {
-  preKeyBundle: StringifiedPreKeyBundle;
+	preKeyBundle: StringifiedPreKeyBundle;
 };
 
 export type addPreKeysPayload = {
-  preKeys: StringifiedPreKey[];
+	preKeys: StringifiedPreKey[];
 };
 
 export type sendPreKeyWhisperMessagePayload = {
-  chatId: string;
-  ciphertext: MessageType;
+	chatId: string;
+	ciphertext: MessageType;
 };
 
-//Responses
-export type syncAllChatsMetadataResponse = {
-  chats: ApiChat[];
-  newChats: ApiChat[];
-  isComplete: boolean;
-};
-
-export type syncActiveChatsResponse = {
-  chats: ApiChat[];
-};
+/* Response APIs payloads */
+export type sendAuthResponse = Record<string, never>;
 
 export type sendMessageResponse = { sentMessage: ApiMessage };
 
-export type receiveMessageResponse = {
-  chatId: string;
-  message: MessageDocument;
+export type sendReadUpdateResponse = {
+	chatId: string;
+	sequence: number;
 };
 
-export type sendPreKeyWhisperMessageResponse = {
-  chatId: string;
-  message: MessageDocument;
+export type syncActiveChatsResponse = {
+	chats: ApiChat[];
 };
 
-export type readUpdateResponse = {
-  chatId: string;
-  sequence: number;
+export type syncAllChatsMetadataResponse = {
+	chats: ApiChat[];
+	newChats: ApiChat[];
+	isComplete: boolean;
 };
 
 export type createChatResponse = {
-  createdChat: ApiChat;
-  preKeyBundle?: StringifiedPreKeyBundle;
+	createdChat: ApiChat;
+	preKeyBundle?: StringifiedPreKeyBundle;
 };
 
 export type loginResponse = {
-  userId: ObjectId;
-  token: string; //JWT
+	userId: string;
+	token: string; //JWT
 };
 
 export type signupResponse = {
-  userId: ObjectId;
-  token: string; //JWT
+	userId: string;
+	token: string; //JWT
 };
 
 export type sendPreKeyBundleResponse = Record<string, never>;
 
 export type addPreKeysResponse = Record<string, never>;
 
-export type errorResponse = {
-  message: string;
+export type sendPreKeyWhisperMessageResponse = Record<string, never>;
+
+/* Notification APIs payloads */
+export type incomingMessageResponse = {
+	chatId: string;
+	message: ApiMessage;
+};
+
+export type incomingReadResponse = {
+	chatId: string;
+	sequence: number;
+};
+
+export type incomingChatResponse = {
+	createdChat: ApiChat;
 };

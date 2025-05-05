@@ -1,5 +1,5 @@
 #LOCAL
-FROM node:lts-alpine
+FROM node:lts
 
 # Set working directory inside the container
 WORKDIR /usr/src/server

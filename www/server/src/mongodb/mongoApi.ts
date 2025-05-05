@@ -69,7 +69,8 @@ export async function syncAllChatsMetadata(
   try {
     const user = await usersCollection.findOne({ _id: userId });
     if (!user) throw new Error(`User with id ${userId} not found`);
-    const lastMetadataSync = user.lastMetadataSync;
+    let lastMetadataSync = user.lastMetadataSync;
+    lastMetadataSync ??= new Date();
 
     const offsetMetadataSyncDate = new Date(lastMetadataSync.getTime() - METADATA_SYNC_OFFSET);
     const chatDocuments: ChatDocument[] = await chatsCollection
@@ -249,12 +250,12 @@ export async function readUpdate(
 
 /**
  * Creates a new chat between the creator and the specified recipient.
- * @param creatingU_id - The _id of the user to create the chat.
+ * @param creatingUserId - The _id of the user to create the chat.
  * @param receivingUsername - The username of the user to create the chat with.
  * @returns A promise that resolves to an object containing the created chat, the _id of the receiving user, and the preKeyBundle.
  */
 export async function createChat(
-  creatingU_id: ObjectId,
+  creatingUserId: ObjectId,
   receivingUsername: string
 ): Promise<{
   createdChat: ChatDocument;
@@ -262,7 +263,7 @@ export async function createChat(
   preKeyBundle: StringifiedPreKeyBundle;
 }> {
   try {
-    const creatingUser = await usersCollection.findOne({ _id: creatingU_id });
+    const creatingUser = await usersCollection.findOne({ _id: creatingUserId });
     const receivingUser = await usersCollection.findOne({ username: receivingUsername });
 
     if (!creatingUser || !receivingUser) {
@@ -529,7 +530,7 @@ export async function updateLastMetadataSync(userId: ObjectId, date: string) {
  * @param username - The username of the user to find.
  * @returns A promise that resolves to the user document.
  */
-export async function findUser(username: string): Promise<UserDocument> {
+export async function findUserByName(username: string): Promise<UserDocument> {
   try {
     const user = await usersCollection.findOne({ username });
     if (!user) {
@@ -539,6 +540,24 @@ export async function findUser(username: string): Promise<UserDocument> {
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : "An unknown error occurred";
     throw new Error(`Error finding user with username "${username}": ${errMsg}`);
+  }
+}
+
+/**
+ * Finds and returns a user by their _id.
+ * @param userId - The _id of the user to find.
+ * @returns A promise that resolves to the user document.
+ */
+export async function findUserById(userId: ObjectId): Promise<UserDocument> {
+  try {
+    const user = await usersCollection.findOne({ _id: userId });
+    if (!user) {
+      throw new Error(`User with id "${userId}" not found.`);
+    }
+    return user;
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : "An unknown error occurred";
+    throw new Error(`Error finding user with id "${userId}": ${errMsg}`);
   }
 }
 

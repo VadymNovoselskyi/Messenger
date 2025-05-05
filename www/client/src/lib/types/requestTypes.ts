@@ -1,6 +1,6 @@
-import type { MessageType } from '@privacyresearch/libsignal-protocol-typescript';
-import type { StringifiedPreKey, StringifiedPreKeyBundle } from './signalTypes';
-import type { ApiChat, ApiMessage } from './dataTypes';
+import type { MessageType } from "@privacyresearch/libsignal-protocol-typescript";
+import type { ApiChat, ApiMessage } from "./dataTypes";
+import type { StringifiedPreKey, StringifiedPreKeyBundle } from "./signalTypes";
 
 /* Request APIs */
 export enum RequestApi {
@@ -39,7 +39,6 @@ export type RequestMessagePayload =
 export type ResponseApiMessage = {
 	api: RequestApi;
 	id: string;
-	status: 'SUCCESS' | 'ERROR';
 	payload: ResponseMessagePayload;
 };
 export type ResponseMessagePayload =
@@ -53,36 +52,7 @@ export type ResponseMessagePayload =
 	| signupResponse
 	| sendPreKeyBundleResponse
 	| addPreKeysResponse
-	| sendPreKeyWhisperMessageResponse
-	| errorResponse;
-
-/* Notification APIs */
-export enum NotificationApi {
-	INCOMING_MESSAGE = 'incomingMessage',
-	INCOMING_READ = 'incomingRead',
-	INCOMING_CHAT = 'incomingChat'
-}
-
-export type NotificationApiMessage = {
-	api: NotificationApi;
-	id: string;
-	payload: NotificationMessagePayload;
-};
-export type NotificationMessagePayload =
-	| incomingMessageResponse
-	| incomingReadResponse
-	| incomingChatResponse;
-
-/* System APIs */
-export enum SystemApi {
-	ACK = 'ack',
-	PING = 'ping',
-	PONG = 'pong'
-}
-
-export type SystemApiMessage = {
-	api: SystemApi;
-};
+	| sendPreKeyWhisperMessageResponse;
 
 /* Request APIs payloads */
 export type sendAuthPayload = Record<string, never>;
@@ -169,22 +139,3 @@ export type sendPreKeyBundleResponse = Record<string, never>;
 export type addPreKeysResponse = Record<string, never>;
 
 export type sendPreKeyWhisperMessageResponse = Record<string, never>;
-
-export type errorResponse = {
-	message: string;
-};
-
-/* Notification APIs payloads */
-export type incomingMessageResponse = {
-	chatId: string;
-	message: ApiMessage;
-};
-
-export type incomingReadResponse = {
-	chatId: string;
-	sequence: number;
-};
-
-export type incomingChatResponse = {
-	createdChat: ApiChat;
-};

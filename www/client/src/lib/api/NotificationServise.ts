@@ -1,27 +1,27 @@
 import { SignalProtocolDb } from '$lib/indexedDB/SignalProtocolDb.svelte';
 import { chatsStore } from '$lib/stores/ChatsStore.svelte';
 import { getOtherUserChatMetadata } from '$lib/utils/chatMetadataUtils.svelte';
-import * as apiTypes from '$lib/types/apiTypes';
+import * as notifTypes from '$lib/types/notificationTypes';
 import * as libsignal from '@privacyresearch/libsignal-protocol-typescript';
 import { messagesStore } from '$lib/stores/MessagesStore.svelte';
 import { getCookie } from '$lib/utils/cookieUtils';
 import type { StoredChat, StoredMessage } from '$lib/types/dataTypes';
 
 export function handleNotification(
-	api: apiTypes.NotificationApi,
-	payload: apiTypes.NotificationMessagePayload
+	api: notifTypes.NotificationApi,
+	payload: notifTypes.NotificationMessagePayload
 ) {
 	switch (api) {
-		case apiTypes.NotificationApi.INCOMING_MESSAGE:
-			return handleIncomingMessage(payload as apiTypes.incomingMessageResponse);
-		case apiTypes.NotificationApi.INCOMING_READ:
-			return handleIncomingRead(payload as apiTypes.incomingReadResponse);
-		case apiTypes.NotificationApi.INCOMING_CHAT:
-			return handleIncomingChat(payload as apiTypes.incomingChatResponse);
+		case notifTypes.NotificationApi.INCOMING_MESSAGE:
+			return handleIncomingMessage(payload as notifTypes.incomingMessageResponse);
+		case notifTypes.NotificationApi.INCOMING_READ:
+			return handleIncomingRead(payload as notifTypes.incomingReadResponse);
+		case notifTypes.NotificationApi.INCOMING_CHAT:
+			return handleIncomingChat(payload as notifTypes.incomingChatResponse);
 	}
 }
 
-async function handleIncomingMessage(payload: apiTypes.incomingMessageResponse) {
+async function handleIncomingMessage(payload: notifTypes.incomingMessageResponse) {
 	const { chatId, message } = payload;
 
 	const chat = chatsStore.getLoadedChat(chatId);
@@ -69,7 +69,7 @@ async function handleIncomingMessage(payload: apiTypes.incomingMessageResponse) 
 	chatsStore.sortChats();
 }
 
-async function handleIncomingRead(payload: apiTypes.incomingReadResponse) {
+async function handleIncomingRead(payload: notifTypes.incomingReadResponse) {
 	const { chatId, sequence } = payload;
 	const chat = chatsStore.getLoadedChat(chatId);
 	if (!chat) throw new Error(`Chat with id ${chatId} not found`);
@@ -87,7 +87,7 @@ async function handleIncomingRead(payload: apiTypes.incomingReadResponse) {
 	await chatsStore.updateChat(updatedChat);
 }
 
-async function handleIncomingChat(payload: apiTypes.incomingChatResponse) {
+async function handleIncomingChat(payload: notifTypes.incomingChatResponse) {
 	const { createdChat } = payload;
 	await chatsStore.addChat(createdChat);
 	messagesStore.addEmptyChat(createdChat._id);

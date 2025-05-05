@@ -1,9 +1,6 @@
 import dotenv from "dotenv";
 import jwt from "jsonwebtoken";
-
-import type WebSocket from "ws";
 import { Binary } from "mongodb";
-import { API, responsePayload } from "./types/apiTypes.js";
 
 dotenv.config();
 const JWT_KEY = process.env.JWT_KEY || "";

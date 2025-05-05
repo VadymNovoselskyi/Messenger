@@ -1,24 +1,20 @@
 import { goto } from '$app/navigation';
 import { page } from '$app/state';
-import { SessionCipher } from '@privacyresearch/libsignal-protocol-typescript';
-import { SignalProtocolAddress } from '@privacyresearch/libsignal-protocol-typescript';
-import { SignalProtocolDb } from '../indexedDB/SignalProtocolDb.svelte';
-import { chatsStore } from '../stores/ChatsStore.svelte';
-import { messagesStore } from '../stores/MessagesStore.svelte';
 
-import { getCookie } from '$lib/utils/cookieUtils';
-import { getOtherUserChatMetadata } from '$lib/utils/chatMetadataUtils.svelte';
-import * as apiTypes from '../types/apiTypes';
-import type { StoredChat, StoredMessage } from '../types/dataTypes';
+import * as systemTypes from '../types/systemTypes';
+import * as requestTypes from '../types/requestTypes';
+import * as notificationTypes from '../types/notificationTypes';
+
 import {
-	createApiRequestMessage,
+	messageIsError,
 	messageIsNotification,
 	messageIsResponse,
 	messageIsSystem
 } from '$lib/utils/apiUtils';
-import { SystemApi } from '../types/apiTypes';
+import { SystemApi } from '../types/systemTypes';
 import { handleNotification } from '$lib/api/NotificationServise';
 import { sendAuth } from '$lib/api/RequestService';
+import { getCookie } from '$lib/utils/cookieUtils';
 
 export class WsService {
 	private static instance: WsService;
@@ -30,7 +26,7 @@ export class WsService {
 	private pendingRequests = new Map<
 		string,
 		{
-			resolve: (value: apiTypes.ResponseMessagePayload) => void;
+			resolve: (value: requestTypes.ResponseMessagePayload) => void;
 			reject: (reason: any) => void;
 		}
 	>();
@@ -61,9 +57,9 @@ export class WsService {
 	}
 
 	public async sendRequest(
-		message: apiTypes.RequestApiMessage,
+		message: requestTypes.RequestApiMessage,
 		timeout?: number
-	): Promise<apiTypes.ResponseMessagePayload> {
+	): Promise<requestTypes.ResponseMessagePayload> {
 		const ws = await this.getWs();
 		return new Promise((resolve, reject) => {
 			this.pendingRequests.set(message.id, { resolve, reject });
@@ -82,43 +78,52 @@ export class WsService {
 
 	public async handleServerMessage(event: MessageEvent): Promise<void> {
 		const data:
-			| apiTypes.ResponseApiMessage
-			| apiTypes.NotificationApiMessage
-			| apiTypes.SystemApiMessage = JSON.parse(event.data);
+			| requestTypes.ResponseApiMessage
+			| notificationTypes.NotificationApiMessage
+			| systemTypes.SystemApiMessage
+			| systemTypes.ErrorApiMessage = JSON.parse(event.data);
 
-		console.log(data);
-
-		if (messageIsResponse(data)) {
-			const { api, id, status, payload } = data;
-			this.sendAck(id);
-
-			if (this.pendingRequests.has(id)) {
-				const { resolve, reject } = this.pendingRequests.get(id)!;
-				if (status === 'SUCCESS') resolve(payload);
-				else if (status === 'ERROR') {
-					const { message } = payload as apiTypes.errorResponse;
-					if (
-						message === 'jwt expired' ||
-						message === 'No token provided' ||
-						message === 'Unauthenticated'
-					) {
-						goto('/login');
-						return;
-					}
-					alert(message);
-					reject(`Error from server: ${message}`);
-				}
-				this.pendingRequests.delete(id);
-			} else alert('Unknown request ID: ' + id);
-
-		} else if (messageIsNotification(data)) {
-			this.sendAck(data.id);
-			handleNotification(data.api, data.payload);
-		} else if (messageIsSystem(data)) {
-			if (data.api === apiTypes.SystemApi.PING) {
+		if (messageIsSystem(data)) {
+			if (data.api === systemTypes.SystemApi.PING) {
 				this.handlePing();
 				return;
 			}
+		}
+
+		console.log(data);
+		if (messageIsError(data)) {
+			const { id, payload } = data as systemTypes.ErrorApiMessage;
+			const { message } = payload;
+			if (this.pendingRequests.has(id)) {
+				const { reject } = this.pendingRequests.get(id)!;
+				reject(new Error(message));
+				this.pendingRequests.delete(id);
+			}
+			if (
+				message === 'JWT expired' ||
+				message === 'No token provided' ||
+				message === 'Unauthenticated'
+			) {
+				goto('/login');
+				return;
+			}
+			alert(message);
+			return;
+		} else if (messageIsResponse(data)) {
+			const { id, payload } = data as requestTypes.ResponseApiMessage;
+
+			this.sendAck(id);
+			if (!this.pendingRequests.has(id)) {
+				alert('Unknown request ID: ' + id);
+				return;
+			}
+
+			const { resolve } = this.pendingRequests.get(id)!;
+			resolve(payload);
+			this.pendingRequests.delete(id);
+		} else if (messageIsNotification(data)) {
+			this.sendAck(data.id);
+			handleNotification(data.api, data.payload);
 		}
 	}
 
@@ -133,8 +138,8 @@ export class WsService {
 		this.resetPingTimeout();
 	}
 
-	private handleOpen(resolve: (value: WebSocket) => void) {
-		sendAuth();
+	private async handleOpen(resolve: (value: WebSocket) => void) {
+		if (getCookie('token')) await sendAuth();
 		this.resetPingTimeout();
 		resolve(this.ws!);
 	}

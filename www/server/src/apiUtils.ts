@@ -1,9 +1,6 @@
 import { ObjectId } from "mongodb";
-import { WebSocket } from "ws";
-import { API, ApiChat, ApiMessage, ApiUser, responsePayload } from "./types/apiTypes.js";
-import { ChatDocument, MessageDocument, UserDocument } from "./types/mongoTypes.js";
-import { messagesCollection } from "./mongodb/connect.js";
-import { deliveryService } from "./DeliveryService.js";
+import { ApiChat, ApiMessage, ApiUser, NotificationApi, NotificationApiMessage, RequestApi, RequestApiMessage, ResponseApiMessage, SystemApi, SystemApiMessage } from "./types/apiTypes.js";
+import { ChatDocument, MessageDocument } from "./types/mongoTypes.js";
 
 /**
  * Sends a standardized JSON response over the WebSocket.
@@ -57,4 +54,20 @@ export function toApiUser(user: {
     username: user.username,
     lastReadSequence: user.lastReadSequence,
   };
+}
+
+export function isRequestApiMessage(message: any): message is RequestApiMessage {
+  return Object.values(RequestApi).includes(message.api);
+}
+
+export function isResponseApiMessage(message: any): message is ResponseApiMessage {
+  return Object.values(RequestApi).includes(message.api);
+}
+
+export function isNotificationApiMessage(message: any): message is NotificationApiMessage {
+  return Object.values(NotificationApi).includes(message.api);
+}
+
+export function isSystemApiMessage(message: any): message is SystemApiMessage {
+  return Object.values(SystemApi).includes(message.api);
 }

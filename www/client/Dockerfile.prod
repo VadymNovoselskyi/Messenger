@@ -1,13 +1,13 @@
 #PROD
 # Use official Node.js image as base
-FROM node:lts-alpine
+FROM node:lts
 
 # Set working directory inside the container
 WORKDIR /www/client
 
 # Copy only package manifests, install deps
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm install
 
 # Copy source & build
 COPY . .
