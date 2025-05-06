@@ -1,5 +1,5 @@
 import { WebSocket, WebSocketServer } from "ws";
-import { SystemApi } from "./types/systemTypes.js";
+import { SystemApi } from "../types/systemTypes.js";
 
 export class OnlineUsersService {
   private static instance: OnlineUsersService;

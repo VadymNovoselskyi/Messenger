@@ -3,7 +3,7 @@
 	import type { Link } from '$lib/types/dataTypes';
 
 	let { links, id }: { links: Link[]; id: string } = $props();
-	const currentPath = page.url.pathname;
+	const currentPath = $derived(page.url.pathname);
 </script>
 
 <nav>

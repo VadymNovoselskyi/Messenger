@@ -2,10 +2,10 @@ import { WebSocket } from "ws";
 import { ObjectId } from "mongodb";
 import bcrypt from "bcrypt";
 import { DeliveryService } from "./DeliveryService.js";
-import { createUser, findUserById, findUserByName } from "./mongodb/mongoApi.js";
+import { createUser, findUserById, findUserByName } from "../mongodb/mongoApi.js";
 import { OnlineUsersService } from "./OnlineUsersService.js";
-import { loginPayload, RequestApi, signupPayload } from "./types/requestTypes.js";
-import { generateJwtToken, verifyJwtToken } from "./utils/jwtUtils.js";
+import { loginPayload, RequestApi, signupPayload } from "../types/requestTypes.js";
+import { generateJwtToken, verifyJwtToken } from "../utils/jwtUtils.js";
 
 export class AuthService {
   private static _instance: AuthService;

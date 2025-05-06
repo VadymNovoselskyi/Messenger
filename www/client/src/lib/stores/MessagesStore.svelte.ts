@@ -1,5 +1,6 @@
 import { getMessagesDbService } from '$lib/indexedDB/MessagesDbService.svelte';
 import type { PendingMessage, StoredMessage } from '$lib/types/dataTypes';
+
 export class MessagesStore {
 	private static instance: MessagesStore;
 	private _loadedMessages = $state<Record<string, StoredMessage[]>>({});

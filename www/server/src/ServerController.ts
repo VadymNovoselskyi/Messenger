@@ -3,26 +3,43 @@ import { Binary, ObjectId } from "mongodb";
 
 import * as requestTypes from "./types/requestTypes.js";
 import * as notificationTypes from "./types/notificationTypes.js";
+import * as systemTypes from "./types/systemTypes.js";
 import * as mongoApi from "./mongodb/mongoApi.js";
 
-import { DeliveryService } from "./DeliveryService.js";
-import { OnlineUsersService } from "./OnlineUsersService.js";
-import { AuthService } from "./AuthService.js";
+import { DeliveryService } from "./services/DeliveryService.js";
+import { OnlineUsersService } from "./services/OnlineUsersService.js";
+import { AuthService } from "./services/AuthService.js";
 
 import { PreKeyType } from "@privacyresearch/libsignal-protocol-typescript";
 import { PreKeyBundle } from "./types/signalTypes.js";
-import { toApiChatMetadata, toApiChat, toApiMessage } from "./utils/apiUtils.js";
+import {
+  toApiChatMetadata,
+  toApiChat,
+  toApiMessage,
+  isSystemApiMessage,
+  isRequestApiMessage,
+  isNotificationApiMessage,
+} from "./utils/apiUtils.js";
 import { binaryToBase64, base64ToBinary } from "./utils/parserUtils.js";
+import { ChatService } from "./services/ChatService.js";
+import { MessageService } from "./services/MessageService.js";
+import { UserService } from "./services/UserService.js";
 
 export class ServerController {
   private static _instance: ServerController;
   private authService: AuthService;
+  private chatService: ChatService;
+  private messageService: MessageService;
+  private userService: UserService;
 
   private constructor(
     private deliveryService: DeliveryService,
     private onlineUsers: OnlineUsersService
   ) {
     this.authService = AuthService.init(this.deliveryService, this.onlineUsers);
+    this.chatService = ChatService.init(this.deliveryService, this.onlineUsers);
+    this.messageService = MessageService.init(this.deliveryService, this.onlineUsers);
+    this.userService = UserService.init(this.deliveryService);
   }
 
   public static init(deliveryService: DeliveryService, onlineUsers: OnlineUsersService) {
@@ -35,301 +52,123 @@ export class ServerController {
     return this._instance;
   }
 
-  public async handleAuth(ws: WebSocket, token: string, id: string) {
-    return this.authService.handleAuth(ws, token, id);
+  public async handleMessage(ws: WebSocket, message: WebSocket.RawData) {
+    let parsedMessage: requestTypes.ResponseApiMessage | systemTypes.SystemApiMessage;
+
+    try {
+      parsedMessage = JSON.parse(message.toString());
+    } catch {
+      this.deliveryService.sendError(ws, "", { message: "Invalid JSON format" });
+      return;
+    }
+
+    if (isSystemApiMessage(parsedMessage)) {
+      this.handleSystemMessage(ws, parsedMessage);
+      return;
+    } else if (!isRequestApiMessage(parsedMessage)) {
+      this.deliveryService.sendError(ws, "", {
+        message: `Invalid message, not a system or request: ${parsedMessage?.api}`,
+      });
+      return;
+    }
+
+    this.handleRequestMessage(ws, parsedMessage as requestTypes.RequestApiMessage);
   }
 
-  public async handleLogin(ws: WebSocket, payload: requestTypes.loginPayload, id: string) {
-    return this.authService.handleLogin(ws, payload, id);
+  private handleSystemMessage(ws: WebSocket, message: systemTypes.SystemApiMessage) {
+    const { api, id } = message;
+    if (api === systemTypes.SystemApi.PONG) return;
+    if (api === systemTypes.SystemApi.ACK) {
+      if (!ws.userId || !id) {
+        this.deliveryService.sendError(ws, "", { message: `Invalid system message: ${api}` });
+        return;
+      }
+      this.deliveryService.handleAck(ws.userId!, id);
+      return;
+    } else {
+      this.deliveryService.sendError(ws, "", { message: `Invalid system message: ${api}` });
+      return;
+    }
   }
 
-  public async handleSignup(ws: WebSocket, payload: requestTypes.signupPayload, id: string) {
-    return this.authService.handleSignup(ws, payload, id);
+  private handleRequestMessage(ws: WebSocket, message: requestTypes.RequestApiMessage) {
+    const { id, api, token, payload } = message;
+    console.log(`Received message: ${message}`);
+
+    if (api === requestTypes.RequestApi.SEND_AUTH) {
+      this.authService.handleAuth(ws, token ?? "", id);
+      return;
+    } else if (api === requestTypes.RequestApi.LOGIN) {
+      this.authService.handleLogin(ws, payload as requestTypes.loginPayload, id);
+      return;
+    } else if (api === requestTypes.RequestApi.SIGNUP) {
+      this.authService.handleSignup(ws, payload as requestTypes.signupPayload, id);
+      return;
+    }
+
+    if (!ws.isAuthenticated) {
+      this.deliveryService.sendError(ws, id, { message: "Unauthenticated" });
+      return;
+    }
+
+    try {
+      this.handleAuthenticatedCall(ws, ws.userId ?? "", id, api, payload);
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : "An unknown error occurred";
+      this.deliveryService.sendError(ws, id, { message: errMsg });
+    }
   }
 
-  public async handleAuthenticatedCall(
+  private async handleAuthenticatedCall(
     ws: WebSocket,
     userId: string,
     id: string,
     api: requestTypes.RequestApi,
     payload: requestTypes.RequestMessagePayload
   ): Promise<void> {
-    try {
-      switch (api) {
-        case requestTypes.RequestApi.SYNC_ACTIVE_CHATS: {
-          const { chatIds } = payload as requestTypes.syncActiveChatsPayload;
-          const chats = await mongoApi.syncActiveChatsUpdates(
-            new ObjectId(userId),
-            chatIds.map(id => new ObjectId(id))
-          );
-  
-          this.deliveryService.sendMessage(
-            userId,
-            {
-              id,
-              api,
-              payload: { chats },
-            },
-            () => {
-              for (const chat of chats) {
-                const otherUserMetadata = chat.users.find(user => user._id.toString() !== userId)!;
-                mongoApi.updateLastAckSequence(
-                  new ObjectId(chat._id),
-                  new ObjectId(userId),
-                  chat.messages.at(-1)?.sequence ?? 0
-                );
-                mongoApi.updateLastAckReadSequence(
-                  new ObjectId(chat._id),
-                  new ObjectId(userId),
-                  otherUserMetadata.lastReadSequence
-                );
-                if (!chat.messages.at(-1)) return;
-                mongoApi.deletePreviousMessages(
-                  new ObjectId(chat._id),
-                  chat.messages.at(-1)!.sequence
-                );
-              }
-            }
-          );
-          break;
-        }
-  
-        case requestTypes.RequestApi.SYNC_ALL_CHATS_METADATA: {
-          const { chats, unacknowledgedChats, isComplete } = await mongoApi.syncAllChatsMetadata(
-            new ObjectId(userId)
-          );
-          this.deliveryService.sendMessage(
-            userId,
-            {
-              id,
-              api,
-              payload: {
-                chats,
-                newChats: unacknowledgedChats.map(chat => toApiChatMetadata(chat)),
-                isComplete,
-              },
-            },
-            () => {
-              const metadataSyncDate = isComplete
-                ? new Date().toISOString()
-                : chats.at(-1)?.lastModified ?? new Date().toISOString();
-              mongoApi.updateLastMetadataSync(new ObjectId(userId), metadataSyncDate);
-              for (const chat of unacknowledgedChats) {
-                mongoApi.markChatAsAcknowledged(new ObjectId(chat._id), new ObjectId(userId));
-              }
-            }
-          );
-          break;
-        }
-  
-        case requestTypes.RequestApi.SEND_READ_UPDATE: {
-          const { chatId, sequence } = payload as requestTypes.sendReadUpdatePayload;
-          const { receivingUserId } = await mongoApi.readUpdate(
-            new ObjectId(userId),
-            new ObjectId(chatId),
-            sequence
-          );
-  
-          const receivingUserWs = this.onlineUsers.getUser(receivingUserId.toString());
-          if (receivingUserWs) {
-            this.deliveryService.sendMessage(
-              receivingUserId.toString(),
-              {
-                id,
-                api: notificationTypes.NotificationApi.INCOMING_READ,
-                payload: { chatId, sequence },
-              },
-              () => {
-                mongoApi.updateLastAckReadSequence(
-                  new ObjectId(chatId),
-                  new ObjectId(receivingUserId),
-                  sequence
-                );
-              }
-            );
-          }
-          break;
-        }
-  
-        case requestTypes.RequestApi.CREATE_CHAT: {
-          const { username } = payload as requestTypes.createChatPayload;
-          const { createdChat, receivingUserId, preKeyBundle } = await mongoApi.createChat(
-            new ObjectId(userId),
-            username
-          );
-          const createdApiChat = await toApiChat(createdChat, []);
-          const stringifiedPreKeyBundle: PreKeyBundle<string> = {
-            registrationId: preKeyBundle.registrationId,
-            identityKey: binaryToBase64(preKeyBundle.identityKey),
-            signedPreKey: {
-              keyId: preKeyBundle.signedPreKey.keyId,
-              publicKey: binaryToBase64(preKeyBundle.signedPreKey.publicKey),
-              signature: binaryToBase64(preKeyBundle.signedPreKey.signature),
-            },
-            preKeys: [
-              {
-                keyId: preKeyBundle.preKeys[0].keyId,
-                publicKey: binaryToBase64(preKeyBundle.preKeys[0].publicKey),
-              },
-            ],
-          };
-          this.deliveryService.sendMessage(userId, {
-            id,
-            api,
-            payload: { createdChat: createdApiChat, preKeyBundle: stringifiedPreKeyBundle },
-          });
-  
-          const receivingUserWs = this.onlineUsers.getUser(receivingUserId.toString());
-          if (receivingUserWs) {
-            this.deliveryService.sendMessage(
-              receivingUserId.toString(),
-              {
-                id,
-                api: notificationTypes.NotificationApi.INCOMING_CHAT,
-                payload: { createdChat: createdApiChat },
-              },
-              () => {
-                mongoApi.markChatAsAcknowledged(
-                  new ObjectId(createdChat._id),
-                  new ObjectId(receivingUserId)
-                );
-              }
-            );
-          }
-          break;
-        }
-  
-        case requestTypes.RequestApi.SEND_PRE_KEY_BUNDLE: {
-          let { preKeyBundle } = payload as requestTypes.sendPreKeyBundlePayload;
-          const binaryPreKeyBundle: PreKeyBundle<Binary> = {
-            registrationId: preKeyBundle.registrationId,
-            identityKey: base64ToBinary(preKeyBundle.identityKey),
-            signedPreKey: {
-              keyId: preKeyBundle.signedPreKey.keyId,
-              publicKey: base64ToBinary(preKeyBundle.signedPreKey.publicKey),
-              signature: base64ToBinary(preKeyBundle.signedPreKey.signature),
-            },
-            preKeys: [],
-          };
-          for (const preKey of preKeyBundle.preKeys) {
-            binaryPreKeyBundle.preKeys.push({
-              keyId: preKey.keyId,
-              publicKey: base64ToBinary(preKey.publicKey),
-            });
-          }
-  
-          await mongoApi.savePreKeyBundle(new ObjectId(userId), binaryPreKeyBundle);
-          this.deliveryService.sendMessage(userId, {
-            id,
-            api,
-            payload: {},
-          });
-          break;
-        }
-  
-        case requestTypes.RequestApi.ADD_PRE_KEYS: {
-          const { preKeys } = payload as requestTypes.addPreKeysPayload;
-          const binaryPreKeys: PreKeyType<Binary>[] = [];
-          for (const preKey of preKeys) {
-            binaryPreKeys.push({
-              keyId: preKey.keyId,
-              publicKey: base64ToBinary(preKey.publicKey),
-            });
-          }
-          await mongoApi.addPreKeys(new ObjectId(userId), binaryPreKeys);
-          this.deliveryService.sendMessage(userId, {
-            id,
-            api,
-            payload: {},
-          });
-          break;
-        }
-  
-        case requestTypes.RequestApi.SEND_PRE_KEY_WHISPER_MESSAGE: {
-          const { chatId, ciphertext } = payload as requestTypes.sendPreKeyWhisperMessagePayload;
-          const { sentMessage, receivingUserId } = await mongoApi.sendPreKeyWhisperMessage(
-            new ObjectId(userId),
-            new ObjectId(chatId),
-            ciphertext
-          );
-  
-          const receivingUserWs = this.onlineUsers.getUser(receivingUserId.toString());
-          if (receivingUserWs) {
-            this.deliveryService.sendMessage(receivingUserId.toString(), {
-              id,
-              api: notificationTypes.NotificationApi.INCOMING_MESSAGE,
-              payload: { chatId, message: toApiMessage(sentMessage) },
-            });
-          }
-  
-          this.deliveryService.sendMessage(userId, {
-            id,
-            api,
-            payload: {},
-          });
-          break;
-        }
-  
-        case requestTypes.RequestApi.SEND_MESSAGE: {
-          const { chatId, ciphertext } = payload as requestTypes.sendMessagePayload;
-          const { sentMessage, receivingUserId } = await mongoApi.sendMessage(
-            new ObjectId(userId),
-            new ObjectId(chatId),
-            ciphertext
-          );
-  
-          const receivingUserWs = this.onlineUsers.getUser(receivingUserId.toString());
-          if (receivingUserWs) {
-            this.deliveryService.sendMessage(
-              receivingUserId.toString(),
-              {
-                id,
-                api: notificationTypes.NotificationApi.INCOMING_MESSAGE,
-                payload: { chatId, message: toApiMessage(sentMessage) },
-              },
-              () => {
-                mongoApi.updateLastAckSequence(
-                  new ObjectId(chatId),
-                  new ObjectId(receivingUserId),
-                  sentMessage.sequence
-                );
-                mongoApi.updateLastAckReadSequence(
-                  new ObjectId(chatId),
-                  new ObjectId(receivingUserId),
-                  sentMessage.sequence
-                );
-                mongoApi.deletePreviousMessages(new ObjectId(chatId), sentMessage.sequence);
-              }
-            );
-          }
-  
-          this.deliveryService.sendMessage(
-            userId,
-            {
-              id,
-              api,
-              payload: { sentMessage: toApiMessage(sentMessage) },
-            },
-            () => {
-              mongoApi.updateLastAckSequence(
-                new ObjectId(chatId),
-                new ObjectId(userId),
-                sentMessage.sequence
-              );
-            }
-          );
-          break;
-        }
-  
-        default: {
-          console.error(`Unknown api call: ${api}`);
-          this.deliveryService.sendError(ws, id, { message: "Invalid api call" });
-          break;
-        }
+    switch (api) {
+      /* Chat APIs */
+      case requestTypes.RequestApi.SYNC_ACTIVE_CHATS: {
+        this.chatService.syncActiveChats(userId, id, payload as requestTypes.syncActiveChatsPayload);
+        break;
       }
-    } catch (error) {
-      throw error;
+      case requestTypes.RequestApi.SYNC_ALL_CHATS_METADATA: {
+        this.chatService.syncAllChatsMetadata(userId, id);
+        break;
+      }
+      case requestTypes.RequestApi.SEND_READ_UPDATE: {
+        this.chatService.sendReadUpdate(userId, id, payload as requestTypes.sendReadUpdatePayload);
+        break;
+      }
+      case requestTypes.RequestApi.CREATE_CHAT: {
+        this.chatService.createChat(userId, id, payload as requestTypes.createChatPayload);
+        break;
+      }
+
+      /* Message APIs */
+      case requestTypes.RequestApi.SEND_MESSAGE: {
+        this.messageService.sendMessage(userId, id, payload as requestTypes.sendMessagePayload);
+        break;
+      }
+      case requestTypes.RequestApi.SEND_PRE_KEY_WHISPER_MESSAGE: {
+        this.messageService.sendPreKeyWhisperMessage(userId, id, payload as requestTypes.sendPreKeyWhisperMessagePayload);
+        break;
+      }
+
+      /* User APIs */
+      case requestTypes.RequestApi.SEND_PRE_KEY_BUNDLE: {
+        this.userService.sendPreKeyBundle(userId, id, payload as requestTypes.sendPreKeyBundlePayload);
+        break;
+      }
+      case requestTypes.RequestApi.ADD_PRE_KEYS: {
+        this.userService.addPreKeys(userId, id, payload as requestTypes.addPreKeysPayload);
+        break;
+      }
+
+      default: {
+        this.deliveryService.sendError(ws, id, { message: "Invalid api call" });
+        break;
+      }
     }
   }
-  
 }
