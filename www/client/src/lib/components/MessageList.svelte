@@ -25,6 +25,8 @@
 		messages,
 		MAX_PAGES,
 		PAGE_SIZE,
+		// svelte-ignore state_referenced_locally
+		lastSequence,
 		async (direction, elements) => {
 			let low: number;
 			let high: number;
@@ -38,9 +40,7 @@
 
 			if (low > high) return [];
 			return (await getMessagesDbService()).getMessagesByIndex(chat._id, low, high);
-		},
-		// svelte-ignore state_referenced_locally
-		lastSequence
+		}
 	);
 
 	$effect(() => {
@@ -196,8 +196,12 @@
 			requestAnimationFrame(setAnchors);
 			return;
 		}
-		if (unreadAnchor) unreadAnchor.scrollIntoView({ behavior: 'instant', block: 'start' });
-		if (bottomAnchor) bottomAnchor.scrollIntoView({ behavior: 'instant', block: 'end' });
+
+		if (unreadAnchor) {
+			unreadAnchor.scrollIntoView({ behavior: 'instant', block: 'end' });
+		} else {
+			bottomAnchor.scrollIntoView({ behavior: 'instant', block: 'end' });
+		}
 
 		topObserver.observe(topAnchor);
 		bottomObserver.observe(bottomAnchor);

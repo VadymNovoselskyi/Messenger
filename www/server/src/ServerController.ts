@@ -54,6 +54,7 @@ export class ServerController {
 
   public async handleMessage(ws: WebSocket, message: WebSocket.RawData) {
     let parsedMessage: requestTypes.ResponseApiMessage | systemTypes.SystemApiMessage;
+    console.log(`Received message: ${message}`);
 
     try {
       parsedMessage = JSON.parse(message.toString());
@@ -91,9 +92,8 @@ export class ServerController {
     }
   }
 
-  private handleRequestMessage(ws: WebSocket, message: requestTypes.RequestApiMessage) {
+  private async handleRequestMessage(ws: WebSocket, message: requestTypes.RequestApiMessage) {
     const { id, api, token, payload } = message;
-    console.log(`Received message: ${message}`);
 
     if (api === requestTypes.RequestApi.SEND_AUTH) {
       this.authService.handleAuth(ws, token ?? "", id);
@@ -112,11 +112,12 @@ export class ServerController {
     }
 
     try {
-      this.handleAuthenticatedCall(ws, ws.userId ?? "", id, api, payload);
+      await this.handleAuthenticatedCall(ws, ws.userId ?? "", id, api, payload);
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : "An unknown error occurred";
       this.deliveryService.sendError(ws, id, { message: errMsg });
     }
+    return;
   }
 
   private async handleAuthenticatedCall(
@@ -129,39 +130,59 @@ export class ServerController {
     switch (api) {
       /* Chat APIs */
       case requestTypes.RequestApi.SYNC_ACTIVE_CHATS: {
-        this.chatService.syncActiveChats(userId, id, payload as requestTypes.syncActiveChatsPayload);
+        await this.chatService.syncActiveChats(
+          userId,
+          id,
+          payload as requestTypes.syncActiveChatsPayload
+        );
         break;
       }
       case requestTypes.RequestApi.SYNC_ALL_CHATS_METADATA: {
-        this.chatService.syncAllChatsMetadata(userId, id);
+        await this.chatService.syncAllChatsMetadata(userId, id);
         break;
       }
       case requestTypes.RequestApi.SEND_READ_UPDATE: {
-        this.chatService.sendReadUpdate(userId, id, payload as requestTypes.sendReadUpdatePayload);
+        await this.chatService.sendReadUpdate(
+          userId,
+          id,
+          payload as requestTypes.sendReadUpdatePayload
+        );
         break;
       }
       case requestTypes.RequestApi.CREATE_CHAT: {
-        this.chatService.createChat(userId, id, payload as requestTypes.createChatPayload);
+        await this.chatService.createChat(userId, id, payload as requestTypes.createChatPayload);
         break;
       }
 
       /* Message APIs */
       case requestTypes.RequestApi.SEND_MESSAGE: {
-        this.messageService.sendMessage(userId, id, payload as requestTypes.sendMessagePayload);
+        await this.messageService.sendMessage(
+          userId,
+          id,
+          payload as requestTypes.sendMessagePayload
+        );
         break;
       }
       case requestTypes.RequestApi.SEND_PRE_KEY_WHISPER_MESSAGE: {
-        this.messageService.sendPreKeyWhisperMessage(userId, id, payload as requestTypes.sendPreKeyWhisperMessagePayload);
+        await this.messageService.sendPreKeyWhisperMessage(
+          userId,
+          id,
+          payload as requestTypes.sendPreKeyWhisperMessagePayload
+        );
         break;
       }
 
       /* User APIs */
       case requestTypes.RequestApi.SEND_PRE_KEY_BUNDLE: {
-        this.userService.sendPreKeyBundle(userId, id, payload as requestTypes.sendPreKeyBundlePayload);
+        await this.userService.sendPreKeyBundle(
+          userId,
+          id,
+          payload as requestTypes.sendPreKeyBundlePayload
+        );
         break;
       }
       case requestTypes.RequestApi.ADD_PRE_KEYS: {
-        this.userService.addPreKeys(userId, id, payload as requestTypes.addPreKeysPayload);
+        await this.userService.addPreKeys(userId, id, payload as requestTypes.addPreKeysPayload);
         break;
       }
 

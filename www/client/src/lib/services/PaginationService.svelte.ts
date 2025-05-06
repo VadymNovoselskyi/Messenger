@@ -22,8 +22,9 @@ export class PaginationService<T> {
 		private elements: T[],
 		private maxPages: number,
 		private pageSize: number,
+		private _totalLength: number,
 		private getter: (direction: 'UP' | 'DOWN', elements: T[]) => Promise<T[]>,
-		private _totalLength: number
+		private loadedCallback?: (elements: T[]) => Promise<void>
 	) {
 		const totalPages = Math.ceil(this._totalLength / this.pageSize);
 		this.lowerPage = totalPages;
@@ -64,6 +65,7 @@ export class PaginationService<T> {
 				this.lowerPage = this.upperPage - this.maxPages + 1;
 			}
 		}
+		if (this.loadedCallback) await this.loadedCallback(this.paginatedElements);
 	}
 
 	public set totalLength(length: number) {

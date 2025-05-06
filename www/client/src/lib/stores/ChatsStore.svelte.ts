@@ -1,4 +1,3 @@
-
 import type { PendingMessage, StoredChat, StoredMessage } from '$lib/types/dataTypes';
 import { messagesStore } from '$lib/stores/MessagesStore.svelte';
 import { getChatsDbService } from '$lib/indexedDB/ChatsDbService.svelte';
@@ -76,6 +75,13 @@ export class ChatsStore {
 		this._chatsCount++;
 
 		await (await this.getChatsDb()).putChat($state.snapshot(chat));
+	}
+
+	/* Adds multiple loaded chats to the store */
+	public async addLoadedChats(chats: StoredChat[], direction: 'UP' | 'DOWN'): Promise<void> {
+		if (direction === 'UP') this._loadedChats.unshift(...chats);
+		else this._loadedChats.push(...chats);
+		this._chatsCount += chats.length;
 	}
 
 	/* Updates an existing chat in the store */

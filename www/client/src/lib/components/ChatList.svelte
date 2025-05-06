@@ -84,6 +84,7 @@
 		chats,
 		MAX_PAGES,
 		PAGE_SIZE,
+		chatsStore.chatsCount,
 		async (direction, elements) => {
 			let lastModified: string | undefined;
 			if (direction === 'DOWN') {
@@ -96,10 +97,11 @@
 			const newChats = await (
 				await getChatsDbService()
 			).getChatsByDate(lastModified, PAGE_SIZE, direction);
-			await messagesStore.loadLatestMessages(newChats.map((chat) => chat._id));
 			return newChats;
 		},
-		chatsStore.chatsCount
+		async (elements) => {
+			await messagesStore.loadLatestMessages(elements.map((chat) => chat._id));
+		}
 	);
 
 	onMount(setAnchors);

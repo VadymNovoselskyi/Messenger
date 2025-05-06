@@ -25,9 +25,10 @@ export class MessagesStore {
 	public async loadLatestMessages(chatIds: string[]): Promise<void> {
 		for (const chatId of chatIds) {
 			const messages = await (await this.getMessagesDb()).getLatestMessages(chatId);
+			const lastMessage = await (await this.getMessagesDb()).getLastMessage(chatId);
 			this._loadedMessages[chatId] = messages;
+			this._lastMessages[chatId] = lastMessage;
 		}
-		this._lastMessages = await this.loadLastMessages();
 		this._hasLoaded = true;
 	}
 
@@ -111,7 +112,7 @@ export class MessagesStore {
 		this._lastMessages[chatId] = undefined;
 	}
 
-	/* Returns the latest message for each chat */
+	/* Returns the last message for each chat */
 	private async loadLastMessages(): Promise<Record<string, StoredMessage | undefined>> {
 		const db = await this.getMessagesDb();
 		const lastMessages: Record<string, StoredMessage | undefined> = {};

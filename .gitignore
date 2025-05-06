@@ -1,3 +1,4 @@
 db/*
 mongodb/*
 .DS_Store
+*.archive
