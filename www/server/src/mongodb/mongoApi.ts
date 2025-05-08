@@ -428,11 +428,8 @@ export async function addPreKeys(userId: ObjectId, preKeys: PreKeyType<Binary>[]
 export async function updateLastAckSequence(chatId: ObjectId, userId: ObjectId, sequence: number) {
   try {
     await chatsCollection.updateOne(
-      {
-        _id: chatId,
-        users: { $elemMatch: { _id: userId, lastAckSequence: { $lt: sequence } } },
-      },
-      { $set: { "users.$.lastAckSequence": sequence } }
+      { _id: chatId, "users._id": userId },
+      { $max: { "users.$.lastAckSequence": sequence } }
     );
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : "An unknown error occurred";
@@ -453,11 +450,8 @@ export async function updateLastAckReadSequence(
 ) {
   try {
     await chatsCollection.updateOne(
-      {
-        _id: chatId,
-        users: { $elemMatch: { _id: userId, lastAckReadSequence: { $lt: sequence } } },
-      },
-      { $set: { "users.$.lastAckReadSequence": sequence } }
+      { _id: chatId, "users._id": userId },
+      { $max: { "users.$.lastAckReadSequence": sequence } }
     );
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : "An unknown error occurred";
